@@ -1,9 +1,9 @@
-// main.go
+// main.go - Kaminskyi AI Messenger (Production Ready v1.0)
 package main
 
 import (
+	"context"
 	"crypto/rand"
-	"database/sql"
 	"embed"
 	"encoding/base64"
 	"encoding/json"
@@ -16,237 +16,103 @@ import (
 	"os"
 	"strings"
 	"sync"
+	"time"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
-	_ "github.com/mattn/go-sqlite3"
+	"github.com/redis/go-redis/v9"
 )
 
 const (
 	validUsername = "Oleh"
 	validPassword = "QwertY24$"
+	sessionTTL    = 24 * time.Hour
+	meetingTTL    = 8 * time.Hour
 )
 
 var (
-	addr         = flag.String("addr", ":8080", "HTTP service address")
-	db           *sql.DB
-	activeSessions = make(map[string]bool) // token -> valid
-	sessionMutex   sync.RWMutex
+	addr = flag.String("addr", ":8080", "HTTP service address")
+	ctx  = context.Background()
+
+	// Redis client
+	rdb *redis.Client
+
+	// TURN server config
+	turnHost     string
+	turnUsername string
+	turnPassword string
 )
 
 //go:embed static/*
 var staticFiles embed.FS
 
-// Room represents a 1-on-1 chat/video room
+// Room represents a 1-on-1 video room
 type Room struct {
-	Peers map[*websocket.Conn]string // conn → user ID
-	mu    sync.Mutex
+	ID           string
+	HostID       string
+	Participants map[*websocket.Conn]*Participant
+	CreatedAt    time.Time
+	mu           sync.RWMutex
 }
 
-var (
-	rooms = make(map[string]*Room)
-	mu    sync.Mutex // protects the rooms map
-)
+// Participant in a room
+type Participant struct {
+	ID       string
+	Name     string
+	IsHost   bool
+	JoinedAt time.Time
+}
 
-// Message is the standard message format for WebSocket
+// Message is the WebSocket message format
 type Message struct {
-	Type string          `json:"type"` // "chat", "join", "leave"
+	Type string          `json:"type"`
 	Data json.RawMessage `json:"data"`
 	Room string          `json:"room"`
 	User string          `json:"user"`
 }
 
-func initDB() {
-	if err := os.MkdirAll("/data", os.ModePerm); err != nil {
-		log.Fatalf("Failed to create /data directory: %v", err)
-	}
-
-	var err error
-	// Use standard SQLite driver
-	db, err = sql.Open("sqlite3", "/data/sqlite.db")
-	if err != nil {
-		log.Fatalf("Failed to open SQLite DB: %v", err)
-	}
-
-	// Налаштування підключення
-	db.SetMaxOpenConns(1) // SQLite не підтримує справжній паралелізм
-	db.SetMaxIdleConns(1)
-
-	// Створення таблиці кімнат
-	if _, err = db.Exec(`CREATE TABLE IF NOT EXISTS rooms (
-		id TEXT PRIMARY KEY,
-		created_at DATETIME DEFAULT CURRENT_TIMESTAMP
-	)`); err != nil {
-		log.Fatalf("Failed to create rooms table: %v", err)
-	}
-}
-
-func createRoom() string {
-	id := uuid.NewString()
-	_, err := db.Exec("INSERT INTO rooms (id) VALUES (?)", id)
-	if err != nil {
-		log.Printf("Failed to insert room %s into DB: %v", id, err)
-		return ""
-	}
-
-	mu.Lock()
-	rooms[id] = &Room{
-		Peers: make(map[*websocket.Conn]string),
-	}
-	mu.Unlock()
-
-	return id
-}
-
-func roomExists(id string) bool {
-	var dummy string
-	err := db.QueryRow("SELECT id FROM rooms WHERE id = ?", id).Scan(&dummy)
-	return err == nil
-}
+var (
+	rooms = make(map[string]*Room)
+	mu    sync.RWMutex
+)
 
 var upgrader = websocket.Upgrader{
 	CheckOrigin: func(r *http.Request) bool {
-		// Дозволяємо всі origin для локальної розробки
-		// У продакшені — обмежити до свого домену
 		return true
 	},
 }
 
-func wsHandler(w http.ResponseWriter, r *http.Request) {
-	conn, err := upgrader.Upgrade(w, r, nil)
+func initRedis() {
+	redisURL := os.Getenv("REDIS_URL")
+	if redisURL == "" {
+		redisURL = "redis://localhost:6379"
+		log.Printf("[REDIS] ⚠️  Using default Redis URL (development)")
+	}
+
+	opt, err := redis.ParseURL(redisURL)
 	if err != nil {
-		log.Printf("WebSocket upgrade failed: %v", err)
-		return
-	}
-	defer conn.Close()
-
-	roomID := r.URL.Query().Get("room")
-	if roomID == "" {
-		_ = conn.WriteMessage(websocket.TextMessage, []byte(`{"error":"room ID missing"}`))
-		return
-	}
-	if !roomExists(roomID) {
-		_ = conn.WriteMessage(websocket.TextMessage, []byte(`{"error":"room not found"}`))
-		return
+		log.Fatalf("[REDIS] ❌ Failed to parse REDIS_URL: %v", err)
 	}
 
-	// Переконуємося, що кімната є в пам’яті (наприклад, після рестарту сервера)
-	mu.Lock()
-	room, exists := rooms[roomID]
-	if !exists {
-		room = &Room{Peers: make(map[*websocket.Conn]string)}
-		rooms[roomID] = room
+	rdb = redis.NewClient(opt)
+
+	// Test connection
+	if err := rdb.Ping(ctx).Err(); err != nil {
+		log.Fatalf("[REDIS] ❌ Failed to connect: %v", err)
 	}
-	mu.Unlock()
 
-	// Генеруємо унікальний ID користувача
-	userID := "user_" + uuid.NewString()[:8]
-
-	room.mu.Lock()
-	if len(room.Peers) >= 2 {
-		room.mu.Unlock()
-		_ = conn.WriteMessage(websocket.TextMessage, []byte(`{"error":"room full"}`))
-		return
-	}
-	room.Peers[conn] = userID
-	room.mu.Unlock()
-
-	// Повідомляємо іншого учасника про приєднання
-	joinMsg := Message{
-		Type: "join",
-		Data: json.RawMessage(`{"message":"joined the call"}`),
-		Room: roomID,
-		User: userID,
-	}
-	broadcastToRoom(room, joinMsg, conn)
-
-	log.Printf("User %s joined room %s", userID, roomID)
-
-	// Очищення при відключенні
-	defer func() {
-		room.mu.Lock()
-		delete(room.Peers, conn)
-		peerCount := len(room.Peers)
-		room.mu.Unlock()
-
-		// Повідомлення про вихід
-		leaveMsg := Message{
-			Type: "leave",
-			Data: json.RawMessage(`{"message":"left the call"}`),
-			Room: roomID,
-			User: userID,
-		}
-		broadcastToRoom(room, leaveMsg, conn)
-
-		log.Printf("User %s left room %s (peers remaining: %d)", userID, roomID, peerCount)
-
-		// Не видаляємо кімнату з БД — можна повторно використовувати
-	}()
-
-	// Читання повідомлень
-	for {
-		_, msg, err := conn.ReadMessage()
-		if err != nil {
-			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				log.Printf("WebSocket read error in room %s: %v", roomID, err)
-			}
-			break
-		}
-
-		var message Message
-		if err := json.Unmarshal(msg, &message); err != nil {
-			log.Printf("Invalid JSON from user %s: %v", userID, err)
-			continue
-		}
-
-		// Підтримувані типи повідомлень
-		validTypes := map[string]bool{
-			"chat":          true,
-			"offer":         true,
-			"answer":        true,
-			"ice-candidate": true,
-			"join":          true,
-		}
-
-		if !validTypes[message.Type] {
-			log.Printf("[WS] Unsupported message type: %s", message.Type)
-			continue
-		}
-
-		log.Printf("[WS] Received %s from user %s in room %s", message.Type, userID, roomID)
-
-		// Забезпечуємо наявність User
-		message.User = userID
-		message.Room = roomID
-
-		// Розсилка іншому учаснику
-		room.mu.Lock()
-		for peerConn, peerID := range room.Peers {
-			if peerConn != conn {
-				outgoing := message
-				outgoing.User = peerID // Для UI — показуємо відправника
-
-				if err := peerConn.WriteJSON(outgoing); err != nil {
-					log.Printf("[WS] Failed to send %s to peer %s: %v", message.Type, peerID, err)
-				} else {
-					log.Printf("[WS] ✅ Sent %s to peer %s", message.Type, peerID)
-				}
-				break // лише один інший учасник
-			}
-		}
-		room.mu.Unlock()
-	}
+	log.Printf("[REDIS] ✅ Connected successfully")
 }
 
-func broadcastToRoom(room *Room, msg Message, exclude *websocket.Conn) {
-	room.mu.Lock()
-	defer room.mu.Unlock()
-	for peerConn := range room.Peers {
-		if peerConn != exclude {
-			if err := peerConn.WriteJSON(msg); err != nil {
-				log.Printf("Broadcast error: %v", err)
-			}
-		}
+func initTURN() {
+	turnHost = os.Getenv("TURN_HOST")
+	turnUsername = os.Getenv("TURN_USERNAME")
+	turnPassword = os.Getenv("TURN_PASSWORD")
+
+	if turnHost == "" {
+		log.Printf("[TURN] ⚠️  No TURN server configured (P2P only)")
+	} else {
+		log.Printf("[TURN] ✅ TURN server: %s", turnHost)
 	}
 }
 
@@ -258,54 +124,86 @@ func generateToken() (string, error) {
 	return base64.URLEncoding.EncodeToString(b), nil
 }
 
+// Store session in Redis
+func storeSession(token, userID string) error {
+	key := fmt.Sprintf("session:%s", token)
+	return rdb.Set(ctx, key, userID, sessionTTL).Err()
+}
+
+// Validate session from Redis
+func validateSession(token string) (string, bool) {
+	key := fmt.Sprintf("session:%s", token)
+	userID, err := rdb.Get(ctx, key).Result()
+	if err != nil {
+		return "", false
+	}
+	return userID, true
+}
+
+// Store meeting in Redis
+func storeMeeting(roomID, hostID string) error {
+	key := fmt.Sprintf("meeting:%s", roomID)
+	data := map[string]interface{}{
+		"host_id":    hostID,
+		"created_at": time.Now().Unix(),
+		"active":     true,
+	}
+	dataJSON, _ := json.Marshal(data)
+	return rdb.Set(ctx, key, dataJSON, meetingTTL).Err()
+}
+
+// Check if meeting exists
+func meetingExists(roomID string) bool {
+	key := fmt.Sprintf("meeting:%s", roomID)
+	exists, _ := rdb.Exists(ctx, key).Result()
+	return exists > 0
+}
+
+// Delete meeting from Redis
+func deleteMeeting(roomID string) error {
+	key := fmt.Sprintf("meeting:%s", roomID)
+	return rdb.Del(ctx, key).Err()
+}
+
 func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("[AUTH] Request: %s %s", r.Method, r.URL.Path)
+		log.Printf("[AUTH] %s %s", r.Method, r.URL.Path)
 
-		// Skip auth for login page and static files
-		if strings.HasPrefix(r.URL.Path, "/login") || strings.HasPrefix(r.URL.Path, "/static/") {
-			log.Printf("[AUTH] Skipping auth for: %s", r.URL.Path)
+		// Skip auth for public routes
+		if strings.HasPrefix(r.URL.Path, "/login") ||
+			strings.HasPrefix(r.URL.Path, "/join/") ||
+			strings.HasPrefix(r.URL.Path, "/static/") {
 			next(w, r)
 			return
 		}
 
-		// Check cookie first (for browser navigation)
+		// Check cookie
 		cookie, err := r.Cookie("auth_token")
 		if err == nil && cookie.Value != "" {
-			sessionMutex.RLock()
-			valid := activeSessions[cookie.Value]
-			sessionMutex.RUnlock()
-
-			if valid {
-				log.Printf("[AUTH] Valid cookie token for: %s", r.URL.Path)
+			if userID, valid := validateSession(cookie.Value); valid {
+				log.Printf("[AUTH] ✅ Valid session for user: %s", userID)
+				r.Header.Set("X-User-ID", userID)
 				next(w, r)
 				return
 			}
-			log.Printf("[AUTH] Invalid cookie token: %s", cookie.Value[:10]+"...")
 		}
 
-		// Check Authorization header (for API calls)
+		// Check Authorization header
 		authHeader := r.Header.Get("Authorization")
 		if authHeader != "" {
 			token := strings.TrimPrefix(authHeader, "Bearer ")
-			sessionMutex.RLock()
-			valid := activeSessions[token]
-			sessionMutex.RUnlock()
-
-			if valid {
-				log.Printf("[AUTH] Valid Bearer token for: %s", r.URL.Path)
+			if userID, valid := validateSession(token); valid {
+				log.Printf("[AUTH] ✅ Valid Bearer token")
+				r.Header.Set("X-User-ID", userID)
 				next(w, r)
 				return
 			}
-			log.Printf("[AUTH] Invalid Bearer token")
 		}
 
-		// No valid auth found
-		log.Printf("[AUTH] No valid authentication, redirecting to login")
+		log.Printf("[AUTH] ❌ Unauthorized access")
 
-		// Check if this is an HTML request
-		acceptHeader := r.Header.Get("Accept")
-		if strings.Contains(acceptHeader, "text/html") {
+		// Redirect to login
+		if strings.Contains(r.Header.Get("Accept"), "text/html") {
 			http.Redirect(w, r, "/login", http.StatusSeeOther)
 			return
 		}
@@ -326,30 +224,207 @@ func serveFile(filename string) http.HandlerFunc {
 	}
 }
 
+func createRoom(hostID string) string {
+	id := uuid.NewString()
+
+	// Store in memory
+	mu.Lock()
+	rooms[id] = &Room{
+		ID:           id,
+		HostID:       hostID,
+		Participants: make(map[*websocket.Conn]*Participant),
+		CreatedAt:    time.Now(),
+	}
+	mu.Unlock()
+
+	// Store in Redis
+	if err := storeMeeting(id, hostID); err != nil {
+		log.Printf("[ROOM] ⚠️  Failed to store in Redis: %v", err)
+	}
+
+	log.Printf("[ROOM] ✅ Created room %s by host %s", id, hostID)
+	return id
+}
+
+func wsHandler(w http.ResponseWriter, r *http.Request) {
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Printf("[WS] ❌ Upgrade failed: %v", err)
+		return
+	}
+	defer conn.Close()
+
+	roomID := r.URL.Query().Get("room")
+	guestName := r.URL.Query().Get("name")
+
+	if roomID == "" {
+		conn.WriteMessage(websocket.TextMessage, []byte(`{"error":"room ID missing"}`))
+		return
+	}
+
+	// Check if meeting exists in Redis
+	if !meetingExists(roomID) {
+		conn.WriteMessage(websocket.TextMessage, []byte(`{"error":"meeting not found or expired"}`))
+		return
+	}
+
+	// Get or create room in memory
+	mu.Lock()
+	room, exists := rooms[roomID]
+	if !exists {
+		room = &Room{
+			ID:           roomID,
+			Participants: make(map[*websocket.Conn]*Participant),
+			CreatedAt:    time.Now(),
+		}
+		rooms[roomID] = room
+	}
+	mu.Unlock()
+
+	// Generate participant ID
+	participantID := "user_" + uuid.NewString()[:8]
+	participant := &Participant{
+		ID:       participantID,
+		Name:     guestName,
+		IsHost:   false,
+		JoinedAt: time.Now(),
+	}
+
+	// Check if host
+	userID := r.Header.Get("X-User-ID")
+	if userID != "" {
+		participant.IsHost = true
+		participant.Name = "Oleh Kaminskyi"
+	}
+
+	// Add to room
+	room.mu.Lock()
+	if len(room.Participants) >= 2 {
+		room.mu.Unlock()
+		conn.WriteMessage(websocket.TextMessage, []byte(`{"error":"room full (max 2 participants)"}`))
+		return
+	}
+	room.Participants[conn] = participant
+	participantCount := len(room.Participants)
+	room.mu.Unlock()
+
+	log.Printf("[WS] ✅ %s joined room %s (%d participants)", participant.Name, roomID, participantCount)
+
+	// Send join message to other participant
+	joinMsg := Message{
+		Type: "join",
+		Data: json.RawMessage(fmt.Sprintf(`{"name":"%s","id":"%s"}`, participant.Name, participantID)),
+		Room: roomID,
+		User: participantID,
+	}
+	broadcastToRoom(room, joinMsg, conn)
+
+	// Cleanup on disconnect
+	defer func() {
+		room.mu.Lock()
+		delete(room.Participants, conn)
+		remaining := len(room.Participants)
+		room.mu.Unlock()
+
+		leaveMsg := Message{
+			Type: "leave",
+			Data: json.RawMessage(fmt.Sprintf(`{"name":"%s","id":"%s"}`, participant.Name, participantID)),
+			Room: roomID,
+			User: participantID,
+		}
+		broadcastToRoom(room, leaveMsg, conn)
+
+		log.Printf("[WS] 👋 %s left room %s (%d remaining)", participant.Name, roomID, remaining)
+
+		// If room empty, clean up
+		if remaining == 0 {
+			mu.Lock()
+			delete(rooms, roomID)
+			mu.Unlock()
+			log.Printf("[ROOM] 🗑️  Deleted empty room %s", roomID)
+		}
+	}()
+
+	// Message loop
+	for {
+		_, msg, err := conn.ReadMessage()
+		if err != nil {
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+				log.Printf("[WS] ⚠️  Unexpected close: %v", err)
+			}
+			break
+		}
+
+		var message Message
+		if err := json.Unmarshal(msg, &message); err != nil {
+			log.Printf("[WS] ⚠️  Invalid JSON: %v", err)
+			continue
+		}
+
+		// Validate message type
+		validTypes := map[string]bool{
+			"chat": true, "offer": true, "answer": true,
+			"ice-candidate": true, "ping": true,
+		}
+
+		if !validTypes[message.Type] {
+			log.Printf("[WS] ⚠️  Unsupported type: %s", message.Type)
+			continue
+		}
+
+		// Handle ping
+		if message.Type == "ping" {
+			conn.WriteJSON(map[string]string{"type": "pong"})
+			continue
+		}
+
+		message.User = participantID
+		message.Room = roomID
+
+		log.Printf("[WS] 📨 %s: %s → broadcast", participantID, message.Type)
+
+		// Broadcast to other participant
+		broadcastToRoom(room, message, conn)
+	}
+}
+
+func broadcastToRoom(room *Room, msg Message, exclude *websocket.Conn) {
+	room.mu.RLock()
+	defer room.mu.RUnlock()
+
+	for conn := range room.Participants {
+		if conn != exclude {
+			if err := conn.WriteJSON(msg); err != nil {
+				log.Printf("[WS] ⚠️  Broadcast failed: %v", err)
+			}
+		}
+	}
+}
+
 func main() {
 	flag.Parse()
 
-	// Підтримка хостингів (Render, Railway)
+	// Support Railway PORT
 	if port := os.Getenv("PORT"); port != "" && *addr == ":8080" {
 		*addr = ":" + port
 	}
 
-	initDB()
-	defer db.Close()
+	// Initialize Redis
+	initRedis()
 
-	// Налаштування статичних файлів
+	// Initialize TURN config
+	initTURN()
+
+	// Setup static files
 	staticFS, err := fs.Sub(staticFiles, "static")
 	if err != nil {
-		log.Fatalf("Failed to create static FS: %v", err)
+		log.Fatalf("❌ Failed to create static FS: %v", err)
 	}
 
-	// Роутинг
 	http.Handle("/static/", http.StripPrefix("/static/", http.FileServer(http.FS(staticFS))))
 
-	// Login endpoint
+	// Login (host only)
 	http.HandleFunc("/login", func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("[LOGIN] %s request from %s", r.Method, r.RemoteAddr)
-
 		if r.Method == http.MethodGet {
 			serveFile("login.html")(w, r)
 			return
@@ -361,47 +436,33 @@ func main() {
 				Password string `json:"password"`
 			}
 
-			body, err := io.ReadAll(r.Body)
-			if err != nil {
-				log.Printf("[LOGIN] Error reading body: %v", err)
-				http.Error(w, "Invalid request", http.StatusBadRequest)
-				return
-			}
-
-			log.Printf("[LOGIN] Received body: %s", string(body))
-
+			body, _ := io.ReadAll(r.Body)
 			if err := json.Unmarshal(body, &creds); err != nil {
-				log.Printf("[LOGIN] Error parsing JSON: %v", err)
 				http.Error(w, "Invalid JSON", http.StatusBadRequest)
 				return
 			}
 
-			log.Printf("[LOGIN] Attempting login for user: %s", creds.Username)
+			log.Printf("[LOGIN] Attempt: %s", creds.Username)
 
 			if creds.Username == validUsername && creds.Password == validPassword {
-				token, err := generateToken()
-				if err != nil {
-					log.Printf("[LOGIN] Error generating token: %v", err)
-					http.Error(w, "Server error", http.StatusInternalServerError)
-					return
-				}
+				token, _ := generateToken()
+				userID := "host_" + uuid.NewString()[:8]
 
-				sessionMutex.Lock()
-				activeSessions[token] = true
-				sessionMutex.Unlock()
+				// Store session in Redis
+				storeSession(token, userID)
 
-				log.Printf("[LOGIN] ✅ Login successful for user: %s, token: %s...", creds.Username, token[:10])
-
-				// Set cookie for browser
+				// Set cookie
 				http.SetCookie(w, &http.Cookie{
 					Name:     "auth_token",
 					Value:    token,
 					Path:     "/",
-					MaxAge:   86400, // 24 hours
+					MaxAge:   86400,
 					HttpOnly: true,
 					Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
 					SameSite: http.SameSiteLaxMode,
 				})
+
+				log.Printf("[LOGIN] ✅ Success: %s (token: %s...)", creds.Username, token[:10])
 
 				w.Header().Set("Content-Type", "application/json")
 				json.NewEncoder(w).Encode(map[string]any{
@@ -409,8 +470,7 @@ func main() {
 					"token":   token,
 				})
 			} else {
-				log.Printf("[LOGIN] ❌ Invalid credentials for user: %s", creds.Username)
-				w.Header().Set("Content-Type", "application/json")
+				log.Printf("[LOGIN] ❌ Invalid credentials: %s", creds.Username)
 				w.WriteHeader(http.StatusUnauthorized)
 				json.NewEncoder(w).Encode(map[string]any{
 					"success": false,
@@ -423,59 +483,108 @@ func main() {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 	})
 
-	// Logout endpoint
-	http.HandleFunc("/logout", func(w http.ResponseWriter, r *http.Request) {
-		log.Printf("[LOGOUT] User logging out")
-
-		// Get token from cookie
-		cookie, err := r.Cookie("auth_token")
-		if err == nil {
-			sessionMutex.Lock()
-			delete(activeSessions, cookie.Value)
-			sessionMutex.Unlock()
-			log.Printf("[LOGOUT] Removed session token")
+	// Logout
+	http.HandleFunc("/logout", authMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		cookie, _ := r.Cookie("auth_token")
+		if cookie != nil {
+			// Delete from Redis
+			rdb.Del(ctx, fmt.Sprintf("session:%s", cookie.Value))
 		}
 
-		// Clear cookie
 		http.SetCookie(w, &http.Cookie{
-			Name:     "auth_token",
-			Value:    "",
-			Path:     "/",
-			MaxAge:   -1,
-			HttpOnly: true,
+			Name:   "auth_token",
+			Value:  "",
+			Path:   "/",
+			MaxAge: -1,
 		})
 
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
+	}))
+
+	// Home (host only)
+	http.HandleFunc("/", authMiddleware(serveFile("home.html")))
+
+	// Guest join page
+	http.HandleFunc("/join/", func(w http.ResponseWriter, r *http.Request) {
+		serveFile("guest.html")(w, r)
 	})
 
-	// Protected routes
-	http.HandleFunc("/", authMiddleware(serveFile("home.html")))
-	http.HandleFunc("/room/", authMiddleware(serveFile("index.html")))
+	// Meeting room
+	http.HandleFunc("/room/", func(w http.ResponseWriter, r *http.Request) {
+		serveFile("index.html")(w, r)
+	})
 
-	// Створення кімнати (protected)
+	// Create meeting (host only)
 	http.HandleFunc("/create", authMiddleware(func(w http.ResponseWriter, r *http.Request) {
-		id := createRoom()
-		if id == "" {
-			http.Error(w, "Failed to create room", http.StatusInternalServerError)
-			return
-		}
+		userID := r.Header.Get("X-User-ID")
+		roomID := createRoom(userID)
 
-		// Визначення схеми (http/https)
 		scheme := "http"
 		if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
 			scheme = "https"
 		}
 
-		url := fmt.Sprintf("%s://%s/room/%s", scheme, r.Host, id)
-		w.Header().Set("Content-Type", "text/plain; charset=utf-8")
+		url := fmt.Sprintf("%s://%s/join/%s", scheme, r.Host, roomID)
+
+		log.Printf("[CREATE] ✅ Meeting URL: %s", url)
+
+		w.Header().Set("Content-Type", "text/plain")
 		w.Write([]byte(url))
 	}))
 
-	// WebSocket (protected)
-	http.HandleFunc("/ws", authMiddleware(wsHandler))
+	// End meeting (host only)
+	http.HandleFunc("/end", authMiddleware(func(w http.ResponseWriter, r *http.Request) {
+		roomID := r.URL.Query().Get("room")
+		if roomID == "" {
+			http.Error(w, "room ID required", http.StatusBadRequest)
+			return
+		}
 
-	log.Printf("🚀 Kaminskyi AI Messenger starting on %s", *addr)
-	log.Printf("📝 Login credentials: username=%s, password=%s", validUsername, validPassword)
-	log.Printf("🔒 Authentication: Cookie-based + Bearer token")
+		// Delete from Redis
+		deleteMeeting(roomID)
+
+		// Close all connections
+		mu.RLock()
+		room, exists := rooms[roomID]
+		mu.RUnlock()
+
+		if exists {
+			room.mu.Lock()
+			for conn := range room.Participants {
+				conn.Close()
+			}
+			room.mu.Unlock()
+
+			mu.Lock()
+			delete(rooms, roomID)
+			mu.Unlock()
+		}
+
+		log.Printf("[END] ✅ Meeting %s ended by host", roomID)
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]bool{"success": true})
+	}))
+
+	// TURN credentials API
+	http.HandleFunc("/api/turn-credentials", func(w http.ResponseWriter, r *http.Request) {
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]string{
+			"host":     turnHost,
+			"username": turnUsername,
+			"password": turnPassword,
+		})
+	})
+
+	// WebSocket
+	http.HandleFunc("/ws", wsHandler)
+
+	log.Printf("🚀 Kaminskyi AI Messenger v1.0")
+	log.Printf("📝 Host: %s / %s", validUsername, validPassword)
+	log.Printf("🔒 Auth: Cookie + Bearer Token")
+	log.Printf("🗄️  Redis: Connected")
+	log.Printf("⏱️  Meeting TTL: %v", meetingTTL)
+	log.Printf("🌐 Server: %s", *addr)
+
 	log.Fatal(http.ListenAndServe(*addr, nil))
 }

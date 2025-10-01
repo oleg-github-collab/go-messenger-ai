@@ -108,7 +108,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Connect to room and initialize WebRTC
     async function connectToRoom(roomId) {
         try {
-            const wsUrl = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws?room=${roomId}`;
+            // Get guest name from sessionStorage
+            const guestName = sessionStorage.getItem('guestName') || 'Guest';
+
+            const wsUrl = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws?room=${roomId}&name=${encodeURIComponent(guestName)}`;
             socket = new WebSocket(wsUrl);
 
             socket.onopen = async () => {

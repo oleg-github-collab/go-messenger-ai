@@ -1,0 +1,82 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#0f172a">
+    <title>Join Meeting - Kaminskyi AI Messenger</title>
+    <link rel="stylesheet" href="/static/guest.css">
+</head>
+<body>
+    <div class="guest-container">
+        <div class="guest-card">
+            <div class="logo">
+                <div class="logo-icon">K</div>
+            </div>
+
+            <h1>Join Meeting</h1>
+            <p class="host-name">Hosted by <span id="hostName">Oleh Kaminskyi</span></p>
+
+            <!-- Video preview -->
+            <div class="preview-container">
+                <video id="previewVideo" autoplay muted playsinline></video>
+                <div class="preview-placeholder" id="previewPlaceholder">
+                    <div class="preview-avatar">?</div>
+                    <p>Camera Off</p>
+                </div>
+            </div>
+
+            <form id="guestForm">
+                <div class="input-group">
+                    <label for="guestName">Your Name</label>
+                    <input type="text" id="guestName" name="guestName" placeholder="Enter your name" required autocomplete="name">
+                </div>
+
+                <div class="media-options">
+                    <label class="toggle-option">
+                        <input type="checkbox" id="enableVideo" checked>
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-label">
+                            <span class="icon">📹</span>
+                            Join with Video
+                        </span>
+                    </label>
+
+                    <label class="toggle-option">
+                        <input type="checkbox" id="enableAudio" checked>
+                        <span class="toggle-slider"></span>
+                        <span class="toggle-label">
+                            <span class="icon">🎤</span>
+                            Join with Audio
+                        </span>
+                    </label>
+                </div>
+
+                <div class="device-selects">
+                    <select id="cameraSelect" class="device-select">
+                        <option>Loading cameras...</option>
+                    </select>
+                    <select id="microphoneSelect" class="device-select">
+                        <option>Loading microphones...</option>
+                    </select>
+                </div>
+
+                <button type="submit" class="join-btn" id="joinBtn">
+                    <span class="btn-icon">→</span>
+                    Join Meeting
+                </button>
+            </form>
+
+            <p class="privacy-note">
+                <span class="icon">🔒</span>
+                Your video and audio will only be visible to meeting participants
+            </p>
+        </div>
+    </div>
+
+    <script src="/static/guest.js"></script>
+</body>
+</html>

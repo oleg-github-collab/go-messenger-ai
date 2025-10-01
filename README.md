@@ -1,107 +1,111 @@
 # Kaminskyi AI Messenger
 
-A secure 1-on-1 video messenger application with high-quality video and audio capabilities.
+Production-ready 1-on-1 video messenger with WebRTC, Redis, and Railway deployment.
 
 ## Features
 
-- 🔐 Secure authentication (Login: Oleh, Password: QwertY24$)
-- 📹 HD video calling with optimized quality settings
-- 🎤 High-fidelity audio (48kHz stereo)
-- 💬 Real-time chat messaging
-- 📱 Mobile-optimized interface (native app-like experience)
-- 🌐 Works perfectly on desktop and mobile browsers
-- ⚡ WebSocket-based real-time communication
+- 🎥 **HD Video Calls** - 1-on-1 video meetings with WebRTC
+- 🔐 **Host Authentication** - Secure login for meeting host
+- 👥 **Guest Access** - Join via link without authentication
+- 🔗 **Share Links** - Email, SMS, WhatsApp sharing
+- ⏰ **8-Hour TTL** - Meetings expire after 8 hours
+- 💬 **Live Chat** - Text messaging during calls
+- 📱 **Mobile Optimized** - Works on all devices
+- 🌐 **Picture-in-Picture** - Background video calls
 
-## Tech Stack
+## Quick Start
 
-- **Backend:** Go (Golang)
-- **WebSocket:** Gorilla WebSocket
-- **Database:** SQLite
-- **Frontend:** Vanilla JavaScript, HTML5, CSS3
-- **Deployment:** Railway (Docker-based)
+### Railway Deployment
 
-## Local Development
+1. **Create Railway Project**
+   ```bash
+   railway init
+   ```
 
-### Prerequisites
+2. **Add Redis Database**
+   - Go to Railway dashboard
+   - Click "New" → "Database" → "Add Redis"
+   - Redis URL will be auto-configured
 
-- Go 1.21 or higher
-- GCC (for SQLite support)
+3. **Deploy**
+   ```bash
+   railway up
+   ```
 
-### Running Locally
+4. **Environment Variables** (Auto-configured by Railway)
+   - `REDIS_URL` - Redis connection string
+   - `PORT` - Application port (default: 8080)
 
-```bash
-# Clone the repository
-git clone <your-repo-url>
-cd "go messenger"
+### Local Development
 
-# Install dependencies
-go mod download
+1. **Start Redis**
+   ```bash
+   docker run -d -p 6379:6379 redis:alpine
+   ```
 
-# Run the server
-go run main.go
-```
+2. **Set Environment**
+   ```bash
+   export REDIS_URL="redis://localhost:6379"
+   export PORT=8080
+   ```
 
-The app will be available at `http://localhost:8080`
+3. **Run Application**
+   ```bash
+   go run main.go
+   ```
 
-### Login Credentials
+4. **Access**
+   - Host: http://localhost:8080/login
+   - Guest: http://localhost:8080/join/{roomID}
 
-- **Username:** Oleh
-- **Password:** QwertY24$
+## Host Credentials
 
-## Deployment on Railway
+- **Username**: `Oleh`
+- **Password**: `QwertY24$`
 
-### Quick Deploy
+## Architecture
 
-1. Create a new project on [Railway](https://railway.app)
-2. Connect your GitHub repository
-3. Railway will automatically detect the `Dockerfile` and deploy
-4. The app will be available at your Railway-provided URL
+- **Backend**: Go 1.21 with Gorilla WebSocket
+- **Database**: Redis (sessions + meetings)
+- **WebRTC**: Peer-to-peer with ICE/STUN
+- **Frontend**: Vanilla JavaScript + CSS3
+- **Deployment**: Railway + Docker
 
-### Environment Variables
+## Session Management
 
-No additional environment variables are required. The app uses:
-- Port: Automatically set by Railway via `$PORT` environment variable
-- Database: SQLite stored in `/data/sqlite.db`
+- **Host Sessions**: 24-hour TTL with HTTP-only cookies
+- **Meetings**: 8-hour TTL with Redis expiration
+- **Guest Access**: No authentication required
 
-### Railway Configuration Files
+## API Endpoints
 
-- `Dockerfile` - Multi-stage Docker build for optimal size
-- `railway.json` - Railway-specific configuration
-- `railway.toml` - Alternative Railway configuration
-- `.railwayignore` - Files to exclude from deployment
+### Host (Protected)
+- `GET /` - Home page
+- `GET /create` - Create meeting
+- `POST /end` - Terminate meeting
+- `GET /logout` - Logout
 
-## Usage
+### Guest (Public)
+- `GET /join/{roomID}` - Guest entry page
+- `GET /room/{roomID}` - Meeting room
+- `WS /ws?room={id}&name={name}` - WebSocket signaling
 
-1. **Login:** Navigate to `/login` and sign in with credentials
-2. **Home Page:** After login, you'll see the home page with "Create Meeting" button
-3. **Create Meeting:** Click "Create Meeting" to generate a unique meeting room
-4. **Share Link:** Share the meeting URL with another participant
-5. **Join Call:** Both participants can see and hear each other, and use the chat feature
+## WebRTC Signaling
 
-## Video/Audio Settings
+Messages exchanged via WebSocket:
+- `join` - User joins room
+- `offer` - WebRTC offer
+- `answer` - WebRTC answer
+- `ice-candidate` - ICE candidates
+- `chat` - Text message
+- `leave` - User disconnects
 
-The app uses optimized media constraints:
+## Browser Support
 
-### Video
-- Resolution: Up to 1920x1080 (Full HD)
-- Frame rate: 30-60 fps
-- Adaptive quality based on device capabilities
-
-### Audio
-- Sample rate: 48kHz
-- Stereo (2 channels)
-- Echo cancellation enabled
-- Noise suppression enabled
-- Auto gain control enabled
-
-## Mobile Optimization
-
-- ✅ Viewport optimized for mobile browsers
-- ✅ No unwanted scrolling or zooming
-- ✅ Native app-like experience
-- ✅ Support for notched devices (iPhone X+)
-- ✅ Proper safe area handling
-- ✅ Links open directly in browser (not in embedded views)
+- ✅ Chrome/Edge 90+
+- ✅ Firefox 88+
+- ✅ Safari 14+
+- ✅ Mobile browsers (iOS Safari, Chrome Android)
 
 ## License
 

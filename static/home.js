@@ -1,68 +1,133 @@
 document.addEventListener('DOMContentLoaded', () => {
     const createMeetingBtn = document.getElementById('createMeetingBtn');
     const logoutBtn = document.getElementById('logoutBtn');
+    const shareSection = document.getElementById('shareSection');
+    const closeShare = document.getElementById('closeShare');
+    const meetingLinkInput = document.getElementById('meetingLink');
+    const copyBtn = document.getElementById('copyBtn');
+    const shareEmail = document.getElementById('shareEmail');
+    const shareSMS = document.getElementById('shareSMS');
+    const shareWhatsApp = document.getElementById('shareWhatsApp');
+    const joinNow = document.getElementById('joinNow');
 
-    console.log('Home page loaded');
+    let currentMeetingURL = '';
+
+    console.log('[HOME] Page loaded');
 
     createMeetingBtn.addEventListener('click', async () => {
         createMeetingBtn.disabled = true;
-        createMeetingBtn.textContent = 'Creating...';
-
-        const authToken = localStorage.getItem('authToken');
-        console.log('Creating meeting, token exists:', !!authToken);
+        const originalHTML = createMeetingBtn.innerHTML;
+        createMeetingBtn.innerHTML = '<span class="btn-icon">⏳</span> Creating...';
 
         try {
-            const headers = {};
-            if (authToken) {
-                headers['Authorization'] = `Bearer ${authToken}`;
-            }
-
             const response = await fetch('/create', {
                 method: 'GET',
-                credentials: 'include', // Include cookies
-                headers: headers
+                credentials: 'include'
             });
 
-            console.log('Create meeting response:', response.status);
+            console.log('[HOME] Create meeting response:', response.status);
 
             if (response.ok) {
                 const url = await response.text();
-                console.log('Meeting URL:', url);
+                currentMeetingURL = url;
+                console.log('[HOME] ✅ Meeting URL:', url);
 
-                // Copy to clipboard
-                if (navigator.clipboard) {
-                    try {
-                        await navigator.clipboard.writeText(url);
-                        console.log('URL copied to clipboard');
-                    } catch (e) {
-                        console.log('Failed to copy to clipboard:', e);
-                    }
+                // Show share section
+                meetingLinkInput.value = url;
+                shareSection.style.display = 'block';
+                createMeetingBtn.style.display = 'none';
+
+                // Auto-copy to clipboard
+                try {
+                    await navigator.clipboard.writeText(url);
+                    console.log('[HOME] URL auto-copied');
+                } catch (e) {
+                    console.log('[HOME] Clipboard failed:', e);
                 }
-
-                // Navigate to the meeting
-                window.location.href = url;
             } else if (response.status === 401) {
-                console.log('Unauthorized, redirecting to login');
                 localStorage.removeItem('authToken');
                 window.location.href = '/login';
             } else {
                 alert('Failed to create meeting. Please try again.');
-                createMeetingBtn.disabled = false;
-                createMeetingBtn.innerHTML = '<span class="btn-icon">+</span> Create Meeting';
             }
         } catch (error) {
-            console.error('Error creating meeting:', error);
+            console.error('[HOME] Error:', error);
             alert('Connection error. Please try again.');
+        } finally {
             createMeetingBtn.disabled = false;
-            createMeetingBtn.innerHTML = '<span class="btn-icon">+</span> Create Meeting';
+            createMeetingBtn.innerHTML = originalHTML;
         }
     });
 
+    // Close share section
+    closeShare.addEventListener('click', () => {
+        shareSection.style.display = 'none';
+        createMeetingBtn.style.display = 'flex';
+        currentMeetingURL = '';
+    });
+
+    // Copy link
+    copyBtn.addEventListener('click', async () => {
+        try {
+            await navigator.clipboard.writeText(currentMeetingURL);
+            copyBtn.innerHTML = '<span class="icon">✓</span> Copied!';
+            copyBtn.classList.add('copied');
+
+            setTimeout(() => {
+                copyBtn.innerHTML = '<span class="icon">📋</span> Copy';
+                copyBtn.classList.remove('copied');
+            }, 2000);
+
+            console.log('[HOME] ✅ Link copied');
+        } catch (error) {
+            console.error('[HOME] Copy failed:', error);
+            alert('Failed to copy link');
+        }
+    });
+
+    // Share via Email
+    shareEmail.addEventListener('click', () => {
+        const subject = encodeURIComponent('Join my video call');
+        const body = encodeURIComponent(`Hi! Join me for a video call:\n\n${currentMeetingURL}\n\nThis link expires in 8 hours.`);
+        window.open(`mailto:?subject=${subject}&body=${body}`, '_blank');
+        console.log('[HOME] Opened email share');
+    });
+
+    // Share via SMS
+    shareSMS.addEventListener('click', () => {
+        const message = encodeURIComponent(`Join my video call: ${currentMeetingURL}`);
+
+        // iOS/Android detection
+        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+        if (isMobile) {
+            window.open(`sms:?body=${message}`, '_blank');
+        } else {
+            // Desktop - copy and show message
+            navigator.clipboard.writeText(currentMeetingURL);
+            alert('Link copied! Send it via SMS from your phone.');
+        }
+
+        console.log('[HOME] SMS share triggered');
+    });
+
+    // Share via WhatsApp
+    shareWhatsApp.addEventListener('click', () => {
+        const message = encodeURIComponent(`Join my video call: ${currentMeetingURL}`);
+        window.open(`https://wa.me/?text=${message}`, '_blank');
+        console.log('[HOME] Opened WhatsApp share');
+    });
+
+    // Join Now
+    joinNow.addEventListener('click', () => {
+        window.location.href = currentMeetingURL;
+    });
+
+    // Logout
     logoutBtn.addEventListener('click', () => {
         if (confirm('Are you sure you want to logout?')) {
-            console.log('Logging out...');
+            console.log('[HOME] Logging out...');
             localStorage.removeItem('authToken');
-            // Use server logout to clear cookie
             window.location.href = '/logout';
         }
     });

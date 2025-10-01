@@ -33,6 +33,46 @@
                 Create Meeting
             </button>
 
+            <!-- Share Link Section (hidden by default) -->
+            <div class="share-section" id="shareSection" style="display: none;">
+                <div class="share-header">
+                    <h3>Meeting Link</h3>
+                    <button class="close-share" id="closeShare">✕</button>
+                </div>
+
+                <div class="link-container">
+                    <input type="text" id="meetingLink" readonly class="meeting-link-input">
+                    <button class="copy-btn" id="copyBtn">
+                        <span class="icon">📋</span>
+                        Copy
+                    </button>
+                </div>
+
+                <div class="share-buttons">
+                    <button class="share-btn" id="shareEmail">
+                        <span class="icon">✉️</span>
+                        Email
+                    </button>
+                    <button class="share-btn" id="shareSMS">
+                        <span class="icon">💬</span>
+                        SMS
+                    </button>
+                    <button class="share-btn" id="shareWhatsApp">
+                        <span class="icon">📱</span>
+                        WhatsApp
+                    </button>
+                    <button class="share-btn" id="joinNow">
+                        <span class="icon">→</span>
+                        Join Now
+                    </button>
+                </div>
+
+                <div class="link-expires">
+                    <span class="icon">⏰</span>
+                    Link expires in 8 hours
+                </div>
+            </div>
+
             <div class="features">
                 <div class="feature-item">
                     <div class="feature-icon">📹</div>
