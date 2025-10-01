@@ -217,9 +217,25 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     case 'join-request':
                         const requestData = JSON.parse(message.data);
-                        console.log('[CALL] Join request from:', requestData.name);
+                        console.log('[CALL] 🔔 Join request from:', requestData.name, 'Data:', requestData);
+                        console.log('[CALL] joinRequestUI exists?', !!joinRequestUI);
                         if (joinRequestUI) {
+                            console.log('[CALL] Showing join request UI...');
                             joinRequestUI.show(requestData);
+                        } else {
+                            console.error('[CALL] ❌ joinRequestUI is NULL!');
+                            // Fallback: show browser alert
+                            if (confirm(`${requestData.name} wants to join. Admit?`)) {
+                                socket.send(JSON.stringify({
+                                    type: 'approve-join',
+                                    data: JSON.stringify({ id: requestData.id })
+                                }));
+                            } else {
+                                socket.send(JSON.stringify({
+                                    type: 'reject-join',
+                                    data: JSON.stringify({ id: requestData.id })
+                                }));
+                            }
                         }
                         break;
 

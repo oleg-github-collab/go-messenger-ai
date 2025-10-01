@@ -469,7 +469,7 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 		// Validate message type
 		validTypes := map[string]bool{
 			"chat": true, "offer": true, "answer": true,
-			"ice-candidate": true, "ping": true,
+			"ice-candidate": true, "ping": true, "join": true,
 			"approve-join": true, "reject-join": true,
 		}
 
