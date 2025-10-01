@@ -81,6 +81,39 @@
                 <span class="btn-label">More</span>
             </button>
         </div>
+
+        <!-- Chat Panel -->
+        <div class="chat-panel" id="chatPanel">
+            <div class="chat-header">
+                <button class="chat-back-btn" id="chatBackBtn">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                        <path d="M15 18L9 12L15 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                    <span>Back to call</span>
+                </button>
+            </div>
+
+            <div class="chat-messages" id="chatMessages">
+                <div class="chat-empty-state" id="chatEmpty">
+                    <div class="chat-empty-icon">💬</div>
+                    <div class="chat-empty-title">No messages yet</div>
+                    <div class="chat-empty-subtitle">Start chatting with everyone or send private messages</div>
+                </div>
+            </div>
+
+            <div class="chat-input-area">
+                <button class="emoji-btn" id="emojiBtn" title="Emoji">😊</button>
+                <select class="recipient-select" id="recipientSelect">
+                    <option value="everyone">Everyone</option>
+                </select>
+                <input type="text" id="messageInput" placeholder="Type a message..." />
+                <button id="sendMessageBtn" class="send-message-btn">
+                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                    </svg>
+                </button>
+            </div>
+        </div>
     </div>
 
     <script src="/static/group-call.js"></script>

@@ -83,7 +83,35 @@ function initEmojiPicker() {
     // GIF search
     const gifSearch = document.getElementById('gifSearch');
     const gifGrid = document.getElementById('gifGrid');
+    const gifCategories = document.getElementById('gifCategories');
     let gifSearchTimeout;
+
+    // GIF category buttons
+    const gifCategoryButtons = [
+        { emoji: '😊', label: 'Happy', query: 'happy excited' },
+        { emoji: '😂', label: 'Funny', query: 'funny laugh' },
+        { emoji: '❤️', label: 'Love', query: 'love heart' },
+        { emoji: '💃', label: 'Dance', query: 'dance party' },
+        { emoji: '😢', label: 'Sad', query: 'sad cry' },
+        { emoji: '😮', label: 'Wow', query: 'wow shocked' },
+        { emoji: '👏', label: 'Applause', query: 'clap applause' },
+        { emoji: '🎉', label: 'Party', query: 'party celebrate' }
+    ];
+
+    // Create category buttons
+    if (gifCategories) {
+        gifCategories.innerHTML = '';
+        gifCategoryButtons.forEach(cat => {
+            const btn = document.createElement('button');
+            btn.className = 'gif-category-btn';
+            btn.innerHTML = `<span style="font-size: 18px; margin-right: 4px;">${cat.emoji}</span><span style="font-size: 12px;">${cat.label}</span>`;
+            btn.addEventListener('click', () => {
+                gifSearch.value = '';
+                loadGifs(cat.query);
+            });
+            gifCategories.appendChild(btn);
+        });
+    }
 
     if (gifSearch) {
         gifSearch.addEventListener('input', (e) => {
@@ -100,7 +128,7 @@ function initEmojiPicker() {
         try {
             // Using Tenor's public demo API key
             const apiKey = 'AIzaSyAyimkuYQYF_FXVALexPuGQctUWRURdCYQ';
-            const limit = 20;
+            const limit = 50; // Increased from 20 to 50
             const url = `https://tenor.googleapis.com/v2/search?q=${encodeURIComponent(query)}&key=${apiKey}&limit=${limit}`;
 
             const response = await fetch(url);

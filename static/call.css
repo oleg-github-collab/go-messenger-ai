@@ -843,6 +843,42 @@ html, body {
     color: #94a3b8;
 }
 
+.gif-categories {
+    display: flex;
+    gap: 8px;
+    padding: 0 20px 12px;
+    overflow-x: auto;
+    scrollbar-width: none;
+}
+
+.gif-categories::-webkit-scrollbar {
+    display: none;
+}
+
+.gif-category-btn {
+    flex-shrink: 0;
+    padding: 8px 16px;
+    background: rgba(59, 130, 246, 0.1);
+    border: 1px solid rgba(59, 130, 246, 0.3);
+    border-radius: 20px;
+    color: white;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: flex;
+    align-items: center;
+    gap: 4px;
+}
+
+.gif-category-btn:hover {
+    background: rgba(59, 130, 246, 0.2);
+    border-color: rgba(59, 130, 246, 0.5);
+}
+
+.gif-category-btn:active {
+    transform: scale(0.95);
+}
+
 .gif-grid {
     padding: 0 20px 20px;
     display: grid;

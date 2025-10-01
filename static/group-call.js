@@ -194,21 +194,21 @@ document.addEventListener('DOMContentLoaded', async () => {
                 // List of existing participants
                 const existingParticipants = message.data || [];
                 existingParticipants.forEach(p => {
-                    addParticipantTile(p.id, p.name);
+                    addParticipantTileEnhanced(p.id, p.name);
                 });
                 break;
 
             case 'participant-joined':
                 // New participant joined
                 const joined = typeof message.data === 'string' ? JSON.parse(message.data) : message.data;
-                addParticipantTile(joined.id, joined.name);
+                addParticipantTileEnhanced(joined.id, joined.name);
                 updateParticipantCount(participants.size + 1);
                 break;
 
             case 'participant-left':
                 // Participant left
                 const left = typeof message.data === 'string' ? JSON.parse(message.data) : message.data;
-                removeParticipantTile(left.id);
+                removeParticipantTileEnhanced(left.id);
                 updateParticipantCount(participants.size + 1);
                 break;
 
@@ -221,13 +221,113 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             case 'chat':
                 // Chat message received
-                console.log('[GROUP-CALL] Chat from', message.from, ':', message.data);
-                // TODO: Handle chat UI
+                const chatData = typeof message.data === 'string' ? JSON.parse(message.data) : message.data;
+                const isPrivate = chatData.to && chatData.to !== 'everyone';
+                const isForMe = !chatData.to || chatData.to === 'everyone' || chatData.to === myParticipantId;
+
+                if (isForMe) {
+                    appendMessage(chatData.text, 'received', chatData.from, chatData.fromName, isPrivate);
+
+                    // Show badge if chat panel is closed
+                    if (!document.getElementById('chatPanel').classList.contains('active')) {
+                        const badge = document.getElementById('chatBadge');
+                        const currentCount = parseInt(badge.textContent) || 0;
+                        badge.textContent = currentCount + 1;
+                        badge.style.display = 'block';
+                    }
+                }
                 break;
 
             default:
                 console.warn('[GROUP-CALL] Unknown message type:', message.type);
         }
+    }
+
+    // Chat functionality elements
+    const chatPanel = document.getElementById('chatPanel');
+    const chatBackBtn = document.getElementById('chatBackBtn');
+    const chatMessages = document.getElementById('chatMessages');
+    const chatEmpty = document.getElementById('chatEmpty');
+    const messageInput = document.getElementById('messageInput');
+    const sendMessageBtn = document.getElementById('sendMessageBtn');
+    const recipientSelect = document.getElementById('recipientSelect');
+
+    function appendMessage(text, type, fromId, fromName, isPrivate) {
+        if (chatEmpty) {
+            chatEmpty.style.display = 'none';
+        }
+
+        const messageDiv = document.createElement('div');
+        messageDiv.classList.add('message', type);
+        if (isPrivate) {
+            messageDiv.classList.add('private');
+        }
+
+        // Add header if received message
+        if (type === 'received') {
+            const header = document.createElement('div');
+            header.className = 'message-header';
+            header.textContent = fromName || `Participant ${fromId}`;
+            if (isPrivate) {
+                const badge = document.createElement('span');
+                badge.className = 'message-private-badge';
+                badge.textContent = 'PRIVATE';
+                header.appendChild(badge);
+            }
+            messageDiv.appendChild(header);
+        }
+
+        const content = document.createElement('div');
+        content.textContent = text;
+        messageDiv.appendChild(content);
+
+        chatMessages.appendChild(messageDiv);
+        chatMessages.scrollTop = chatMessages.scrollHeight;
+    }
+
+    function sendMessage() {
+        const text = messageInput.value.trim();
+        const recipient = recipientSelect.value;
+
+        if (!text || !socket || socket.readyState !== WebSocket.OPEN) return;
+
+        const chatMessage = {
+            type: 'chat',
+            data: JSON.stringify({
+                text: text,
+                to: recipient,
+                from: myParticipantId,
+                fromName: myName
+            })
+        };
+
+        socket.send(JSON.stringify(chatMessage));
+
+        // Display sent message
+        const isPrivate = recipient !== 'everyone';
+        const recipientName = isPrivate ? recipientSelect.options[recipientSelect.selectedIndex].text : null;
+        appendMessage(
+            isPrivate ? `To ${recipientName}: ${text}` : text,
+            'sent',
+            myParticipantId,
+            myName,
+            isPrivate
+        );
+
+        messageInput.value = '';
+    }
+
+    function updateRecipientList() {
+        // Clear existing options except "Everyone"
+        recipientSelect.innerHTML = '<option value="everyone">Everyone</option>';
+
+        // Add each participant as an option
+        participants.forEach((participant, participantId) => {
+            const option = document.createElement('option');
+            option.value = participantId;
+            option.textContent = participant.name;
+            recipientSelect.appendChild(option);
+        });
     }
 
     // Add participant tile to grid
@@ -272,6 +372,11 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.log('[GROUP-CALL] Added participant:', participantName);
     }
 
+    function addParticipantTileEnhanced(participantId, participantName) {
+        addParticipantTile(participantId, participantName);
+        updateRecipientList();
+    }
+
     // Remove participant tile
     function removeParticipantTile(participantId) {
         const participant = participants.get(participantId);
@@ -281,6 +386,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             updateGridLayout();
             console.log('[GROUP-CALL] Removed participant:', participant.name);
         }
+    }
+
+    function removeParticipantTileEnhanced(participantId) {
+        removeParticipantTile(participantId);
+        updateRecipientList();
     }
 
     // Update grid layout based on participant count
@@ -347,9 +457,20 @@ document.addEventListener('DOMContentLoaded', async () => {
     cameraBtn.addEventListener('click', toggleCamera);
     micBtn.addEventListener('click', toggleMic);
     endCallBtn.addEventListener('click', endCall);
+
     chatBtn.addEventListener('click', () => {
-        console.log('[GROUP-CALL] Chat clicked');
-        // TODO: Open chat panel
+        chatPanel.classList.add('active');
+        chatBadge.style.display = 'none';
+        chatBadge.textContent = '0';
+    });
+
+    chatBackBtn.addEventListener('click', () => {
+        chatPanel.classList.remove('active');
+    });
+
+    sendMessageBtn.addEventListener('click', sendMessage);
+    messageInput.addEventListener('keypress', (e) => {
+        if (e.key === 'Enter') sendMessage();
     });
 
     // Initialize
