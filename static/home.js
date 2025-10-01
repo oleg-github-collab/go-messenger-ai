@@ -94,7 +94,7 @@ document.addEventListener('DOMContentLoaded', () => {
             createMeetingBtn.disabled = false;
             createMeetingBtn.innerHTML = originalHTML;
         }
-    });
+    }
 
     // Close share section
     closeShare.addEventListener('click', () => {
