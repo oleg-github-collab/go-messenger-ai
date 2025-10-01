@@ -1,0 +1,90 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="format-detection" content="telephone=no">
+    <title>Meeting - Kaminskyi AI Messenger</title>
+    <link rel="stylesheet" href="/static/style.css">
+</head>
+<body>
+    <div class="call-container" id="callContainer">
+        <!-- Main video area -->
+        <div class="main-video" id="mainVideo">
+            <!-- Remote video placeholder -->
+            <div class="remote-placeholder">
+                <div class="avatar">P</div>
+                <div class="name">Partner</div>
+                <div class="status">Connecting...</div>
+            </div>
+
+            <!-- Local video (small overlay) -->
+            <div class="local-video-overlay" id="localVideoOverlay">
+                <div class="local-placeholder">
+                    <div class="avatar">Y</div>
+                </div>
+            </div>
+
+            <!-- Call timer (centered top) -->
+            <div class="call-timer" id="callTimer">
+                <span class="timer-dot"></span>
+                <span class="timer-value">00:00</span>
+            </div>
+
+            <!-- Fullscreen button -->
+            <button class="fullscreen-btn" id="fullscreenBtn" title="Fullscreen">
+                <span>⛶</span>
+            </button>
+
+            <!-- Picture-in-Picture button -->
+            <button class="pip-btn" id="pipBtn" title="Picture-in-Picture">
+                <span>◱</span>
+            </button>
+
+            <!-- Chat bubble (TikTok-style) -->
+            <div class="chat-bubble" id="chatBubble">
+                <div class="chat-avatar">P</div>
+                <div class="chat-text">Hello! Ready to talk?</div>
+                <span class="chat-expand">▼</span>
+            </div>
+        </div>
+
+        <!-- Bottom controls -->
+        <div class="bottom-controls" id="bottomControls">
+            <div class="bottom-btn" id="micBtn">
+                <span>🎤</span>
+            </div>
+            <div class="bottom-btn" id="videoBtn">
+                <span>📹</span>
+            </div>
+            <div class="bottom-btn end-call" id="endCall">
+                <span>📞</span>
+            </div>
+            <div class="bottom-btn" id="chatBtn">
+                <span>💬</span>
+            </div>
+            <div class="bottom-btn" id="settingsBtn">
+                <span>⚙️</span>
+            </div>
+        </div>
+
+        <!-- Full chat panel (hidden by default) -->
+        <div class="chat-panel" id="chatPanel">
+            <div class="chat-header">
+                <button class="back-to-call" id="backToCall">← Back to call</button>
+            </div>
+            <div class="chat-messages" id="chatMessages"></div>
+            <div class="chat-input">
+                <input type="text" id="messageInput" placeholder="Type a message..." />
+                <button id="sendBtn">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/script.js"></script>
+</body>
+</html>
