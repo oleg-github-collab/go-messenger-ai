@@ -509,9 +509,9 @@ func main() {
 		serveFile("guest.html")(w, r)
 	})
 
-	// Meeting room
+	// Meeting room (new modern UI)
 	http.HandleFunc("/room/", func(w http.ResponseWriter, r *http.Request) {
-		serveFile("index.html")(w, r)
+		serveFile("call.html")(w, r)
 	})
 
 	// Create meeting (host only)
