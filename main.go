@@ -21,6 +21,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/redis/go-redis/v9"
+	"messenger/sfu"
 )
 
 const (
@@ -41,6 +42,9 @@ var (
 	turnHost     string
 	turnUsername string
 	turnPassword string
+
+	// SFU server for group calls
+	sfuServer *sfu.SFUServer
 )
 
 //go:embed static/*
@@ -145,11 +149,12 @@ func validateSession(token string) (string, bool) {
 }
 
 // Store meeting in Redis
-func storeMeeting(roomID, hostID, hostName string) error {
+func storeMeeting(roomID, hostID, hostName, mode string) error {
 	key := fmt.Sprintf("meeting:%s", roomID)
 	data := map[string]interface{}{
 		"host_id":    hostID,
 		"host_name":  hostName,
+		"mode":       mode,
 		"created_at": time.Now().Unix(),
 		"active":     true,
 	}
@@ -242,27 +247,29 @@ func serveFile(filename string) http.HandlerFunc {
 	}
 }
 
-func createRoom(hostID, hostName string) string {
+func createRoom(hostID, hostName, mode string) string {
 	id := uuid.NewString()
 
-	// Store in memory
-	mu.Lock()
-	rooms[id] = &Room{
-		ID:           id,
-		HostID:       hostID,
-		HostName:     hostName,
-		Participants: make(map[*websocket.Conn]*Participant),
-		WaitingRoom:  make(map[string]*Participant),
-		CreatedAt:    time.Now(),
+	// Store in memory (only for 1-on-1 mode)
+	if mode == "1on1" {
+		mu.Lock()
+		rooms[id] = &Room{
+			ID:           id,
+			HostID:       hostID,
+			HostName:     hostName,
+			Participants: make(map[*websocket.Conn]*Participant),
+			WaitingRoom:  make(map[string]*Participant),
+			CreatedAt:    time.Now(),
+		}
+		mu.Unlock()
 	}
-	mu.Unlock()
 
 	// Store in Redis
-	if err := storeMeeting(id, hostID, hostName); err != nil {
+	if err := storeMeeting(id, hostID, hostName, mode); err != nil {
 		log.Printf("[ROOM] ⚠️  Failed to store in Redis: %v", err)
 	}
 
-	log.Printf("[ROOM] ✅ Created room %s by host %s", id, hostName)
+	log.Printf("[ROOM] ✅ Created %s room %s by host %s", mode, id, hostName)
 	return id
 }
 
@@ -558,6 +565,200 @@ func broadcastToRoom(room *Room, msg Message, exclude *websocket.Conn) {
 	}
 }
 
+// SFU WebSocket handler for group calls
+func sfuWSHandler(w http.ResponseWriter, r *http.Request) {
+	conn, err := upgrader.Upgrade(w, r, nil)
+	if err != nil {
+		log.Printf("[SFU-WS] ❌ Upgrade failed: %v", err)
+		return
+	}
+	defer conn.Close()
+
+	roomID := r.URL.Query().Get("room")
+	userName := r.URL.Query().Get("name")
+
+	if roomID == "" {
+		conn.WriteJSON(map[string]string{"error": "room ID missing"})
+		return
+	}
+
+	if userName == "" {
+		userName = "Guest"
+	}
+
+	// Check if meeting exists in Redis
+	meetingData, err := getMeeting(roomID)
+	if err != nil {
+		conn.WriteJSON(map[string]string{"error": "meeting not found or expired"})
+		return
+	}
+
+	// Verify this is a group meeting
+	mode := "1on1"
+	if m, ok := meetingData["mode"].(string); ok {
+		mode = m
+	}
+
+	if mode != "group" {
+		conn.WriteJSON(map[string]string{"error": "this is not a group meeting"})
+		return
+	}
+
+	// Get or create SFU room
+	room := sfuServer.GetOrCreateRoom(roomID)
+
+	// Check participant limit
+	participantCount := len(room.GetAllParticipants())
+	if participantCount >= 20 {
+		conn.WriteJSON(map[string]string{"error": "room full (max 20 participants)"})
+		return
+	}
+
+	// Generate participant ID
+	participantID := uuid.NewString()
+
+	// Check if this is the host
+	userID := r.Header.Get("X-User-ID")
+	hostID := ""
+	if id, ok := meetingData["host_id"].(string); ok {
+		hostID = id
+	}
+	isHost := userID != "" && userID == hostID
+
+	// Get host name
+	hostName := "Host"
+	if name, ok := meetingData["host_name"].(string); ok {
+		hostName = name
+	}
+
+	if isHost {
+		userName = hostName
+	}
+
+	// Add participant to SFU room
+	participant, err := room.AddParticipant(participantID, userName, conn)
+	if err != nil {
+		log.Printf("[SFU-WS] ❌ Failed to add participant: %v", err)
+		conn.WriteJSON(map[string]string{"error": "failed to join room"})
+		return
+	}
+
+	log.Printf("[SFU-WS] ✅ %s joined group room %s (%d/%d participants)",
+		userName, roomID, participantCount+1, 20)
+
+	// Send join confirmation
+	conn.WriteJSON(map[string]interface{}{
+		"type": "joined",
+		"data": map[string]interface{}{
+			"id":               participantID,
+			"name":             userName,
+			"isHost":           isHost,
+			"participantCount": participantCount + 1,
+		},
+	})
+
+	// Notify others about new participant
+	participants := room.GetAllParticipants()
+	for _, p := range participants {
+		if p.ID != participantID {
+			p.SendMessage(map[string]interface{}{
+				"type": "participant-joined",
+				"data": map[string]interface{}{
+					"id":   participantID,
+					"name": userName,
+				},
+			})
+		}
+	}
+
+	// Send existing participants list to new participant
+	existingParticipants := []map[string]string{}
+	for _, p := range participants {
+		if p.ID != participantID {
+			existingParticipants = append(existingParticipants, map[string]string{
+				"id":   p.ID,
+				"name": p.Name,
+			})
+		}
+	}
+	conn.WriteJSON(map[string]interface{}{
+		"type": "participants-list",
+		"data": existingParticipants,
+	})
+
+	// Handle signaling messages
+	for {
+		var msg map[string]interface{}
+		err := conn.ReadJSON(&msg)
+		if err != nil {
+			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
+				log.Printf("[SFU-WS] ⚠️  Unexpected close: %v", err)
+			}
+			break
+		}
+
+		msgType, ok := msg["type"].(string)
+		if !ok {
+			log.Printf("[SFU-WS] ⚠️  Invalid message format")
+			continue
+		}
+
+		dataStr := ""
+		if data, ok := msg["data"].(string); ok {
+			dataStr = data
+		}
+
+		switch msgType {
+		case "offer":
+			if err := participant.HandleOffer(dataStr); err != nil {
+				log.Printf("[SFU-WS] ⚠️  Handle offer error: %v", err)
+			}
+
+		case "answer":
+			if err := participant.HandleAnswer(dataStr); err != nil {
+				log.Printf("[SFU-WS] ⚠️  Handle answer error: %v", err)
+			}
+
+		case "ice-candidate":
+			if err := participant.HandleICECandidate(dataStr); err != nil {
+				log.Printf("[SFU-WS] ⚠️  Handle ICE candidate error: %v", err)
+			}
+
+		case "chat":
+			// Broadcast chat to all other participants
+			for _, p := range room.GetAllParticipants() {
+				if p.ID != participantID {
+					p.SendMessage(map[string]interface{}{
+						"type": "chat",
+						"data": msg["data"],
+						"from": userName,
+					})
+				}
+			}
+
+		default:
+			log.Printf("[SFU-WS] ⚠️  Unknown message type: %s", msgType)
+		}
+	}
+
+	// Cleanup on disconnect
+	room.RemoveParticipant(participantID)
+	log.Printf("[SFU-WS] 👋 %s left group room %s", userName, roomID)
+
+	// Notify others
+	for _, p := range room.GetAllParticipants() {
+		p.SendMessage(map[string]interface{}{
+			"type": "participant-left",
+			"data": map[string]interface{}{
+				"id":   participantID,
+				"name": userName,
+			},
+		})
+	}
+
+	// If room is empty, it will be cleaned up by SFU's internal logic
+}
+
 func main() {
 	flag.Parse()
 
@@ -571,6 +772,10 @@ func main() {
 
 	// Initialize TURN config
 	initTURN()
+
+	// Initialize SFU server
+	sfuServer = sfu.NewSFUServer()
+	log.Printf("[SFU] ✅ SFU server initialized")
 
 	// Setup static files
 	staticFS, err := fs.Sub(staticFiles, "static")
@@ -666,8 +871,32 @@ func main() {
 		serveFile("guest.html")(w, r)
 	})
 
-	// Meeting room (new modern UI)
+	// Meeting room - route based on meeting mode
 	http.HandleFunc("/room/", func(w http.ResponseWriter, r *http.Request) {
+		// Extract room ID from URL
+		pathParts := strings.Split(r.URL.Path, "/")
+		roomID := ""
+		if len(pathParts) >= 3 {
+			roomID = pathParts[2]
+		}
+
+		// Check meeting mode
+		if roomID != "" {
+			meetingData, err := getMeeting(roomID)
+			if err == nil {
+				mode := "1on1"
+				if m, ok := meetingData["mode"].(string); ok {
+					mode = m
+				}
+
+				if mode == "group" {
+					serveFile("group-call.html")(w, r)
+					return
+				}
+			}
+		}
+
+		// Default to 1-on-1 call UI
 		serveFile("call.html")(w, r)
 	})
 
@@ -681,7 +910,13 @@ func main() {
 			hostName = "Host"
 		}
 
-		roomID := createRoom(userID, hostName)
+		// Get meeting mode (1on1 or group)
+		mode := r.URL.Query().Get("mode")
+		if mode == "" {
+			mode = "1on1"
+		}
+
+		roomID := createRoom(userID, hostName, mode)
 
 		scheme := "http"
 		if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
@@ -690,7 +925,7 @@ func main() {
 
 		url := fmt.Sprintf("%s://%s/join/%s", scheme, r.Host, roomID)
 
-		log.Printf("[CREATE] ✅ Meeting URL: %s (Host: %s)", url, hostName)
+		log.Printf("[CREATE] ✅ %s meeting URL: %s (Host: %s)", mode, url, hostName)
 
 		w.Header().Set("Content-Type", "text/plain")
 		w.Write([]byte(url))
@@ -746,8 +981,11 @@ func main() {
 		})
 	})
 
-	// WebSocket
+	// WebSocket for 1-on-1 calls
 	http.HandleFunc("/ws", wsHandler)
+
+	// WebSocket for group calls (SFU)
+	http.HandleFunc("/ws-sfu", sfuWSHandler)
 
 	log.Printf("🚀 Kaminskyi AI Messenger v1.0")
 	log.Printf("📝 Host: %s / %s", validUsername, validPassword)

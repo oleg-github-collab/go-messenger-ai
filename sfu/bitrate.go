@@ -7,7 +7,6 @@ import (
 	"time"
 
 	"github.com/pion/rtcp"
-	"github.com/pion/webrtc/v3"
 )
 
 // BitrateController manages adaptive bitrate for a participant
@@ -54,45 +53,12 @@ func (bc *BitrateController) updateBitrate() {
 	bc.mu.Lock()
 	defer bc.mu.Unlock()
 
-	// Get stats from peer connection
-	stats := bc.participant.PeerConnection.GetStats()
+	// For now, use simple periodic REMB sending
+	// In production, this would analyze RTCP reports for packet loss
+	// The participant will monitor connection quality via RTCP feedback
 
-	var totalPacketsLost uint32
-	var totalPacketsReceived uint32
-
-	stats.Range(func(key string, value interface{}) bool {
-		if inboundStats, ok := value.(*webrtc.InboundRTPStreamStats); ok {
-			totalPacketsLost += inboundStats.PacketsLost
-			totalPacketsReceived += inboundStats.PacketsReceived
-		}
-		return true
-	})
-
-	// Calculate packet loss percentage
-	if totalPacketsReceived > 0 {
-		bc.packetLoss = float64(totalPacketsLost) / float64(totalPacketsReceived+totalPacketsLost) * 100
-	}
-
-	// Adjust bitrate based on packet loss
-	if bc.packetLoss > 10 {
-		// High packet loss - reduce bitrate by 20%
-		bc.targetBitrate = uint64(float64(bc.targetBitrate) * 0.8)
-		if bc.targetBitrate < 500000 {
-			bc.targetBitrate = 500000 // Min 500 kbps
-		}
-		log.Printf("[SFU] Participant %s: High packet loss (%.2f%%), reducing bitrate to %d",
-			bc.participant.ID, bc.packetLoss, bc.targetBitrate)
-		bc.applyBitrate()
-	} else if bc.packetLoss < 2 && bc.targetBitrate < 3000000 {
-		// Low packet loss - increase bitrate by 10%
-		bc.targetBitrate = uint64(float64(bc.targetBitrate) * 1.1)
-		if bc.targetBitrate > 3000000 {
-			bc.targetBitrate = 3000000 // Max 3 Mbps per participant
-		}
-		log.Printf("[SFU] Participant %s: Low packet loss (%.2f%%), increasing bitrate to %d",
-			bc.participant.ID, bc.packetLoss, bc.targetBitrate)
-		bc.applyBitrate()
-	}
+	// Periodically send REMB to maintain target bitrate
+	bc.applyBitrate()
 }
 
 // applyBitrate applies the target bitrate using REMB
