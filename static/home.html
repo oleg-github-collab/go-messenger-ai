@@ -33,6 +33,32 @@
                 Create Meeting
             </button>
 
+            <!-- Meeting Type Selection Modal -->
+            <div class="meeting-type-modal" id="meetingTypeModal" style="display: none;">
+                <div class="modal-content">
+                    <h2 class="modal-title">Select Meeting Type</h2>
+                    <p class="modal-subtitle">Choose the type of meeting you want to create</p>
+
+                    <div class="meeting-type-options">
+                        <button class="meeting-type-card" id="oneOnOneBtn">
+                            <div class="card-icon">👥</div>
+                            <h3>1-on-1 Call</h3>
+                            <p>Private video call between two people</p>
+                            <div class="card-badge">P2P Connection</div>
+                        </button>
+
+                        <button class="meeting-type-card" id="groupCallBtn">
+                            <div class="card-icon">👨‍👩‍👧‍👦</div>
+                            <h3>Group Call</h3>
+                            <p>Video conference with up to 20 participants</p>
+                            <div class="card-badge">SFU Server</div>
+                        </button>
+                    </div>
+
+                    <button class="modal-cancel" id="cancelMeetingType">Cancel</button>
+                </div>
+            </div>
+
             <!-- Share Link Section (hidden by default) -->
             <div class="share-section" id="shareSection" style="display: none;">
                 <div class="share-header">

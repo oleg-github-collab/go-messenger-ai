@@ -12,15 +12,50 @@ document.addEventListener('DOMContentLoaded', () => {
 
     let currentMeetingURL = '';
 
+    // Meeting type selection elements
+    const meetingTypeModal = document.getElementById('meetingTypeModal');
+    const oneOnOneBtn = document.getElementById('oneOnOneBtn');
+    const groupCallBtn = document.getElementById('groupCallBtn');
+    const cancelMeetingType = document.getElementById('cancelMeetingType');
+
     console.log('[HOME] Page loaded');
 
-    createMeetingBtn.addEventListener('click', async () => {
+    // Show meeting type selection modal
+    createMeetingBtn.addEventListener('click', () => {
+        meetingTypeModal.style.display = 'flex';
+    });
+
+    // Handle 1-on-1 selection
+    oneOnOneBtn.addEventListener('click', () => {
+        createMeeting('p2p');
+    });
+
+    // Handle group call selection
+    groupCallBtn.addEventListener('click', () => {
+        createMeeting('sfu');
+    });
+
+    // Cancel modal
+    cancelMeetingType.addEventListener('click', () => {
+        meetingTypeModal.style.display = 'none';
+    });
+
+    // Close modal on backdrop click
+    meetingTypeModal.addEventListener('click', (e) => {
+        if (e.target === meetingTypeModal) {
+            meetingTypeModal.style.display = 'none';
+        }
+    });
+
+    // Create meeting function
+    async function createMeeting(mode) {
+        meetingTypeModal.style.display = 'none';
         createMeetingBtn.disabled = true;
         const originalHTML = createMeetingBtn.innerHTML;
         createMeetingBtn.innerHTML = '<span class="btn-icon">⏳</span> Creating...';
 
         try {
-            const response = await fetch('/create', {
+            const response = await fetch(`/create?mode=${mode}`, {
                 method: 'GET',
                 credentials: 'include'
             });
