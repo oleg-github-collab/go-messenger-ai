@@ -39,6 +39,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let isInitiator = false;
     let peerConnected = false;
     let unreadMessages = 0;
+    let reconnectAttempts = 0;
+    let maxReconnectAttempts = 5;
+    let reconnectTimeout = null;
 
     // Get room ID from URL
     const pathParts = window.location.pathname.split('/');
@@ -115,6 +118,9 @@ document.addEventListener('DOMContentLoaded', () => {
                 const initialized = await webrtc.initialize();
 
                 if (initialized) {
+                    // Reset reconnect counter on successful connection
+                    reconnectAttempts = 0;
+
                     socket.send(JSON.stringify({
                         type: 'join',
                         room: roomId
@@ -175,6 +181,20 @@ document.addEventListener('DOMContentLoaded', () => {
 
             socket.onclose = () => {
                 console.log('[CALL] WebSocket disconnected');
+
+                // Attempt to reconnect
+                if (reconnectAttempts < maxReconnectAttempts) {
+                    reconnectAttempts++;
+                    const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 10000);
+                    console.log(`[CALL] Reconnecting in ${delay}ms (attempt ${reconnectAttempts}/${maxReconnectAttempts})`);
+
+                    reconnectTimeout = setTimeout(() => {
+                        connectToRoom(roomID);
+                    }, delay);
+                } else {
+                    console.error('[CALL] Max reconnection attempts reached');
+                    alert('Connection lost. Please refresh the page.');
+                }
             };
 
             socket.onerror = (error) => {
@@ -290,27 +310,88 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // PiP expand (swap videos)
-    document.getElementById('pipExpandBtn').addEventListener('click', () => {
-        // Swap remote and local videos
-        const remoteParent = remoteVideo.parentElement;
-        const localParent = localVideo.parentElement;
+    const pipExpandBtn = document.getElementById('pipExpandBtn');
+    if (pipExpandBtn) {
+        pipExpandBtn.addEventListener('click', () => {
+            // Swap remote and local videos
+            const remoteContainer = document.querySelector('.call-container');
 
-        if (localVideo.parentElement === localPip) {
-            // Move local to main, remote to PiP
-            remoteParent.appendChild(localVideo);
-            localPip.appendChild(remoteVideo);
-        } else {
-            // Move remote to main, local to PiP
-            localPip.appendChild(localVideo);
-            remoteParent.appendChild(remoteVideo);
-        }
-    });
+            if (localVideo.parentElement === localPip) {
+                // Move local to main, remote to PiP
+                remoteContainer.insertBefore(localVideo, localPip);
+                localPip.appendChild(remoteVideo);
+            } else {
+                // Move remote to main, local to PiP
+                remoteContainer.insertBefore(remoteVideo, localPip);
+                localPip.appendChild(localVideo);
+            }
+        });
+    }
+
+    // Share screen button
+    const shareScreenBtn = document.getElementById('shareScreenBtn');
+    if (shareScreenBtn) {
+        shareScreenBtn.addEventListener('click', async () => {
+            try {
+                const screenStream = await navigator.mediaDevices.getDisplayMedia({
+                    video: true,
+                    audio: false
+                });
+
+                const screenTrack = screenStream.getVideoTracks()[0];
+
+                // Replace video track
+                const senders = webrtc.peerConnection.getSenders();
+                const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+
+                if (videoSender) {
+                    await videoSender.replaceTrack(screenTrack);
+
+                    // When user stops sharing
+                    screenTrack.onended = () => {
+                        // Switch back to camera
+                        const cameraTrack = webrtc.localStream.getVideoTracks()[0];
+                        if (cameraTrack) {
+                            videoSender.replaceTrack(cameraTrack);
+                        }
+                    };
+                }
+            } catch (err) {
+                console.error('[CALL] Screen share failed:', err);
+            }
+        });
+    }
+
+    // Switch camera button (desktop)
+    const switchCameraBtn = document.getElementById('switchCameraBtn');
+    if (switchCameraBtn) {
+        switchCameraBtn.addEventListener('click', async () => {
+            if (webrtc) {
+                const { cameras } = await webrtc.getDevices();
+                if (cameras.length > 1) {
+                    const currentIndex = cameras.findIndex(c => c.deviceId === webrtc.currentCameraId);
+                    const nextIndex = (currentIndex + 1) % cameras.length;
+                    await webrtc.switchCamera(cameras[nextIndex].deviceId);
+                }
+            }
+        });
+    }
+
+    // More options button
+    const moreOptionsBtn = document.getElementById('moreOptionsBtn');
+    if (moreOptionsBtn) {
+        moreOptionsBtn.addEventListener('click', () => {
+            // Show settings or options menu
+            alert('Settings panel coming soon!');
+        });
+    }
 
     function cleanupCall() {
         console.log('[CALL] Cleaning up call...');
 
         if (socket) socket.close();
         if (timerInterval) clearInterval(timerInterval);
+        if (reconnectTimeout) clearTimeout(reconnectTimeout);
         if (webrtc) webrtc.cleanup();
         releaseWakeLock();
     }

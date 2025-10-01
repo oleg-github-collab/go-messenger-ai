@@ -7,23 +7,27 @@ class WebRTCManager {
         this.peerConnection = null;
         this.localStream = null;
         this.remoteStream = null;
+        this.currentCameraId = null;
 
-        // Video/Audio elements
+        // Video/Audio elements (support both old and new UI)
         this.localVideo = document.getElementById('localVideo');
         this.remoteVideo = document.getElementById('remoteVideo');
         this.localPlaceholder = document.getElementById('localPlaceholder');
         this.remotePlaceholder = document.getElementById('remotePlaceholder');
         this.connectionStatus = document.getElementById('connectionStatus');
 
-        // ICE servers for STUN/TURN
+        // ICE servers for STUN/TURN (multiple for reliability)
         this.iceServers = {
             iceServers: [
                 { urls: 'stun:stun.l.google.com:19302' },
                 { urls: 'stun:stun1.l.google.com:19302' },
                 { urls: 'stun:stun2.l.google.com:19302' },
                 { urls: 'stun:stun3.l.google.com:19302' },
-                { urls: 'stun:stun4.l.google.com:19302' }
-            ]
+                { urls: 'stun:stun4.l.google.com:19302' },
+                { urls: 'stun:stun.services.mozilla.com' },
+                { urls: 'stun:stun.voip.blackberry.com:3478' }
+            ],
+            iceCandidatePoolSize: 10
         };
 
         // Current quality settings
@@ -73,7 +77,10 @@ class WebRTCManager {
 
             // Show local video
             this.localVideo.srcObject = this.localStream;
-            this.localPlaceholder.classList.add('hidden');
+            if (this.localPlaceholder) {
+                this.localPlaceholder.classList.add('hidden');
+                this.localPlaceholder.style.display = 'none';
+            }
 
             console.log('[WebRTC] ✅ Local stream acquired');
 
@@ -118,7 +125,10 @@ class WebRTCManager {
             }
 
             this.remoteStream.addTrack(event.track);
-            this.remotePlaceholder.classList.add('hidden');
+            if (this.remotePlaceholder) {
+                this.remotePlaceholder.classList.add('hidden');
+                this.remotePlaceholder.style.display = 'none';
+            }
             this.updateStatus('Connected', 'success');
         };
 
@@ -261,10 +271,14 @@ class WebRTCManager {
                 videoTrack.enabled = enabled;
                 console.log('[WebRTC] Video:', enabled ? 'ON' : 'OFF');
 
-                if (!enabled) {
-                    this.localPlaceholder.classList.remove('hidden');
-                } else {
-                    this.localPlaceholder.classList.add('hidden');
+                if (this.localPlaceholder) {
+                    if (!enabled) {
+                        this.localPlaceholder.classList.remove('hidden');
+                        this.localPlaceholder.style.display = 'flex';
+                    } else {
+                        this.localPlaceholder.classList.add('hidden');
+                        this.localPlaceholder.style.display = 'none';
+                    }
                 }
             }
         }
