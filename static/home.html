@@ -36,8 +36,15 @@
             <!-- Meeting Type Selection Modal -->
             <div class="meeting-type-modal" id="meetingTypeModal" style="display: none;">
                 <div class="modal-content">
-                    <h2 class="modal-title">Select Meeting Type</h2>
-                    <p class="modal-subtitle">Choose the type of meeting you want to create</p>
+                    <h2 class="modal-title">Create Meeting</h2>
+                    <p class="modal-subtitle">Choose the type of meeting and enter your name</p>
+
+                    <div class="input-group" style="margin-bottom: 24px;">
+                        <label for="hostNameInput" style="display: block; font-size: 14px; color: #e2e8f0; margin-bottom: 8px;">Your Name</label>
+                        <input type="text" id="hostNameInput" placeholder="Enter your name..."
+                               style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 2px solid rgba(59,130,246,0.2); border-radius: 12px; color: white; font-size: 15px; outline: none;"
+                               value="Oleh" />
+                    </div>
 
                     <div class="meeting-type-options">
                         <button class="meeting-type-card" id="oneOnOneBtn">

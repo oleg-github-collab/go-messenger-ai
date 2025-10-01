@@ -49,13 +49,15 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Create meeting function
     async function createMeeting(mode) {
+        const hostName = document.getElementById('hostNameInput').value.trim() || 'Host';
+
         meetingTypeModal.style.display = 'none';
         createMeetingBtn.disabled = true;
         const originalHTML = createMeetingBtn.innerHTML;
         createMeetingBtn.innerHTML = '<span class="btn-icon">⏳</span> Creating...';
 
         try {
-            const response = await fetch(`/create?mode=${mode}`, {
+            const response = await fetch(`/create?mode=${mode}&name=${encodeURIComponent(hostName)}`, {
                 method: 'GET',
                 credentials: 'include'
             });

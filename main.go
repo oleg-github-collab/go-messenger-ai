@@ -48,19 +48,23 @@ var staticFiles embed.FS
 
 // Room represents a 1-on-1 video room
 type Room struct {
-	ID           string
-	HostID       string
-	Participants map[*websocket.Conn]*Participant
-	CreatedAt    time.Time
-	mu           sync.RWMutex
+	ID               string
+	HostID           string
+	HostName         string
+	Participants     map[*websocket.Conn]*Participant
+	WaitingRoom      map[string]*Participant
+	CreatedAt        time.Time
+	mu               sync.RWMutex
 }
 
 // Participant in a room
 type Participant struct {
-	ID       string
-	Name     string
-	IsHost   bool
-	JoinedAt time.Time
+	ID         string
+	Name       string
+	IsHost     bool
+	JoinedAt   time.Time
+	Approved   bool
+	Connection *websocket.Conn
 }
 
 // Message is the WebSocket message format
@@ -141,15 +145,29 @@ func validateSession(token string) (string, bool) {
 }
 
 // Store meeting in Redis
-func storeMeeting(roomID, hostID string) error {
+func storeMeeting(roomID, hostID, hostName string) error {
 	key := fmt.Sprintf("meeting:%s", roomID)
 	data := map[string]interface{}{
 		"host_id":    hostID,
+		"host_name":  hostName,
 		"created_at": time.Now().Unix(),
 		"active":     true,
 	}
 	dataJSON, _ := json.Marshal(data)
 	return rdb.Set(ctx, key, dataJSON, meetingTTL).Err()
+}
+
+// Get meeting data from Redis
+func getMeeting(roomID string) (map[string]interface{}, error) {
+	key := fmt.Sprintf("meeting:%s", roomID)
+	data, err := rdb.Get(ctx, key).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	var result map[string]interface{}
+	err = json.Unmarshal([]byte(data), &result)
+	return result, err
 }
 
 // Check if meeting exists
@@ -224,7 +242,7 @@ func serveFile(filename string) http.HandlerFunc {
 	}
 }
 
-func createRoom(hostID string) string {
+func createRoom(hostID, hostName string) string {
 	id := uuid.NewString()
 
 	// Store in memory
@@ -232,18 +250,47 @@ func createRoom(hostID string) string {
 	rooms[id] = &Room{
 		ID:           id,
 		HostID:       hostID,
+		HostName:     hostName,
 		Participants: make(map[*websocket.Conn]*Participant),
+		WaitingRoom:  make(map[string]*Participant),
 		CreatedAt:    time.Now(),
 	}
 	mu.Unlock()
 
 	// Store in Redis
-	if err := storeMeeting(id, hostID); err != nil {
+	if err := storeMeeting(id, hostID, hostName); err != nil {
 		log.Printf("[ROOM] ⚠️  Failed to store in Redis: %v", err)
 	}
 
-	log.Printf("[ROOM] ✅ Created room %s by host %s", id, hostID)
+	log.Printf("[ROOM] ✅ Created room %s by host %s", id, hostName)
 	return id
+}
+
+// Clean up room completely
+func cleanupRoom(roomID string) {
+	mu.Lock()
+	room, exists := rooms[roomID]
+	if exists {
+		// Close all connections
+		room.mu.Lock()
+		for conn := range room.Participants {
+			conn.Close()
+		}
+		for _, p := range room.WaitingRoom {
+			if p.Connection != nil {
+				p.Connection.Close()
+			}
+		}
+		room.mu.Unlock()
+
+		delete(rooms, roomID)
+	}
+	mu.Unlock()
+
+	// Delete from Redis
+	deleteMeeting(roomID)
+
+	log.Printf("[ROOM] 🗑️  Cleaned up room %s", roomID)
 }
 
 func wsHandler(w http.ResponseWriter, r *http.Request) {
@@ -263,9 +310,15 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Check if meeting exists in Redis
-	if !meetingExists(roomID) {
+	meetingData, err := getMeeting(roomID)
+	if err != nil {
 		conn.WriteMessage(websocket.TextMessage, []byte(`{"error":"meeting not found or expired"}`))
 		return
+	}
+
+	hostName := "Host"
+	if name, ok := meetingData["host_name"].(string); ok {
+		hostName = name
 	}
 
 	// Get or create room in memory
@@ -274,7 +327,10 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 	if !exists {
 		room = &Room{
 			ID:           roomID,
+			HostID:       meetingData["host_id"].(string),
+			HostName:     hostName,
 			Participants: make(map[*websocket.Conn]*Participant),
+			WaitingRoom:  make(map[string]*Participant),
 			CreatedAt:    time.Now(),
 		}
 		rooms[roomID] = room
@@ -284,64 +340,97 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 	// Generate participant ID
 	participantID := "user_" + uuid.NewString()[:8]
 	participant := &Participant{
-		ID:       participantID,
-		Name:     guestName,
-		IsHost:   false,
-		JoinedAt: time.Now(),
+		ID:         participantID,
+		Name:       guestName,
+		IsHost:     false,
+		JoinedAt:   time.Now(),
+		Approved:   false,
+		Connection: conn,
 	}
 
 	// Check if host
 	userID := r.Header.Get("X-User-ID")
-	if userID != "" {
+	isHost := userID != "" && userID == room.HostID
+	if isHost {
 		participant.IsHost = true
-		participant.Name = "Oleh Kaminskyi"
+		participant.Name = hostName
+		participant.Approved = true
 	}
 
-	// Add to room
+	// Add to room or waiting room
 	room.mu.Lock()
-	if len(room.Participants) >= 2 {
+
+	if isHost {
+		// Host joins directly
+		if len(room.Participants) >= 2 {
+			room.mu.Unlock()
+			conn.WriteMessage(websocket.TextMessage, []byte(`{"error":"room full (max 2 participants)"}`))
+			return
+		}
+		room.Participants[conn] = participant
+		participantCount := len(room.Participants)
 		room.mu.Unlock()
-		conn.WriteMessage(websocket.TextMessage, []byte(`{"error":"room full (max 2 participants)"}`))
-		return
-	}
-	room.Participants[conn] = participant
-	participantCount := len(room.Participants)
-	room.mu.Unlock()
 
-	log.Printf("[WS] ✅ %s joined room %s (%d participants)", participant.Name, roomID, participantCount)
+		log.Printf("[WS] ✅ Host %s joined room %s (%d participants)", participant.Name, roomID, participantCount)
 
-	// Send join message to other participant
-	joinMsg := Message{
-		Type: "join",
-		Data: json.RawMessage(fmt.Sprintf(`{"name":"%s","id":"%s"}`, participant.Name, participantID)),
-		Room: roomID,
-		User: participantID,
+		// Send join confirmation
+		conn.WriteJSON(Message{
+			Type: "joined",
+			Data: json.RawMessage(fmt.Sprintf(`{"name":"%s","id":"%s","isHost":true}`, participant.Name, participantID)),
+		})
+	} else {
+		// Guest goes to waiting room
+		room.WaitingRoom[participantID] = participant
+		waitingCount := len(room.WaitingRoom)
+		room.mu.Unlock()
+
+		log.Printf("[WS] 🚪 Guest %s in waiting room %s (%d waiting)", participant.Name, roomID, waitingCount)
+
+		// Notify guest they're waiting
+		conn.WriteJSON(Message{
+			Type: "waiting",
+			Data: json.RawMessage(fmt.Sprintf(`{"message":"Waiting for host approval","name":"%s"}`, participant.Name)),
+		})
+
+		// Notify host of join request
+		room.mu.RLock()
+		for c, p := range room.Participants {
+			if p.IsHost {
+				c.WriteJSON(Message{
+					Type: "join-request",
+					Data: json.RawMessage(fmt.Sprintf(`{"id":"%s","name":"%s"}`, participantID, participant.Name)),
+				})
+				log.Printf("[WS] 🔔 Notified host about guest %s", participant.Name)
+			}
+		}
+		room.mu.RUnlock()
 	}
-	broadcastToRoom(room, joinMsg, conn)
 
 	// Cleanup on disconnect
 	defer func() {
 		room.mu.Lock()
 		delete(room.Participants, conn)
+		delete(room.WaitingRoom, participantID)
 		remaining := len(room.Participants)
+		waitingCount := len(room.WaitingRoom)
 		room.mu.Unlock()
 
-		leaveMsg := Message{
-			Type: "leave",
-			Data: json.RawMessage(fmt.Sprintf(`{"name":"%s","id":"%s"}`, participant.Name, participantID)),
-			Room: roomID,
-			User: participantID,
+		// Notify others
+		if participant.Approved {
+			leaveMsg := Message{
+				Type: "leave",
+				Data: json.RawMessage(fmt.Sprintf(`{"name":"%s","id":"%s"}`, participant.Name, participantID)),
+				Room: roomID,
+				User: participantID,
+			}
+			broadcastToRoom(room, leaveMsg, conn)
 		}
-		broadcastToRoom(room, leaveMsg, conn)
 
-		log.Printf("[WS] 👋 %s left room %s (%d remaining)", participant.Name, roomID, remaining)
+		log.Printf("[WS] 👋 %s left room %s (%d active, %d waiting)", participant.Name, roomID, remaining, waitingCount)
 
-		// If room empty, clean up
-		if remaining == 0 {
-			mu.Lock()
-			delete(rooms, roomID)
-			mu.Unlock()
-			log.Printf("[ROOM] 🗑️  Deleted empty room %s", roomID)
+		// If room empty and no one waiting, clean up
+		if remaining == 0 && waitingCount == 0 {
+			cleanupRoom(roomID)
 		}
 	}()
 
@@ -365,6 +454,7 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 		validTypes := map[string]bool{
 			"chat": true, "offer": true, "answer": true,
 			"ice-candidate": true, "ping": true,
+			"approve-join": true, "reject-join": true,
 		}
 
 		if !validTypes[message.Type] {
@@ -375,6 +465,73 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 		// Handle ping
 		if message.Type == "ping" {
 			conn.WriteJSON(map[string]string{"type": "pong"})
+			continue
+		}
+
+		// Handle join approval (host only)
+		if message.Type == "approve-join" && participant.IsHost {
+			var data struct {
+				ID string `json:"id"`
+			}
+			json.Unmarshal(message.Data, &data)
+
+			room.mu.Lock()
+			guest, exists := room.WaitingRoom[data.ID]
+			if exists && len(room.Participants) < 2 {
+				delete(room.WaitingRoom, data.ID)
+				guest.Approved = true
+				room.Participants[guest.Connection] = guest
+
+				// Notify guest they're approved
+				guest.Connection.WriteJSON(Message{
+					Type: "approved",
+					Data: json.RawMessage(fmt.Sprintf(`{"name":"%s","id":"%s"}`, guest.Name, data.ID)),
+				})
+
+				// Notify others
+				joinMsg := Message{
+					Type: "join",
+					Data: json.RawMessage(fmt.Sprintf(`{"name":"%s","id":"%s"}`, guest.Name, data.ID)),
+				}
+				for c := range room.Participants {
+					if c != guest.Connection {
+						c.WriteJSON(joinMsg)
+					}
+				}
+
+				log.Printf("[WS] ✅ Approved %s to join room %s", guest.Name, roomID)
+			}
+			room.mu.Unlock()
+			continue
+		}
+
+		// Handle join rejection (host only)
+		if message.Type == "reject-join" && participant.IsHost {
+			var data struct {
+				ID string `json:"id"`
+			}
+			json.Unmarshal(message.Data, &data)
+
+			room.mu.Lock()
+			guest, exists := room.WaitingRoom[data.ID]
+			if exists {
+				delete(room.WaitingRoom, data.ID)
+				if guest.Connection != nil {
+					guest.Connection.WriteJSON(Message{
+						Type: "rejected",
+						Data: json.RawMessage(`{"message":"Host rejected your join request"}`),
+					})
+					guest.Connection.Close()
+				}
+				log.Printf("[WS] ❌ Rejected %s from room %s", guest.Name, roomID)
+			}
+			room.mu.Unlock()
+			continue
+		}
+
+		// Only broadcast if participant is approved
+		if !participant.Approved {
+			log.Printf("[WS] ⚠️  Unapproved participant tried to send: %s", message.Type)
 			continue
 		}
 
@@ -517,7 +674,14 @@ func main() {
 	// Create meeting (host only)
 	http.HandleFunc("/create", authMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		userID := r.Header.Get("X-User-ID")
-		roomID := createRoom(userID)
+
+		// Get host name from query or use default
+		hostName := r.URL.Query().Get("name")
+		if hostName == "" {
+			hostName = "Host"
+		}
+
+		roomID := createRoom(userID, hostName)
 
 		scheme := "http"
 		if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
@@ -526,7 +690,7 @@ func main() {
 
 		url := fmt.Sprintf("%s://%s/join/%s", scheme, r.Host, roomID)
 
-		log.Printf("[CREATE] ✅ Meeting URL: %s", url)
+		log.Printf("[CREATE] ✅ Meeting URL: %s (Host: %s)", url, hostName)
 
 		w.Header().Set("Content-Type", "text/plain")
 		w.Write([]byte(url))
@@ -540,25 +704,31 @@ func main() {
 			return
 		}
 
-		// Delete from Redis
-		deleteMeeting(roomID)
-
-		// Close all connections
+		// Notify all participants meeting ended
 		mu.RLock()
 		room, exists := rooms[roomID]
 		mu.RUnlock()
 
 		if exists {
-			room.mu.Lock()
-			for conn := range room.Participants {
-				conn.Close()
+			endMsg := Message{
+				Type: "meeting-ended",
+				Data: json.RawMessage(`{"message":"Host ended the meeting"}`),
 			}
-			room.mu.Unlock()
 
-			mu.Lock()
-			delete(rooms, roomID)
-			mu.Unlock()
+			room.mu.RLock()
+			for conn := range room.Participants {
+				conn.WriteJSON(endMsg)
+			}
+			for _, p := range room.WaitingRoom {
+				if p.Connection != nil {
+					p.Connection.WriteJSON(endMsg)
+				}
+			}
+			room.mu.RUnlock()
 		}
+
+		// Clean up completely
+		cleanupRoom(roomID)
 
 		log.Printf("[END] ✅ Meeting %s ended by host", roomID)
 
