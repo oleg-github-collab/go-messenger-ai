@@ -133,6 +133,7 @@
                 </div>
             </div>
             <div class="chat-input-area">
+                <button class="emoji-btn" id="emojiBtn" title="Emoji & GIF">😊</button>
                 <input type="text" id="messageInput" placeholder="Type a message..." />
                 <button id="sendMessageBtn" class="send-message-btn">
                     <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
@@ -141,9 +142,135 @@
                 </button>
             </div>
         </div>
+
+        <!-- Emoji & GIF Picker -->
+        <div class="emoji-picker" id="emojiPicker">
+            <div class="emoji-header">
+                <div class="emoji-tabs">
+                    <button class="emoji-tab active" data-tab="emoji">😊 Emoji</button>
+                    <button class="emoji-tab" data-tab="gif">GIF</button>
+                </div>
+                <button class="emoji-close" id="emojiClose">✕</button>
+            </div>
+
+            <!-- Emoji Tab -->
+            <div class="emoji-content" id="emojiContent">
+                <div class="emoji-categories">
+                    <button class="emoji-category active" data-category="smileys">😀</button>
+                    <button class="emoji-category" data-category="gestures">👋</button>
+                    <button class="emoji-category" data-category="people">👨</button>
+                    <button class="emoji-category" data-category="animals">🐶</button>
+                    <button class="emoji-category" data-category="food">🍕</button>
+                    <button class="emoji-category" data-category="travel">✈️</button>
+                    <button class="emoji-category" data-category="objects">⚽</button>
+                    <button class="emoji-category" data-category="symbols">❤️</button>
+                </div>
+                <div class="emoji-grid" id="emojiGrid"></div>
+            </div>
+
+            <!-- GIF Tab -->
+            <div class="gif-content" id="gifContent" style="display: none;">
+                <input type="text" class="gif-search" id="gifSearch" placeholder="Search GIFs..." />
+                <div class="gif-grid" id="gifGrid"></div>
+            </div>
+        </div>
+
+        <!-- Settings Panel -->
+        <div class="settings-panel" id="settingsPanel">
+            <div class="settings-header">
+                <h3>Settings</h3>
+                <button class="settings-close" id="settingsClose">✕</button>
+            </div>
+            <div class="settings-content">
+                <!-- Video Quality -->
+                <div class="settings-group">
+                    <label class="settings-label">Video Quality</label>
+                    <select class="settings-select" id="videoQualitySelect">
+                        <option value="auto">Auto (Adaptive)</option>
+                        <option value="1080p" selected>Full HD (1080p)</option>
+                        <option value="720p">HD (720p)</option>
+                        <option value="480p">SD (480p)</option>
+                        <option value="360p">Low (360p)</option>
+                    </select>
+                    <p class="settings-description">Automatically adjusts based on connection quality</p>
+                </div>
+
+                <!-- Frame Rate -->
+                <div class="settings-group">
+                    <label class="settings-label">Frame Rate</label>
+                    <select class="settings-select" id="frameRateSelect">
+                        <option value="auto">Auto</option>
+                        <option value="60">60 FPS</option>
+                        <option value="30" selected>30 FPS</option>
+                        <option value="24">24 FPS</option>
+                        <option value="15">15 FPS</option>
+                    </select>
+                </div>
+
+                <!-- Audio Quality -->
+                <div class="settings-group">
+                    <label class="settings-label">Audio Quality</label>
+                    <select class="settings-select" id="audioQualitySelect">
+                        <option value="high" selected>High (48kHz)</option>
+                        <option value="medium">Medium (44.1kHz)</option>
+                        <option value="low">Low (32kHz)</option>
+                    </select>
+                </div>
+
+                <!-- Echo Cancellation -->
+                <div class="settings-group">
+                    <label class="settings-label">
+                        <input type="checkbox" id="echoCancellation" checked>
+                        Echo Cancellation
+                    </label>
+                </div>
+
+                <!-- Noise Suppression -->
+                <div class="settings-group">
+                    <label class="settings-label">
+                        <input type="checkbox" id="noiseSuppression" checked>
+                        Noise Suppression
+                    </label>
+                </div>
+
+                <!-- Auto Gain -->
+                <div class="settings-group">
+                    <label class="settings-label">
+                        <input type="checkbox" id="autoGain" checked>
+                        Auto Gain Control
+                    </label>
+                </div>
+
+                <!-- Connection Stats -->
+                <div class="settings-group">
+                    <label class="settings-label">Connection Stats</label>
+                    <div class="connection-stats">
+                        <div class="stat-item">
+                            <span class="stat-label">Latency:</span>
+                            <span class="stat-value" id="latencyStat">-- ms</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Bitrate:</span>
+                            <span class="stat-value" id="bitrateStat">-- kbps</span>
+                        </div>
+                        <div class="stat-item">
+                            <span class="stat-label">Packet Loss:</span>
+                            <span class="stat-value" id="packetLossStat">-- %</span>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Apply Button -->
+                <button class="settings-apply-btn" id="settingsApply">Apply Changes</button>
+            </div>
+        </div>
+
+        <!-- Settings Backdrop -->
+        <div class="settings-backdrop" id="settingsBackdrop"></div>
     </div>
 
     <script src="/static/webrtc.js"></script>
+    <script src="/static/call-features.js"></script>
     <script src="/static/call.js"></script>
 </body>
 </html>

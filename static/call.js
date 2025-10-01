@@ -42,6 +42,7 @@ document.addEventListener('DOMContentLoaded', () => {
     let reconnectAttempts = 0;
     let maxReconnectAttempts = 5;
     let reconnectTimeout = null;
+    let adaptiveQuality = null;
 
     // Get room ID from URL
     const pathParts = window.location.pathname.split('/');
@@ -57,6 +58,14 @@ document.addEventListener('DOMContentLoaded', () => {
     connectToRoom(roomID);
     startCallTimer();
     requestWakeLock();
+
+    // Initialize features from call-features.js
+    if (window.initEmojiPicker) {
+        window.initEmojiPicker();
+    }
+    if (window.initSettingsPanel) {
+        window.initSettingsPanel();
+    }
 
     // Prevent accidental page close
     window.addEventListener('beforeunload', (e) => {
@@ -120,6 +129,15 @@ document.addEventListener('DOMContentLoaded', () => {
                 if (initialized) {
                     // Reset reconnect counter on successful connection
                     reconnectAttempts = 0;
+
+                    // Initialize adaptive quality if available
+                    if (window.AdaptiveQuality) {
+                        adaptiveQuality = new window.AdaptiveQuality(webrtc);
+                        window.adaptiveQuality = adaptiveQuality; // Make globally accessible
+                    }
+
+                    // Make webrtc globally accessible for settings panel
+                    window.webrtc = webrtc;
 
                     socket.send(JSON.stringify({
                         type: 'join',
@@ -377,14 +395,7 @@ document.addEventListener('DOMContentLoaded', () => {
         });
     }
 
-    // More options button
-    const moreOptionsBtn = document.getElementById('moreOptionsBtn');
-    if (moreOptionsBtn) {
-        moreOptionsBtn.addEventListener('click', () => {
-            // Show settings or options menu
-            alert('Settings panel coming soon!');
-        });
-    }
+    // More options button - now handled by initSettingsPanel in call-features.js
 
     function cleanupCall() {
         console.log('[CALL] Cleaning up call...');
@@ -392,6 +403,7 @@ document.addEventListener('DOMContentLoaded', () => {
         if (socket) socket.close();
         if (timerInterval) clearInterval(timerInterval);
         if (reconnectTimeout) clearTimeout(reconnectTimeout);
+        if (adaptiveQuality) adaptiveQuality.stop();
         if (webrtc) webrtc.cleanup();
         releaseWakeLock();
     }
