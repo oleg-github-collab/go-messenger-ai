@@ -355,13 +355,20 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 		Connection: conn,
 	}
 
-	// Check if host
+	// Check if host - multiple ways to verify:
+	// 1. X-User-ID header matches (for authenticated users)
+	// 2. First participant in the room (room creator)
 	userID := r.Header.Get("X-User-ID")
-	isHost := userID != "" && userID == room.HostID
+	room.mu.Lock()
+	isFirstParticipant := len(room.Participants) == 0 && len(room.WaitingRoom) == 0
+	room.mu.Unlock()
+
+	isHost := (userID != "" && userID == room.HostID) || isFirstParticipant
 	if isHost {
 		participant.IsHost = true
 		participant.Name = hostName
 		participant.Approved = true
+		log.Printf("[WS] 🔑 Identified as HOST - UserID match: %v, First participant: %v", userID == room.HostID, isFirstParticipant)
 	}
 
 	// Add to room or waiting room
@@ -617,13 +624,16 @@ func sfuWSHandler(w http.ResponseWriter, r *http.Request) {
 	// Generate participant ID
 	participantID := uuid.NewString()
 
-	// Check if this is the host
+	// Check if this is the host - multiple ways:
+	// 1. X-User-ID header matches (authenticated users)
+	// 2. First participant in the room (room creator)
 	userID := r.Header.Get("X-User-ID")
 	hostID := ""
 	if id, ok := meetingData["host_id"].(string); ok {
 		hostID = id
 	}
-	isHost := userID != "" && userID == hostID
+	isFirstParticipant := participantCount == 0
+	isHost := (userID != "" && userID == hostID) || isFirstParticipant
 
 	// Get host name
 	hostName := "Host"
@@ -633,6 +643,7 @@ func sfuWSHandler(w http.ResponseWriter, r *http.Request) {
 
 	if isHost {
 		userName = hostName
+		log.Printf("[SFU-WS] 🔑 Identified as HOST - UserID match: %v, First participant: %v", userID == hostID, isFirstParticipant)
 	}
 
 	// Add participant to SFU room
