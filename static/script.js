@@ -1,6 +1,7 @@
 document.addEventListener('DOMContentLoaded', () => {
-    console.log('Call page loaded');
+    console.log('[APP] Call page loaded');
 
+    // UI Elements
     const callContainer = document.getElementById('callContainer');
     const chatPanel = document.getElementById('chatPanel');
     const chatBtn = document.getElementById('chatBtn');
@@ -16,131 +17,262 @@ document.addEventListener('DOMContentLoaded', () => {
     const fullscreenBtn = document.getElementById('fullscreenBtn');
     const pipBtn = document.getElementById('pipBtn');
 
+    // Settings panel elements
+    const settingsPanel = document.getElementById('settingsPanel');
+    const settingsBackdrop = document.getElementById('settingsBackdrop');
+    const closeSettings = document.getElementById('closeSettings');
+    const applySettings = document.getElementById('applySettings');
+    const cancelSettings = document.getElementById('cancelSettings');
+    const videoQualitySelect = document.getElementById('videoQuality');
+    const frameRateSelect = document.getElementById('frameRate');
+    const audioQualitySelect = document.getElementById('audioQuality');
+    const cameraSelect = document.getElementById('cameraSelect');
+    const microphoneSelect = document.getElementById('microphoneSelect');
+
+    // State
     let socket = null;
-    let localStream = null;
+    let webrtc = null;
     let isMicOn = true;
     let isVideoOn = true;
     let callStartTime = null;
     let timerInterval = null;
     let wakeLock = null;
-    let videoElement = null; // For PiP functionality
+    let isInitiator = false;
+    let peerConnected = false;
 
-    // Get room ID from URL path (format: /room/uuid)
+    // Get room ID from URL path
     const pathParts = window.location.pathname.split('/');
     const roomID = pathParts[pathParts.length - 1];
 
     if (!roomID || roomID === 'room') {
         alert('No room ID found. Please create a meeting first.');
         window.location.href = '/';
-    } else {
-        connectToRoom(roomID);
-        startCallTimer();
+        return;
     }
+
+    // Initialize
+    connectToRoom(roomID);
+    startCallTimer();
+    requestWakeLock();
 
     // Prevent accidental page refresh/close
     window.addEventListener('beforeunload', (e) => {
         if (socket && socket.readyState === WebSocket.OPEN) {
             e.preventDefault();
-            e.returnValue = '';
+            return '';
         }
     });
 
-    // Request wake lock to prevent screen from sleeping
+    // Wake Lock functions
     async function requestWakeLock() {
         try {
             if ('wakeLock' in navigator) {
                 wakeLock = await navigator.wakeLock.request('screen');
-                console.log('Wake Lock acquired');
+                console.log('[APP] Wake Lock acquired');
 
                 wakeLock.addEventListener('release', () => {
-                    console.log('Wake Lock released');
+                    console.log('[APP] Wake Lock released');
                 });
             }
         } catch (err) {
-            console.warn('Wake Lock not supported or failed:', err);
+            console.warn('[APP] Wake Lock not supported:', err);
         }
     }
 
-    // Release wake lock
     function releaseWakeLock() {
         if (wakeLock !== null) {
-            wakeLock.release()
-                .then(() => {
-                    wakeLock = null;
-                });
+            wakeLock.release().then(() => {
+                wakeLock = null;
+            });
         }
     }
 
-    // Re-request wake lock when page becomes visible
     document.addEventListener('visibilitychange', async () => {
-        if (wakeLock !== null && document.visibilityState === 'visible') {
+        if (document.visibilityState === 'visible') {
             await requestWakeLock();
         }
     });
 
-    // Request wake lock when call starts
-    requestWakeLock();
-
+    // Call timer
     function startCallTimer() {
         callStartTime = Date.now();
         timerInterval = setInterval(() => {
             const elapsed = Math.floor((Date.now() - callStartTime) / 1000);
             const mins = Math.floor(elapsed / 60);
             const secs = elapsed % 60;
-            document.querySelector('.timer-value').textContent = 
+            document.querySelector('.timer-value').textContent =
                 `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
         }, 1000);
     }
 
+    // Connect to room and initialize WebRTC
     async function connectToRoom(roomId) {
         try {
-            // Request high-quality media with optimized settings
-            const constraints = {
-                audio: {
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                    autoGainControl: true,
-                    sampleRate: 48000,
-                    channelCount: 2
-                },
-                video: {
-                    width: { ideal: 1920, max: 1920 },
-                    height: { ideal: 1080, max: 1080 },
-                    frameRate: { ideal: 30, max: 60 },
-                    facingMode: 'user'
+            const wsUrl = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws?room=${roomId}`;
+            socket = new WebSocket(wsUrl);
+
+            socket.onopen = async () => {
+                console.log('[APP] ✅ WebSocket connected to room:', roomId);
+
+                // Initialize WebRTC
+                webrtc = new WebRTCManager(socket, roomId);
+                const initialized = await webrtc.initialize();
+
+                if (initialized) {
+                    // Load available devices
+                    await loadDevices();
+
+                    // Send join message
+                    socket.send(JSON.stringify({
+                        type: 'join',
+                        room: roomId
+                    }));
+
+                    // Set initiator flag (first person creates offer)
+                    setTimeout(() => {
+                        if (!peerConnected) {
+                            isInitiator = true;
+                            console.log('[APP] I am the initiator');
+                        }
+                    }, 1000);
                 }
             };
 
-            localStream = await navigator.mediaDevices.getUserMedia(constraints);
-            // In real app: attach to <video> element with proper codecs
-            console.log('Media stream acquired with high quality settings');
+            socket.onmessage = async (event) => {
+                const message = JSON.parse(event.data);
+                console.log('[APP] Message received:', message.type);
+
+                switch (message.type) {
+                    case 'join':
+                        console.log('[APP] Partner joined');
+                        if (isInitiator && webrtc) {
+                            await webrtc.createOffer();
+                        }
+                        break;
+
+                    case 'offer':
+                        const offer = JSON.parse(message.data);
+                        await webrtc.handleOffer(offer);
+                        peerConnected = true;
+                        break;
+
+                    case 'answer':
+                        const answer = JSON.parse(message.data);
+                        await webrtc.handleAnswer(answer);
+                        peerConnected = true;
+                        break;
+
+                    case 'ice-candidate':
+                        const candidate = JSON.parse(message.data);
+                        await webrtc.handleICECandidate(candidate);
+                        break;
+
+                    case 'chat':
+                        appendMessage(message.data, 'received');
+                        document.querySelector('.chat-text').textContent = message.data;
+                        break;
+
+                    case 'leave':
+                        console.log('[APP] Partner left');
+                        webrtc.updateStatus('Partner disconnected', 'error');
+                        document.getElementById('remotePlaceholder').classList.remove('hidden');
+                        break;
+                }
+            };
+
+            socket.onclose = () => {
+                console.log('[APP] WebSocket disconnected');
+                webrtc.updateStatus('Disconnected', 'error');
+            };
+
+            socket.onerror = (error) => {
+                console.error('[APP] WebSocket error:', error);
+            };
+
         } catch (err) {
-            console.warn('Camera/mic not available:', err);
-            // UI stays in placeholder mode
+            console.error('[APP] Connection error:', err);
+            alert('Failed to connect. Please try again.');
         }
-
-        const wsUrl = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws?room=${roomId}`;
-        socket = new WebSocket(wsUrl);
-
-        socket.onopen = () => {
-            console.log('Connected to room:', roomId);
-            document.querySelector('.status').textContent = 'Connected';
-        };
-
-        socket.onmessage = (event) => {
-            const data = JSON.parse(event.data);
-            if (data.type === 'chat') {
-                appendMessage(data.data, 'received');
-                // Update chat bubble
-                document.querySelector('.chat-text').textContent = data.data;
-            }
-        };
-
-        socket.onclose = () => {
-            document.querySelector('.status').textContent = 'Disconnected';
-        };
     }
 
+    // Load available devices
+    async function loadDevices() {
+        const { cameras, microphones } = await webrtc.getDevices();
+
+        // Populate camera select
+        cameraSelect.innerHTML = '';
+        cameras.forEach((device, index) => {
+            const option = document.createElement('option');
+            option.value = device.deviceId;
+            option.textContent = device.label || `Camera ${index + 1}`;
+            if (index === 0) option.selected = true;
+            cameraSelect.appendChild(option);
+        });
+
+        // Populate microphone select
+        microphoneSelect.innerHTML = '';
+        microphones.forEach((device, index) => {
+            const option = document.createElement('option');
+            option.value = device.deviceId;
+            option.textContent = device.label || `Microphone ${index + 1}`;
+            if (index === 0) option.selected = true;
+            microphoneSelect.appendChild(option);
+        });
+    }
+
+    // Settings panel
+    settingsBtn.addEventListener('click', () => {
+        settingsPanel.classList.add('active');
+        settingsBackdrop.classList.add('active');
+    });
+
+    closeSettings.addEventListener('click', () => {
+        settingsPanel.classList.remove('active');
+        settingsBackdrop.classList.remove('active');
+    });
+
+    cancelSettings.addEventListener('click', () => {
+        settingsPanel.classList.remove('active');
+        settingsBackdrop.classList.remove('active');
+    });
+
+    settingsBackdrop.addEventListener('click', () => {
+        settingsPanel.classList.remove('active');
+        settingsBackdrop.classList.remove('active');
+    });
+
+    applySettings.addEventListener('click', async () => {
+        const videoQuality = videoQualitySelect.value;
+        const frameRate = parseInt(frameRateSelect.value);
+        const audioQuality = audioQualitySelect.value;
+        const cameraId = cameraSelect.value;
+        const microphoneId = microphoneSelect.value;
+
+        console.log('[APP] Applying settings:', { videoQuality, frameRate, audioQuality });
+
+        // Change quality
+        const success = await webrtc.changeQuality(videoQuality, frameRate, audioQuality);
+
+        if (success) {
+            // Switch devices if changed
+            if (cameraId) {
+                await webrtc.switchCamera(cameraId);
+            }
+            if (microphoneId) {
+                await webrtc.switchMicrophone(microphoneId);
+            }
+
+            // Close settings
+            settingsPanel.classList.remove('active');
+            settingsBackdrop.classList.remove('active');
+
+            alert('Settings applied successfully!');
+        } else {
+            alert('Failed to apply settings. Please try again.');
+        }
+    });
+
+    // Chat functions
     function appendMessage(text, type) {
         const div = document.createElement('div');
         div.classList.add('message', type);
@@ -149,7 +281,6 @@ document.addEventListener('DOMContentLoaded', () => {
         chatMessages.scrollTop = chatMessages.scrollHeight;
     }
 
-    // Toggle chat panel
     chatBtn.addEventListener('click', () => {
         chatPanel.style.display = 'flex';
     });
@@ -158,7 +289,6 @@ document.addEventListener('DOMContentLoaded', () => {
         chatPanel.style.display = 'none';
     });
 
-    // Send message
     sendBtn.addEventListener('click', sendMessage);
     messageInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') sendMessage();
@@ -168,36 +298,31 @@ document.addEventListener('DOMContentLoaded', () => {
         const text = messageInput.value.trim();
         if (!text || !socket || socket.readyState !== WebSocket.OPEN) return;
 
-        const msg = { type: 'chat', data: text };
-        socket.send(JSON.stringify(msg));
+        socket.send(JSON.stringify({
+            type: 'chat',
+            data: text
+        }));
+
         appendMessage(text, 'sent');
         messageInput.value = '';
     }
+
+    chatBubble.addEventListener('click', () => {
+        chatPanel.style.display = 'flex';
+    });
 
     // Toggle mic
     micBtn.addEventListener('click', () => {
         isMicOn = !isMicOn;
         micBtn.querySelector('span').textContent = isMicOn ? '🎤' : '🔇';
-
-        if (localStream) {
-            const audioTrack = localStream.getAudioTracks()[0];
-            if (audioTrack) {
-                audioTrack.enabled = isMicOn;
-            }
-        }
+        webrtc.toggleAudio(isMicOn);
     });
 
     // Toggle video
     videoBtn.addEventListener('click', () => {
         isVideoOn = !isVideoOn;
         videoBtn.querySelector('span').textContent = isVideoOn ? '📹' : '📷';
-
-        if (localStream) {
-            const videoTrack = localStream.getVideoTracks()[0];
-            if (videoTrack) {
-                videoTrack.enabled = isVideoOn;
-            }
-        }
+        webrtc.toggleVideo(isVideoOn);
     });
 
     // End call
@@ -209,12 +334,14 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     function cleanupCall() {
+        console.log('[APP] Cleaning up call...');
+
         if (socket) socket.close();
         if (timerInterval) clearInterval(timerInterval);
-        if (localStream) {
-            localStream.getTracks().forEach(track => track.stop());
-        }
+        if (webrtc) webrtc.cleanup();
+
         releaseWakeLock();
+
         if (document.pictureInPictureElement) {
             document.exitPictureInPicture().catch(e => console.log(e));
         }
@@ -223,76 +350,44 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     }
 
-    // Settings
-    settingsBtn.addEventListener('click', () => {
-        alert('Settings menu (not implemented)');
-    });
-
-    // Chat bubble click
-    chatBubble.addEventListener('click', () => {
-        chatPanel.style.display = 'flex';
-    });
-
-    // Fullscreen functionality
+    // Fullscreen
     fullscreenBtn.addEventListener('click', async () => {
         try {
             if (!document.fullscreenElement) {
                 await callContainer.requestFullscreen();
-                fullscreenBtn.querySelector('span').textContent = '⛶';
             } else {
                 await document.exitFullscreen();
-                fullscreenBtn.querySelector('span').textContent = '⛶';
             }
         } catch (err) {
-            console.error('Fullscreen error:', err);
-            alert('Fullscreen not supported on this device');
+            console.error('[APP] Fullscreen error:', err);
         }
     });
 
-    // Handle fullscreen change
-    document.addEventListener('fullscreenchange', () => {
-        if (document.fullscreenElement) {
-            fullscreenBtn.querySelector('span').textContent = '⛶';
-        } else {
-            fullscreenBtn.querySelector('span').textContent = '⛶';
-        }
-    });
-
-    // Picture-in-Picture functionality
+    // Picture-in-Picture
     pipBtn.addEventListener('click', async () => {
         try {
-            // Create a video element if not exists (for future WebRTC implementation)
-            if (!videoElement) {
-                // For now, show message that video is needed
-                alert('Picture-in-Picture requires active video stream. This will work when video streaming is fully implemented.');
+            const remoteVideo = document.getElementById('remoteVideo');
+
+            if (!remoteVideo.srcObject) {
+                alert('Picture-in-Picture requires active video connection.');
                 return;
             }
 
             if (document.pictureInPictureElement) {
                 await document.exitPictureInPicture();
             } else if (document.pictureInPictureEnabled) {
-                await videoElement.requestPictureInPicture();
+                await remoteVideo.requestPictureInPicture();
+                console.log('[APP] ✅ Entered PiP mode');
             }
         } catch (err) {
-            console.error('PiP error:', err);
+            console.error('[APP] PiP error:', err);
             alert('Picture-in-Picture not supported on this device');
         }
     });
 
-    // Handle PiP change
-    if ('pictureInPictureEnabled' in document) {
-        pipBtn.disabled = false;
-
-        videoElement?.addEventListener('enterpictureinpicture', () => {
-            console.log('Entered PiP mode');
-        });
-
-        videoElement?.addEventListener('leavepictureinpicture', () => {
-            console.log('Left PiP mode');
-        });
-    } else {
+    // Check PiP support
+    if (!document.pictureInPictureEnabled) {
         pipBtn.disabled = true;
         pipBtn.style.opacity = '0.3';
     }
-
 });

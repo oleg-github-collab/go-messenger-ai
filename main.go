@@ -199,11 +199,21 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 			continue
 		}
 
-		// Переконуємося, що тип підтримується
-		if message.Type != "chat" {
-			log.Printf("Unsupported message type: %s", message.Type)
+		// Підтримувані типи повідомлень
+		validTypes := map[string]bool{
+			"chat":          true,
+			"offer":         true,
+			"answer":        true,
+			"ice-candidate": true,
+			"join":          true,
+		}
+
+		if !validTypes[message.Type] {
+			log.Printf("[WS] Unsupported message type: %s", message.Type)
 			continue
 		}
+
+		log.Printf("[WS] Received %s from user %s in room %s", message.Type, userID, roomID)
 
 		// Забезпечуємо наявність User
 		message.User = userID
@@ -215,8 +225,11 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 			if peerConn != conn {
 				outgoing := message
 				outgoing.User = peerID // Для UI — показуємо відправника
+
 				if err := peerConn.WriteJSON(outgoing); err != nil {
-					log.Printf("Failed to send message to peer %s: %v", peerID, err)
+					log.Printf("[WS] Failed to send %s to peer %s: %v", message.Type, peerID, err)
+				} else {
+					log.Printf("[WS] ✅ Sent %s to peer %s", message.Type, peerID)
 				}
 				break // лише один інший учасник
 			}
