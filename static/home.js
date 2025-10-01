@@ -69,6 +69,14 @@ document.addEventListener('DOMContentLoaded', () => {
                 currentMeetingURL = url;
                 console.log('[HOME] ✅ Meeting URL:', url);
 
+                // Extract room ID from URL
+                const roomID = url.split('/').pop();
+
+                // Store that current user is host of this room
+                sessionStorage.setItem('isHost_' + roomID, 'true');
+                sessionStorage.setItem('hostName_' + roomID, hostName);
+                console.log('[HOME] 🔑 Stored host flag for room:', roomID);
+
                 // Show share section
                 meetingLinkInput.value = url;
                 shareSection.style.display = 'block';

@@ -120,7 +120,10 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Connect to SFU via WebSocket
     function connectToSFU() {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const wsUrl = `${protocol}//${window.location.host}/ws-sfu?room=${roomID}&name=${encodeURIComponent(myName)}`;
+        const isHostSession = sessionStorage.getItem('isHost') === 'true';
+        const wsUrl = `${protocol}//${window.location.host}/ws-sfu?room=${roomID}&name=${encodeURIComponent(myName)}&isHost=${isHostSession}`;
+
+        console.log('[GROUP-CALL] Connecting as:', isHostSession ? 'HOST' : 'PARTICIPANT', 'Name:', myName);
 
         socket = new WebSocket(wsUrl);
 

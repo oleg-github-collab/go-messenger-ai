@@ -147,8 +147,11 @@ document.addEventListener('DOMContentLoaded', () => {
     async function connectToRoom(roomId) {
         try {
             const guestName = sessionStorage.getItem('guestName') || 'Guest';
-            const wsUrl = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws?room=${roomId}&name=${encodeURIComponent(guestName)}`;
+            const isHostSession = sessionStorage.getItem('isHost') === 'true';
+            const wsUrl = `${window.location.protocol === 'https:' ? 'wss' : 'ws'}://${window.location.host}/ws?room=${roomId}&name=${encodeURIComponent(guestName)}&isHost=${isHostSession}`;
             socket = new WebSocket(wsUrl);
+
+            console.log('[CALL] Connecting as:', isHostSession ? 'HOST' : 'GUEST', 'Name:', guestName);
 
             socket.onopen = async () => {
                 console.log('[CALL] WebSocket connected');

@@ -1,6 +1,28 @@
 document.addEventListener('DOMContentLoaded', async () => {
     console.log('[GUEST] Page loaded');
 
+    // Get room ID from URL
+    const pathParts = window.location.pathname.split('/');
+    const roomID = pathParts[pathParts.length - 1];
+
+    if (!roomID || roomID === 'join') {
+        alert('Invalid meeting link');
+        return;
+    }
+
+    // Check if this user is the host
+    const isHost = sessionStorage.getItem('isHost_' + roomID) === 'true';
+    const hostName = sessionStorage.getItem('hostName_' + roomID);
+
+    if (isHost) {
+        console.log('[GUEST] 🔑 Host detected, bypassing guest page');
+        // Store host name and redirect directly to room
+        sessionStorage.setItem('guestName', hostName || 'Host');
+        sessionStorage.setItem('isHost', 'true');
+        window.location.href = `/room/${roomID}`;
+        return;
+    }
+
     const guestForm = document.getElementById('guestForm');
     const guestNameInput = document.getElementById('guestName');
     const enableVideoCheckbox = document.getElementById('enableVideo');
@@ -12,15 +34,6 @@ document.addEventListener('DOMContentLoaded', async () => {
     const joinBtn = document.getElementById('joinBtn');
 
     let previewStream = null;
-
-    // Get room ID from URL
-    const pathParts = window.location.pathname.split('/');
-    const roomID = pathParts[pathParts.length - 1];
-
-    if (!roomID || roomID === 'join') {
-        alert('Invalid meeting link');
-        return;
-    }
 
     // Load devices
     try {
