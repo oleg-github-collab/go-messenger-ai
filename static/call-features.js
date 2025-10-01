@@ -131,10 +131,14 @@ function initEmojiPicker() {
     }
 
     function sendGifMessage(gifUrl) {
-        // Add GIF sending logic here
-        const messageInput = document.getElementById('messageInput');
-        messageInput.value = `[GIF] ${gifUrl}`;
-        document.getElementById('sendMessageBtn').click();
+        // Send GIF URL as message with special marker
+        if (window.sendChatMessage) {
+            window.sendChatMessage(`[GIF]${gifUrl}`);
+        } else {
+            const messageInput = document.getElementById('messageInput');
+            messageInput.value = `[GIF]${gifUrl}`;
+            document.getElementById('sendMessageBtn').click();
+        }
     }
 }
 

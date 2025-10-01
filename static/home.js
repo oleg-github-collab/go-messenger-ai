@@ -7,7 +7,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const copyBtn = document.getElementById('copyBtn');
     const shareEmail = document.getElementById('shareEmail');
     const shareSMS = document.getElementById('shareSMS');
-    const shareWhatsApp = document.getElementById('shareWhatsApp');
+    const shareTelegram = document.getElementById('shareTelegram');
     const joinNow = document.getElementById('joinNow');
 
     let currentMeetingURL = '';
@@ -111,11 +111,11 @@ document.addEventListener('DOMContentLoaded', () => {
         console.log('[HOME] SMS share triggered');
     });
 
-    // Share via WhatsApp
-    shareWhatsApp.addEventListener('click', () => {
+    // Share via Telegram
+    shareTelegram.addEventListener('click', () => {
         const message = encodeURIComponent(`Join my video call: ${currentMeetingURL}`);
-        window.open(`https://wa.me/?text=${message}`, '_blank');
-        console.log('[HOME] Opened WhatsApp share');
+        window.open(`https://t.me/share/url?url=${encodeURIComponent(currentMeetingURL)}&text=${encodeURIComponent('Join my video call')}`, '_blank');
+        console.log('[HOME] Opened Telegram share');
     });
 
     // Join Now

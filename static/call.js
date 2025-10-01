@@ -233,7 +233,22 @@ document.addEventListener('DOMContentLoaded', () => {
 
         const div = document.createElement('div');
         div.classList.add('message', type);
-        div.textContent = text;
+
+        // Check if message is a GIF
+        if (text.startsWith('[GIF]')) {
+            const gifUrl = text.substring(5); // Remove [GIF] prefix
+            const img = document.createElement('img');
+            img.src = gifUrl;
+            img.style.maxWidth = '200px';
+            img.style.maxHeight = '200px';
+            img.style.borderRadius = '8px';
+            img.style.marginTop = '4px';
+            img.alt = 'GIF';
+            div.appendChild(img);
+        } else {
+            div.textContent = text;
+        }
+
         chatMessages.appendChild(div);
         chatMessages.scrollTop = chatMessages.scrollHeight;
     }
@@ -259,6 +274,9 @@ document.addEventListener('DOMContentLoaded', () => {
         appendMessage(text, 'sent');
         messageInput.value = '';
     }
+
+    // Expose sendMessage for GIF functionality
+    window.sendChatMessage = sendMessage;
 
     // Button handlers
     backButton.addEventListener('click', () => {
