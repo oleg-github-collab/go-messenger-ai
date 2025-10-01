@@ -49,11 +49,11 @@
                 <span>◱</span>
             </button>
 
-            <!-- Chat bubble (TikTok-style) -->
-            <div class="chat-bubble" id="chatBubble">
-                <div class="chat-avatar">P</div>
-                <div class="chat-text">Hello! Ready to talk?</div>
-                <span class="chat-expand">▼</span>
+            <!-- Chat bubble -->
+            <div class="chat-bubble" id="chatBubble" style="display: none;">
+                <div class="chat-avatar">💬</div>
+                <div class="chat-text">New message received</div>
+                <span class="chat-expand">→</span>
             </div>
         </div>
 
@@ -133,10 +133,19 @@
             <div class="chat-header">
                 <button class="back-to-call" id="backToCall">← Back to call</button>
             </div>
-            <div class="chat-messages" id="chatMessages"></div>
+            <div class="chat-messages" id="chatMessages">
+                <div class="chat-empty" id="chatEmpty">
+                    <div class="chat-empty-icon">💬</div>
+                    <div class="chat-empty-title">No messages yet</div>
+                    <div class="chat-empty-text">Send a message to start the conversation</div>
+                </div>
+            </div>
             <div class="chat-input">
                 <input type="text" id="messageInput" placeholder="Type a message..." />
-                <button id="sendBtn">Send</button>
+                <button id="sendBtn">
+                    <span>Send</span>
+                    <span style="font-size: 18px;">➤</span>
+                </button>
             </div>
         </div>
     </div>

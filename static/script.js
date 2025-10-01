@@ -277,11 +277,28 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Chat functions
     function appendMessage(text, type) {
+        // Hide empty state on first message
+        const chatEmpty = document.getElementById('chatEmpty');
+        if (chatEmpty) {
+            chatEmpty.style.display = 'none';
+        }
+
         const div = document.createElement('div');
         div.classList.add('message', type);
         div.textContent = text;
         chatMessages.appendChild(div);
         chatMessages.scrollTop = chatMessages.scrollHeight;
+
+        // Show chat bubble notification if panel closed and message received
+        if (type === 'received' && chatPanel.style.display === 'none') {
+            chatBubble.querySelector('.chat-text').textContent = text;
+            chatBubble.style.display = 'flex';
+
+            // Auto-hide after 5 seconds
+            setTimeout(() => {
+                chatBubble.style.display = 'none';
+            }, 5000);
+        }
     }
 
     chatBtn.addEventListener('click', () => {
