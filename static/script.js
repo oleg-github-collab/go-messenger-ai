@@ -1,10 +1,5 @@
 document.addEventListener('DOMContentLoaded', () => {
-    // Check authentication
-    const authToken = localStorage.getItem('authToken');
-    if (!authToken) {
-        window.location.href = '/login';
-        return;
-    }
+    console.log('Call page loaded');
 
     const callContainer = document.getElementById('callContainer');
     const chatPanel = document.getElementById('chatPanel');

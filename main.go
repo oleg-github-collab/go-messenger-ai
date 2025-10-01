@@ -247,13 +247,31 @@ func generateToken() (string, error) {
 
 func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 	return func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("[AUTH] Request: %s %s", r.Method, r.URL.Path)
+
 		// Skip auth for login page and static files
 		if strings.HasPrefix(r.URL.Path, "/login") || strings.HasPrefix(r.URL.Path, "/static/") {
+			log.Printf("[AUTH] Skipping auth for: %s", r.URL.Path)
 			next(w, r)
 			return
 		}
 
-		// Check Authorization header
+		// Check cookie first (for browser navigation)
+		cookie, err := r.Cookie("auth_token")
+		if err == nil && cookie.Value != "" {
+			sessionMutex.RLock()
+			valid := activeSessions[cookie.Value]
+			sessionMutex.RUnlock()
+
+			if valid {
+				log.Printf("[AUTH] Valid cookie token for: %s", r.URL.Path)
+				next(w, r)
+				return
+			}
+			log.Printf("[AUTH] Invalid cookie token: %s", cookie.Value[:10]+"...")
+		}
+
+		// Check Authorization header (for API calls)
 		authHeader := r.Header.Get("Authorization")
 		if authHeader != "" {
 			token := strings.TrimPrefix(authHeader, "Bearer ")
@@ -262,10 +280,15 @@ func authMiddleware(next http.HandlerFunc) http.HandlerFunc {
 			sessionMutex.RUnlock()
 
 			if valid {
+				log.Printf("[AUTH] Valid Bearer token for: %s", r.URL.Path)
 				next(w, r)
 				return
 			}
+			log.Printf("[AUTH] Invalid Bearer token")
 		}
+
+		// No valid auth found
+		log.Printf("[AUTH] No valid authentication, redirecting to login")
 
 		// Check if this is an HTML request
 		acceptHeader := r.Header.Get("Accept")
@@ -312,6 +335,8 @@ func main() {
 
 	// Login endpoint
 	http.HandleFunc("/login", func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("[LOGIN] %s request from %s", r.Method, r.RemoteAddr)
+
 		if r.Method == http.MethodGet {
 			serveFile("login.html")(w, r)
 			return
@@ -325,18 +350,25 @@ func main() {
 
 			body, err := io.ReadAll(r.Body)
 			if err != nil {
+				log.Printf("[LOGIN] Error reading body: %v", err)
 				http.Error(w, "Invalid request", http.StatusBadRequest)
 				return
 			}
 
+			log.Printf("[LOGIN] Received body: %s", string(body))
+
 			if err := json.Unmarshal(body, &creds); err != nil {
+				log.Printf("[LOGIN] Error parsing JSON: %v", err)
 				http.Error(w, "Invalid JSON", http.StatusBadRequest)
 				return
 			}
 
+			log.Printf("[LOGIN] Attempting login for user: %s", creds.Username)
+
 			if creds.Username == validUsername && creds.Password == validPassword {
 				token, err := generateToken()
 				if err != nil {
+					log.Printf("[LOGIN] Error generating token: %v", err)
 					http.Error(w, "Server error", http.StatusInternalServerError)
 					return
 				}
@@ -345,12 +377,26 @@ func main() {
 				activeSessions[token] = true
 				sessionMutex.Unlock()
 
+				log.Printf("[LOGIN] ✅ Login successful for user: %s, token: %s...", creds.Username, token[:10])
+
+				// Set cookie for browser
+				http.SetCookie(w, &http.Cookie{
+					Name:     "auth_token",
+					Value:    token,
+					Path:     "/",
+					MaxAge:   86400, // 24 hours
+					HttpOnly: true,
+					Secure:   r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https",
+					SameSite: http.SameSiteLaxMode,
+				})
+
 				w.Header().Set("Content-Type", "application/json")
 				json.NewEncoder(w).Encode(map[string]any{
 					"success": true,
 					"token":   token,
 				})
 			} else {
+				log.Printf("[LOGIN] ❌ Invalid credentials for user: %s", creds.Username)
 				w.Header().Set("Content-Type", "application/json")
 				w.WriteHeader(http.StatusUnauthorized)
 				json.NewEncoder(w).Encode(map[string]any{
@@ -362,6 +408,31 @@ func main() {
 		}
 
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	})
+
+	// Logout endpoint
+	http.HandleFunc("/logout", func(w http.ResponseWriter, r *http.Request) {
+		log.Printf("[LOGOUT] User logging out")
+
+		// Get token from cookie
+		cookie, err := r.Cookie("auth_token")
+		if err == nil {
+			sessionMutex.Lock()
+			delete(activeSessions, cookie.Value)
+			sessionMutex.Unlock()
+			log.Printf("[LOGOUT] Removed session token")
+		}
+
+		// Clear cookie
+		http.SetCookie(w, &http.Cookie{
+			Name:     "auth_token",
+			Value:    "",
+			Path:     "/",
+			MaxAge:   -1,
+			HttpOnly: true,
+		})
+
+		http.Redirect(w, r, "/login", http.StatusSeeOther)
 	})
 
 	// Protected routes
@@ -390,6 +461,8 @@ func main() {
 	// WebSocket (protected)
 	http.HandleFunc("/ws", authMiddleware(wsHandler))
 
-	log.Printf("🚀 Server starting on %s", *addr)
+	log.Printf("🚀 Kaminskyi AI Messenger starting on %s", *addr)
+	log.Printf("📝 Login credentials: username=%s, password=%s", validUsername, validPassword)
+	log.Printf("🔒 Authentication: Cookie-based + Bearer token")
 	log.Fatal(http.ListenAndServe(*addr, nil))
 }

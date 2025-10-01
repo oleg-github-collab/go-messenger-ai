@@ -2,34 +2,47 @@ document.addEventListener('DOMContentLoaded', () => {
     const createMeetingBtn = document.getElementById('createMeetingBtn');
     const logoutBtn = document.getElementById('logoutBtn');
 
-    // Check authentication
-    const authToken = localStorage.getItem('authToken');
-    if (!authToken) {
-        window.location.href = '/login';
-        return;
-    }
+    console.log('Home page loaded');
 
     createMeetingBtn.addEventListener('click', async () => {
         createMeetingBtn.disabled = true;
         createMeetingBtn.textContent = 'Creating...';
 
+        const authToken = localStorage.getItem('authToken');
+        console.log('Creating meeting, token exists:', !!authToken);
+
         try {
+            const headers = {};
+            if (authToken) {
+                headers['Authorization'] = `Bearer ${authToken}`;
+            }
+
             const response = await fetch('/create', {
                 method: 'GET',
-                headers: {
-                    'Authorization': `Bearer ${authToken}`
-                }
+                credentials: 'include', // Include cookies
+                headers: headers
             });
+
+            console.log('Create meeting response:', response.status);
 
             if (response.ok) {
                 const url = await response.text();
+                console.log('Meeting URL:', url);
+
                 // Copy to clipboard
                 if (navigator.clipboard) {
-                    await navigator.clipboard.writeText(url);
+                    try {
+                        await navigator.clipboard.writeText(url);
+                        console.log('URL copied to clipboard');
+                    } catch (e) {
+                        console.log('Failed to copy to clipboard:', e);
+                    }
                 }
+
                 // Navigate to the meeting
                 window.location.href = url;
             } else if (response.status === 401) {
+                console.log('Unauthorized, redirecting to login');
                 localStorage.removeItem('authToken');
                 window.location.href = '/login';
             } else {
@@ -47,8 +60,10 @@ document.addEventListener('DOMContentLoaded', () => {
 
     logoutBtn.addEventListener('click', () => {
         if (confirm('Are you sure you want to logout?')) {
+            console.log('Logging out...');
             localStorage.removeItem('authToken');
-            window.location.href = '/login';
+            // Use server logout to clear cookie
+            window.location.href = '/logout';
         }
     });
 });
