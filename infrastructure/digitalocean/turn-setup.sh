@@ -29,15 +29,15 @@ echo "Public IP: $PUBLIC_IP"
 sed -i 's/#TURNSERVER_ENABLED=1/TURNSERVER_ENABLED=1/' /etc/default/coturn
 
 # Configure coturn
-cat > /etc/turnserver.conf <<'EOF'
+cat > /etc/turnserver.conf <<EOF
 # Kaminskyi Messenger TURN Server Configuration
 
 # Listening interfaces
 listening-ip=0.0.0.0
-relay-ip=${PUBLIC_IP}
+relay-ip=$PUBLIC_IP
 
 # External IP (for NAT)
-external-ip=${PUBLIC_IP}
+external-ip=$PUBLIC_IP
 
 # Ports
 listening-port=3478
@@ -78,10 +78,7 @@ denied-peer-ip=172.16.0.0-172.31.255.255
 fingerprint
 EOF
 
-# Replace variables in config
-sed -i "s/\${PUBLIC_IP}/$PUBLIC_IP/g" /etc/turnserver.conf
-sed -i "s/\${turn_username}/${turn_username}/g" /etc/turnserver.conf
-sed -i "s/\${turn_password}/${turn_password}/g" /etc/turnserver.conf
+# Variables already substituted in heredoc above via $PUBLIC_IP, ${turn_username}, ${turn_password}
 
 # Set proper permissions
 chmod 644 /etc/turnserver.conf
