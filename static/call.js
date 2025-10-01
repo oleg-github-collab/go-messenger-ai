@@ -54,6 +54,37 @@ document.addEventListener('DOMContentLoaded', () => {
         return;
     }
 
+    // Initialize waiting room UI
+    let waitingRoomUI = null;
+    let joinRequestUI = null;
+
+    if (window.WaitingRoomUI) {
+        waitingRoomUI = new window.WaitingRoomUI();
+    }
+
+    if (window.JoinRequestUI) {
+        joinRequestUI = new window.JoinRequestUI(
+            (guestId) => {
+                // Approve join
+                if (socket && socket.readyState === WebSocket.OPEN) {
+                    socket.send(JSON.stringify({
+                        type: 'approve-join',
+                        data: JSON.stringify({ id: guestId })
+                    }));
+                }
+            },
+            (guestId) => {
+                // Reject join
+                if (socket && socket.readyState === WebSocket.OPEN) {
+                    socket.send(JSON.stringify({
+                        type: 'reject-join',
+                        data: JSON.stringify({ id: guestId })
+                    }));
+                }
+            }
+        );
+    }
+
     // Initialize
     connectToRoom(roomID);
     startCallTimer();
@@ -158,6 +189,44 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.log('[CALL] Message received:', message.type);
 
                 switch (message.type) {
+                    case 'waiting':
+                        console.log('[CALL] In waiting room');
+                        if (waitingRoomUI) {
+                            waitingRoomUI.show();
+                        }
+                        break;
+
+                    case 'approved':
+                        console.log('[CALL] Approved by host');
+                        if (waitingRoomUI) {
+                            waitingRoomUI.hide();
+                        }
+                        break;
+
+                    case 'rejected':
+                        console.log('[CALL] Rejected by host');
+                        if (waitingRoomUI) {
+                            waitingRoomUI.hide();
+                        }
+                        alert('The host rejected your join request');
+                        window.location.href = '/';
+                        break;
+
+                    case 'join-request':
+                        const requestData = JSON.parse(message.data);
+                        console.log('[CALL] Join request from:', requestData.name);
+                        if (joinRequestUI) {
+                            joinRequestUI.show(requestData);
+                        }
+                        break;
+
+                    case 'meeting-ended':
+                        console.log('[CALL] Meeting ended by host');
+                        alert('The host ended the meeting');
+                        cleanupCall();
+                        window.location.href = '/';
+                        break;
+
                     case 'join':
                         console.log('[CALL] Partner joined');
                         if (isInitiator && webrtc) {
