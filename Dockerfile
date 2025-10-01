@@ -11,7 +11,7 @@ RUN go mod download
 COPY . .
 
 # Build the application
-RUN CGO_ENABLED=0 GOOS=linux go build -o messenger .
+RUN CGO_ENABLED=0 GOOS=linux go build -o main .
 
 # Runtime stage
 FROM alpine:latest
@@ -21,7 +21,7 @@ RUN apk --no-cache add ca-certificates
 WORKDIR /root/
 
 # Copy binary from builder
-COPY --from=builder /app/messenger .
+COPY --from=builder /app/main .
 
 # Copy static files
 COPY --from=builder /app/static ./static
@@ -30,4 +30,4 @@ COPY --from=builder /app/static ./static
 EXPOSE 8080
 
 # Run the application
-CMD ["./messenger"]
+CMD ["./main"]
