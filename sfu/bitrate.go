@@ -1,0 +1,204 @@
+// sfu/bitrate.go - Adaptive bitrate control for SFU
+package sfu
+
+import (
+	"log"
+	"sync"
+	"time"
+
+	"github.com/pion/rtcp"
+	"github.com/pion/webrtc/v3"
+)
+
+// BitrateController manages adaptive bitrate for a participant
+type BitrateController struct {
+	participant    *SFUParticipant
+	targetBitrate  uint64
+	currentBitrate uint64
+	packetLoss     float64
+	mu             sync.RWMutex
+	stopChan       chan struct{}
+}
+
+// NewBitrateController creates a new bitrate controller
+func NewBitrateController(p *SFUParticipant) *BitrateController {
+	bc := &BitrateController{
+		participant:    p,
+		targetBitrate:  2000000, // 2 Mbps default
+		currentBitrate: 2000000,
+		stopChan:       make(chan struct{}),
+	}
+
+	go bc.monitor()
+
+	return bc
+}
+
+// monitor monitors connection quality and adjusts bitrate
+func (bc *BitrateController) monitor() {
+	ticker := time.NewTicker(time.Second * 2)
+	defer ticker.Stop()
+
+	for {
+		select {
+		case <-bc.stopChan:
+			return
+		case <-ticker.C:
+			bc.updateBitrate()
+		}
+	}
+}
+
+// updateBitrate adjusts bitrate based on connection quality
+func (bc *BitrateController) updateBitrate() {
+	bc.mu.Lock()
+	defer bc.mu.Unlock()
+
+	// Get stats from peer connection
+	stats := bc.participant.PeerConnection.GetStats()
+
+	var totalPacketsLost uint32
+	var totalPacketsReceived uint32
+
+	stats.Range(func(key string, value interface{}) bool {
+		if inboundStats, ok := value.(*webrtc.InboundRTPStreamStats); ok {
+			totalPacketsLost += inboundStats.PacketsLost
+			totalPacketsReceived += inboundStats.PacketsReceived
+		}
+		return true
+	})
+
+	// Calculate packet loss percentage
+	if totalPacketsReceived > 0 {
+		bc.packetLoss = float64(totalPacketsLost) / float64(totalPacketsReceived+totalPacketsLost) * 100
+	}
+
+	// Adjust bitrate based on packet loss
+	if bc.packetLoss > 10 {
+		// High packet loss - reduce bitrate by 20%
+		bc.targetBitrate = uint64(float64(bc.targetBitrate) * 0.8)
+		if bc.targetBitrate < 500000 {
+			bc.targetBitrate = 500000 // Min 500 kbps
+		}
+		log.Printf("[SFU] Participant %s: High packet loss (%.2f%%), reducing bitrate to %d",
+			bc.participant.ID, bc.packetLoss, bc.targetBitrate)
+		bc.applyBitrate()
+	} else if bc.packetLoss < 2 && bc.targetBitrate < 3000000 {
+		// Low packet loss - increase bitrate by 10%
+		bc.targetBitrate = uint64(float64(bc.targetBitrate) * 1.1)
+		if bc.targetBitrate > 3000000 {
+			bc.targetBitrate = 3000000 // Max 3 Mbps per participant
+		}
+		log.Printf("[SFU] Participant %s: Low packet loss (%.2f%%), increasing bitrate to %d",
+			bc.participant.ID, bc.packetLoss, bc.targetBitrate)
+		bc.applyBitrate()
+	}
+}
+
+// applyBitrate applies the target bitrate using REMB
+func (bc *BitrateController) applyBitrate() {
+	bc.participant.mu.RLock()
+	defer bc.participant.mu.RUnlock()
+
+	// Send REMB (Receiver Estimated Maximum Bitrate) for each video track
+	for _, trackInfo := range bc.participant.Tracks {
+		if trackInfo.Kind == "video" {
+			remb := &rtcp.ReceiverEstimatedMaximumBitrate{
+				Bitrate: float32(bc.targetBitrate),
+				SSRCs:   []uint32{uint32(trackInfo.SSRC)},
+			}
+
+			if err := bc.participant.PeerConnection.WriteRTCP([]rtcp.Packet{remb}); err != nil {
+				log.Printf("[SFU] Failed to send REMB: %v", err)
+			}
+		}
+	}
+}
+
+// GetStats returns current stats
+func (bc *BitrateController) GetStats() map[string]interface{} {
+	bc.mu.RLock()
+	defer bc.mu.RUnlock()
+
+	return map[string]interface{}{
+		"targetBitrate":  bc.targetBitrate,
+		"currentBitrate": bc.currentBitrate,
+		"packetLoss":     bc.packetLoss,
+	}
+}
+
+// Stop stops the controller
+func (bc *BitrateController) Stop() {
+	close(bc.stopChan)
+}
+
+// QualityLevel represents video quality levels
+type QualityLevel int
+
+const (
+	QualityLow QualityLevel = iota
+	QualityMedium
+	QualityHigh
+)
+
+// SimulcastController manages simulcast layers
+type SimulcastController struct {
+	participant     *SFUParticipant
+	currentQuality  QualityLevel
+	availableLayers []QualityLevel
+	mu              sync.RWMutex
+}
+
+// NewSimulcastController creates a simulcast controller
+func NewSimulcastController(p *SFUParticipant) *SimulcastController {
+	return &SimulcastController{
+		participant:     p,
+		currentQuality:  QualityHigh,
+		availableLayers: []QualityLevel{QualityLow, QualityMedium, QualityHigh},
+	}
+}
+
+// SetQuality sets the desired quality level
+func (sc *SimulcastController) SetQuality(quality QualityLevel) {
+	sc.mu.Lock()
+	defer sc.mu.Unlock()
+
+	if sc.currentQuality == quality {
+		return
+	}
+
+	sc.currentQuality = quality
+	log.Printf("[SFU] Participant %s: Switched to quality %d", sc.participant.ID, quality)
+
+	// In production, this would switch simulcast layers
+	// For now, we adjust bitrate instead
+	switch quality {
+	case QualityLow:
+		sc.requestBitrate(500000) // 500 kbps
+	case QualityMedium:
+		sc.requestBitrate(1000000) // 1 Mbps
+	case QualityHigh:
+		sc.requestBitrate(2000000) // 2 Mbps
+	}
+}
+
+// requestBitrate requests a specific bitrate
+func (sc *SimulcastController) requestBitrate(bitrate uint64) {
+	for _, trackInfo := range sc.participant.Tracks {
+		if trackInfo.Kind == "video" {
+			remb := &rtcp.ReceiverEstimatedMaximumBitrate{
+				Bitrate: float32(bitrate),
+				SSRCs:   []uint32{uint32(trackInfo.SSRC)},
+			}
+
+			sc.participant.PeerConnection.WriteRTCP([]rtcp.Packet{remb})
+		}
+	}
+}
+
+// GetCurrentQuality returns current quality level
+func (sc *SimulcastController) GetCurrentQuality() QualityLevel {
+	sc.mu.RLock()
+	defer sc.mu.RUnlock()
+	return sc.currentQuality
+}
