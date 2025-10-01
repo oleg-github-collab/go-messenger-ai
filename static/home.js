@@ -27,12 +27,12 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Handle 1-on-1 selection
     oneOnOneBtn.addEventListener('click', () => {
-        createMeeting('p2p');
+        createMeeting('1on1');
     });
 
     // Handle group call selection
     groupCallBtn.addEventListener('click', () => {
-        createMeeting('sfu');
+        createMeeting('group');
     });
 
     // Cancel modal

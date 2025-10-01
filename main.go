@@ -880,6 +880,8 @@ func main() {
 			roomID = pathParts[2]
 		}
 
+		log.Printf("[ROOM] 📱 Request for room: %s", roomID)
+
 		// Check meeting mode
 		if roomID != "" {
 			meetingData, err := getMeeting(roomID)
@@ -889,14 +891,20 @@ func main() {
 					mode = m
 				}
 
+				log.Printf("[ROOM] 🎯 Mode detected: %s", mode)
+
 				if mode == "group" {
+					log.Printf("[ROOM] 👨‍👩‍👧‍👦 Serving group-call.html")
 					serveFile("group-call.html")(w, r)
 					return
 				}
+			} else {
+				log.Printf("[ROOM] ⚠️  Meeting not found in Redis: %v", err)
 			}
 		}
 
 		// Default to 1-on-1 call UI
+		log.Printf("[ROOM] 👥 Serving call.html (1-on-1)")
 		serveFile("call.html")(w, r)
 	})
 
@@ -915,6 +923,8 @@ func main() {
 		if mode == "" {
 			mode = "1on1"
 		}
+
+		log.Printf("[CREATE] 📋 Request - UserID: %s, Host: %s, Mode: %s", userID, hostName, mode)
 
 		roomID := createRoom(userID, hostName, mode)
 
