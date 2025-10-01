@@ -8,6 +8,7 @@ class WebRTCManager {
         this.localStream = null;
         this.remoteStream = null;
         this.currentCameraId = null;
+        this.turnConfigLoaded = false;
 
         // Video/Audio elements (support both old and new UI)
         this.localVideo = document.getElementById('localVideo');
@@ -30,8 +31,37 @@ class WebRTCManager {
             iceCandidatePoolSize: 10
         };
 
+        // Load TURN credentials
+        this.loadTURNCredentials();
+
         // Current quality settings
         this.currentConstraints = this.getConstraints('1080p', 30, 'high');
+    }
+
+    async loadTURNCredentials() {
+        try {
+            const response = await fetch('/api/turn-credentials');
+            const creds = await response.json();
+
+            if (creds.host && creds.username && creds.password) {
+                const turnServer = {
+                    urls: [
+                        `turn:${creds.host}:3478?transport=udp`,
+                        `turn:${creds.host}:3478?transport=tcp`
+                    ],
+                    username: creds.username,
+                    credential: creds.password
+                };
+
+                this.iceServers.iceServers.push(turnServer);
+                this.turnConfigLoaded = true;
+                console.log('[WebRTC] ✅ TURN server configured:', creds.host);
+            } else {
+                console.warn('[WebRTC] ⚠️  TURN credentials not available');
+            }
+        } catch (err) {
+            console.error('[WebRTC] Failed to load TURN credentials:', err);
+        }
     }
 
     getConstraints(videoQuality, frameRate, audioQuality) {
@@ -71,6 +101,12 @@ class WebRTCManager {
     async initialize() {
         try {
             console.log('[WebRTC] Initializing with constraints:', this.currentConstraints);
+
+            // Wait for TURN credentials (max 2 seconds)
+            if (!this.turnConfigLoaded) {
+                console.log('[WebRTC] Waiting for TURN credentials...');
+                await new Promise(resolve => setTimeout(resolve, 500));
+            }
 
             // Get user media
             this.localStream = await navigator.mediaDevices.getUserMedia(this.currentConstraints);

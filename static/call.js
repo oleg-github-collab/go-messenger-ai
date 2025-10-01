@@ -345,7 +345,23 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Expose sendMessage for GIF functionality
-    window.sendChatMessage = sendMessage;
+    window.sendChatMessage = function(text) {
+        console.log('[CALL] sendChatMessage called with:', text);
+        if (!text || !socket || socket.readyState !== WebSocket.OPEN) {
+            console.warn('[CALL] Cannot send message - socket not ready');
+            return;
+        }
+
+        socket.send(JSON.stringify({
+            type: 'chat',
+            data: text
+        }));
+
+        appendMessage(text, 'sent');
+        if (messageInput) {
+            messageInput.value = '';
+        }
+    };
 
     // Button handlers
     backButton.addEventListener('click', () => {
