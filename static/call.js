@@ -154,42 +154,42 @@ document.addEventListener('DOMContentLoaded', () => {
             console.log('[CALL] Connecting as:', isHostSession ? 'HOST' : 'GUEST', 'Name:', guestName);
 
             socket.onopen = async () => {
-                console.log('[CALL] WebSocket connected');
+                console.log('[CALL] ✅ WebSocket connected');
 
-                // Only initialize WebRTC immediately if we're the host
-                // Guests will initialize after being approved
-                if (isHostSession) {
-                    console.log('[CALL] Host - Initializing WebRTC immediately');
-                    webrtc = new WebRTCManager(socket, roomId);
-                    const initialized = await webrtc.initialize();
+                // Initialize WebRTC for EVERYONE immediately
+                console.log('[CALL] Initializing WebRTC...');
+                webrtc = new WebRTCManager(socket, roomId);
+                const initialized = await webrtc.initialize();
 
-                    if (initialized) {
-                        // Reset reconnect counter on successful connection
-                        reconnectAttempts = 0;
+                if (initialized) {
+                    console.log('[CALL] ✅ WebRTC initialized successfully');
 
-                        // Initialize adaptive quality if available
-                        if (window.AdaptiveQuality) {
-                            adaptiveQuality = new window.AdaptiveQuality(webrtc);
-                            window.adaptiveQuality = adaptiveQuality; // Make globally accessible
-                        }
+                    // Reset reconnect counter
+                    reconnectAttempts = 0;
 
-                        // Make webrtc globally accessible for settings panel
-                        window.webrtc = webrtc;
-
-                        socket.send(JSON.stringify({
-                            type: 'join',
-                            room: roomId
-                        }));
-
-                        setTimeout(() => {
-                            if (!peerConnected) {
-                                isInitiator = true;
-                                console.log('[CALL] I am the initiator');
-                            }
-                        }, 1000);
+                    // Initialize adaptive quality
+                    if (window.AdaptiveQuality) {
+                        adaptiveQuality = new window.AdaptiveQuality(webrtc);
+                        window.adaptiveQuality = adaptiveQuality;
                     }
+
+                    window.webrtc = webrtc;
+
+                    // Send join message
+                    socket.send(JSON.stringify({
+                        type: 'join',
+                        room: roomId
+                    }));
+
+                    // Set initiator flag
+                    setTimeout(() => {
+                        if (!peerConnected && isHostSession) {
+                            isInitiator = true;
+                            console.log('[CALL] I am the initiator (host)');
+                        }
+                    }, 500);
                 } else {
-                    console.log('[CALL] Guest - Waiting for host approval before initializing WebRTC');
+                    console.error('[CALL] ❌ Failed to initialize WebRTC');
                 }
             };
 
@@ -198,110 +198,8 @@ document.addEventListener('DOMContentLoaded', () => {
                 console.log('[CALL] Message received:', message.type, 'Full message:', message);
 
                 switch (message.type) {
-                    case 'waiting':
-                        console.log('[CALL] In waiting room');
-                        if (waitingRoomUI) {
-                            waitingRoomUI.show();
-                        }
-                        break;
-
-                    case 'approved':
-                        console.log('[CALL] ✅✅✅ APPROVED BY HOST - Starting WebRTC connection');
-
-                        // Hide waiting room
-                        if (waitingRoomUI) {
-                            console.log('[CALL] Hiding waiting room UI');
-                            waitingRoomUI.hide();
-                        }
-
-                        // Initialize WebRTC if not already initialized
-                        if (!webrtc) {
-                            console.log('[CALL] Initializing WebRTC for guest...');
-                            webrtc = new WebRTCManager(socket, roomID);
-                            const initialized = await webrtc.initialize();
-
-                            if (!initialized) {
-                                console.error('[CALL] ❌ Failed to initialize WebRTC!');
-                                break;
-                            }
-
-                            // Initialize adaptive quality
-                            if (window.AdaptiveQuality) {
-                                adaptiveQuality = new window.AdaptiveQuality(webrtc);
-                                window.adaptiveQuality = adaptiveQuality;
-                            }
-
-                            window.webrtc = webrtc;
-                            console.log('[CALL] ✅ WebRTC initialized successfully');
-                        } else {
-                            console.log('[CALL] WebRTC already initialized');
-                        }
-
-                        // Send join message to trigger offer/answer exchange
-                        console.log('[CALL] Sending JOIN message to trigger WebRTC negotiation...');
-                        socket.send(JSON.stringify({
-                            type: 'join',
-                            room: roomID
-                        }));
-
-                        // Mark as initiator after small delay if no peer connected
-                        setTimeout(() => {
-                            if (!peerConnected) {
-                                isInitiator = false; // Guest is NOT initiator, host is
-                                console.log('[CALL] Guest waiting for host offer');
-                            }
-                        }, 500);
-
-                        console.log('[CALL] ✅ Approval process complete, WebRTC should connect now!');
-                        break;
-
-                    case 'rejected':
-                        console.log('[CALL] Rejected by host');
-                        if (waitingRoomUI) {
-                            waitingRoomUI.hide();
-                        }
-                        alert('The host rejected your join request');
-                        window.location.href = '/';
-                        break;
-
-                    case 'join-request':
-                        // message.data is already a string, need to parse it
-                        let requestData;
-                        try {
-                            requestData = typeof message.data === 'string' ? JSON.parse(message.data) : message.data;
-                        } catch (e) {
-                            console.error('[CALL] Failed to parse join-request data:', e, 'Raw:', message.data);
-                            break;
-                        }
-
-                        console.log('[CALL] 🔔 Join request from:', requestData.name, 'ID:', requestData.id);
-                        console.log('[CALL] joinRequestUI exists?', !!joinRequestUI);
-
-                        if (joinRequestUI) {
-                            console.log('[CALL] Showing join request UI...');
-                            joinRequestUI.show(requestData);
-                        } else {
-                            console.error('[CALL] ❌ joinRequestUI is NULL!');
-                            // Fallback: show browser alert
-                            if (confirm(`${requestData.name} wants to join. Admit?`)) {
-                                socket.send(JSON.stringify({
-                                    type: 'approve-join',
-                                    data: JSON.stringify({ id: requestData.id })
-                                }));
-                            } else {
-                                socket.send(JSON.stringify({
-                                    type: 'reject-join',
-                                    data: JSON.stringify({ id: requestData.id })
-                                }));
-                            }
-                        }
-                        break;
-
-                    case 'meeting-ended':
-                        console.log('[CALL] Meeting ended by host');
-                        alert('The host ended the meeting');
-                        cleanupCall();
-                        window.location.href = '/';
+                    case 'joined':
+                        console.log('[CALL] ✅ Joined room successfully');
                         break;
 
                     case 'join':

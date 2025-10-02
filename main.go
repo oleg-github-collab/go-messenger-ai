@@ -373,50 +373,40 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[WS] 🔑 Identified as HOST - Query param: %v, UserID match: %v, First participant: %v", isHostParam, userID == room.HostID, isFirstParticipant)
 	}
 
-	// Add to room or waiting room
+	// Add to room - SIMPLIFIED: Everyone joins directly, no waiting room
 	room.mu.Lock()
 
-	if isHost {
-		// Host joins directly
-		if len(room.Participants) >= 2 {
-			room.mu.Unlock()
-			conn.WriteMessage(websocket.TextMessage, []byte(`{"error":"room full (max 2 participants)"}`))
-			return
+	if len(room.Participants) >= 2 {
+		room.mu.Unlock()
+		conn.WriteMessage(websocket.TextMessage, []byte(`{"error":"room full (max 2 participants)"}`))
+		return
+	}
+
+	// Add participant to room
+	participant.Approved = true // Everyone is auto-approved
+	room.Participants[conn] = participant
+	participantCount := len(room.Participants)
+	room.mu.Unlock()
+
+	log.Printf("[WS] ✅ %s joined room %s (%d participants)", participant.Name, roomID, participantCount)
+
+	// Send join confirmation
+	conn.WriteJSON(Message{
+		Type: "joined",
+		Data: json.RawMessage(fmt.Sprintf(`{"name":"%s","id":"%s","isHost":%v}`, participant.Name, participantID, isHost)),
+	})
+
+	// Notify other participants
+	if participantCount > 1 {
+		joinMsg := Message{
+			Type: "join",
+			Data: json.RawMessage(fmt.Sprintf(`{"name":"%s","id":"%s"}`, participant.Name, participantID)),
 		}
-		room.Participants[conn] = participant
-		participantCount := len(room.Participants)
-		room.mu.Unlock()
-
-		log.Printf("[WS] ✅ Host %s joined room %s (%d participants)", participant.Name, roomID, participantCount)
-
-		// Send join confirmation
-		conn.WriteJSON(Message{
-			Type: "joined",
-			Data: json.RawMessage(fmt.Sprintf(`{"name":"%s","id":"%s","isHost":true}`, participant.Name, participantID)),
-		})
-	} else {
-		// Guest goes to waiting room
-		room.WaitingRoom[participantID] = participant
-		waitingCount := len(room.WaitingRoom)
-		room.mu.Unlock()
-
-		log.Printf("[WS] 🚪 Guest %s in waiting room %s (%d waiting)", participant.Name, roomID, waitingCount)
-
-		// Notify guest they're waiting
-		conn.WriteJSON(Message{
-			Type: "waiting",
-			Data: json.RawMessage(fmt.Sprintf(`{"message":"Waiting for host approval","name":"%s"}`, participant.Name)),
-		})
-
-		// Notify host of join request
 		room.mu.RLock()
 		for c, p := range room.Participants {
-			if p.IsHost {
-				c.WriteJSON(Message{
-					Type: "join-request",
-					Data: json.RawMessage(fmt.Sprintf(`{"id":"%s","name":"%s"}`, participantID, participant.Name)),
-				})
-				log.Printf("[WS] 🔔 Notified host about guest %s", participant.Name)
+			if c != conn {
+				c.WriteJSON(joinMsg)
+				log.Printf("[WS] 📢 Notified %s about %s joining", p.Name, participant.Name)
 			}
 		}
 		room.mu.RUnlock()
@@ -470,7 +460,6 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 		validTypes := map[string]bool{
 			"chat": true, "offer": true, "answer": true,
 			"ice-candidate": true, "ping": true, "join": true,
-			"approve-join": true, "reject-join": true,
 		}
 
 		if !validTypes[message.Type] {
@@ -481,73 +470,6 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 		// Handle ping
 		if message.Type == "ping" {
 			conn.WriteJSON(map[string]string{"type": "pong"})
-			continue
-		}
-
-		// Handle join approval (host only)
-		if message.Type == "approve-join" && participant.IsHost {
-			var data struct {
-				ID string `json:"id"`
-			}
-			json.Unmarshal(message.Data, &data)
-
-			room.mu.Lock()
-			guest, exists := room.WaitingRoom[data.ID]
-			if exists && len(room.Participants) < 2 {
-				delete(room.WaitingRoom, data.ID)
-				guest.Approved = true
-				room.Participants[guest.Connection] = guest
-
-				// Notify guest they're approved
-				guest.Connection.WriteJSON(Message{
-					Type: "approved",
-					Data: json.RawMessage(fmt.Sprintf(`{"name":"%s","id":"%s"}`, guest.Name, data.ID)),
-				})
-
-				// Notify others
-				joinMsg := Message{
-					Type: "join",
-					Data: json.RawMessage(fmt.Sprintf(`{"name":"%s","id":"%s"}`, guest.Name, data.ID)),
-				}
-				for c := range room.Participants {
-					if c != guest.Connection {
-						c.WriteJSON(joinMsg)
-					}
-				}
-
-				log.Printf("[WS] ✅ Approved %s to join room %s", guest.Name, roomID)
-			}
-			room.mu.Unlock()
-			continue
-		}
-
-		// Handle join rejection (host only)
-		if message.Type == "reject-join" && participant.IsHost {
-			var data struct {
-				ID string `json:"id"`
-			}
-			json.Unmarshal(message.Data, &data)
-
-			room.mu.Lock()
-			guest, exists := room.WaitingRoom[data.ID]
-			if exists {
-				delete(room.WaitingRoom, data.ID)
-				if guest.Connection != nil {
-					guest.Connection.WriteJSON(Message{
-						Type: "rejected",
-						Data: json.RawMessage(`{"message":"Host rejected your join request"}`),
-					})
-					guest.Connection.Close()
-				}
-				log.Printf("[WS] ❌ Rejected %s from room %s", guest.Name, roomID)
-			}
-			room.mu.Unlock()
-			continue
-		}
-
-		// Only broadcast if participant is approved
-		if !participant.Approved {
-			log.Printf("[WS] ⚠️  Unapproved participant tried to send: %s", message.Type)
 			continue
 		}
 
