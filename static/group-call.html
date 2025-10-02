@@ -103,6 +103,7 @@
 
             <div class="chat-input-area">
                 <button class="emoji-btn" id="emojiBtn" title="Emoji">😊</button>
+                <button class="gif-btn" id="gifBtn" title="GIF">GIF</button>
                 <select class="recipient-select" id="recipientSelect">
                     <option value="everyone">Everyone</option>
                 </select>
@@ -114,8 +115,42 @@
                 </button>
             </div>
         </div>
+
+        <!-- Emoji/GIF Picker Panel -->
+        <div class="emoji-picker-panel" id="emojiPickerPanel">
+            <div class="emoji-picker-header">
+                <div class="emoji-picker-tabs">
+                    <button class="emoji-tab active" data-tab="emoji">😊 Emoji</button>
+                    <button class="emoji-tab" data-tab="gif">GIF</button>
+                </div>
+                <button class="emoji-close" id="emojiPickerClose">✕</button>
+            </div>
+
+            <!-- Emoji Content -->
+            <div class="emoji-content" id="emojiContent">
+                <div class="emoji-categories">
+                    <button class="emoji-category active" data-category="smileys">😀</button>
+                    <button class="emoji-category" data-category="gestures">👋</button>
+                    <button class="emoji-category" data-category="people">👨</button>
+                    <button class="emoji-category" data-category="animals">🐶</button>
+                    <button class="emoji-category" data-category="food">🍕</button>
+                    <button class="emoji-category" data-category="travel">✈️</button>
+                    <button class="emoji-category" data-category="objects">⚽</button>
+                    <button class="emoji-category" data-category="symbols">❤️</button>
+                </div>
+                <div class="emoji-grid" id="emojiGrid"></div>
+            </div>
+
+            <!-- GIF Content -->
+            <div class="gif-content" id="gifContent" style="display: none;">
+                <input type="text" class="gif-search" id="gifSearch" placeholder="Search GIFs..." />
+                <div class="gif-categories" id="gifCategories"></div>
+                <div class="gif-grid" id="gifGrid"></div>
+            </div>
+        </div>
     </div>
 
+    <script src="/static/emoji-gif-picker.js"></script>
     <script src="/static/group-call.js"></script>
 </body>
 </html>

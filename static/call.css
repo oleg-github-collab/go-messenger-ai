@@ -977,6 +977,17 @@ html, body {
     }
 }
 
+/* Hide mobile-only buttons on desktop */
+.mobile-only {
+    display: none;
+}
+
+@media (max-width: 768px) {
+    .mobile-only {
+        display: flex;
+    }
+}
+
 /* Extra small mobile */
 @media (max-width: 400px) {
     .bottom-control-bar {

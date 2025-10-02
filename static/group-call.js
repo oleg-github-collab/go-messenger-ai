@@ -331,15 +331,27 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
 
         const content = document.createElement('div');
-        content.textContent = text;
+
+        // Check if message is a GIF
+        if (text.startsWith('[GIF]')) {
+            const gifUrl = text.substring(5); // Remove [GIF] prefix
+            const img = document.createElement('img');
+            img.src = gifUrl;
+            img.alt = 'GIF';
+            img.loading = 'lazy';
+            content.appendChild(img);
+        } else {
+            content.textContent = text;
+        }
+
         messageDiv.appendChild(content);
 
         chatMessages.appendChild(messageDiv);
         chatMessages.scrollTop = chatMessages.scrollHeight;
     }
 
-    function sendMessage() {
-        const text = messageInput.value.trim();
+    function sendMessage(textOverride = null) {
+        const text = textOverride || messageInput.value.trim();
         const recipient = recipientSelect.value;
 
         if (!text || !socket || socket.readyState !== WebSocket.OPEN) return;
@@ -359,13 +371,9 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Display sent message
         const isPrivate = recipient !== 'everyone';
         const recipientName = isPrivate ? recipientSelect.options[recipientSelect.selectedIndex].text : null;
-        appendMessage(
-            isPrivate ? `To ${recipientName}: ${text}` : text,
-            'sent',
-            myParticipantId,
-            myName,
-            isPrivate
-        );
+
+        const displayText = isPrivate ? `To ${recipientName}: ${text}` : text;
+        appendMessage(displayText, 'sent', myParticipantId, myName, isPrivate);
 
         messageInput.value = '';
     }
@@ -525,6 +533,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     messageInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') sendMessage();
     });
+
+    // Initialize Emoji/GIF Picker
+    let emojiGifPicker = null;
+    if (window.EmojiGifPicker) {
+        emojiGifPicker = new window.EmojiGifPicker({
+            panelId: 'emojiPickerPanel',
+            emojiBtnId: 'emojiBtn',
+            gifBtnId: 'gifBtn',
+            closeBtnId: 'emojiPickerClose',
+            messageInputId: 'messageInput',
+            sendCallback: (text) => {
+                console.log('[GROUP-CALL] Emoji/GIF picker callback:', text);
+                // Send the message (emoji or GIF)
+                sendMessage(text);
+            }
+        });
+        console.log('[GROUP-CALL] Emoji/GIF picker initialized');
+    }
 
     // Initialize
     const mediaReady = await initLocalMedia();
