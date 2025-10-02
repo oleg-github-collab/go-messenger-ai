@@ -189,7 +189,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
             socket.onmessage = async (event) => {
                 const message = JSON.parse(event.data);
-                console.log('[CALL] Message received:', message.type);
+                console.log('[CALL] Message received:', message.type, 'Full message:', message);
 
                 switch (message.type) {
                     case 'waiting':
@@ -216,9 +216,18 @@ document.addEventListener('DOMContentLoaded', () => {
                         break;
 
                     case 'join-request':
-                        const requestData = JSON.parse(message.data);
-                        console.log('[CALL] 🔔 Join request from:', requestData.name, 'Data:', requestData);
+                        // message.data is already a string, need to parse it
+                        let requestData;
+                        try {
+                            requestData = typeof message.data === 'string' ? JSON.parse(message.data) : message.data;
+                        } catch (e) {
+                            console.error('[CALL] Failed to parse join-request data:', e, 'Raw:', message.data);
+                            break;
+                        }
+
+                        console.log('[CALL] 🔔 Join request from:', requestData.name, 'ID:', requestData.id);
                         console.log('[CALL] joinRequestUI exists?', !!joinRequestUI);
+
                         if (joinRequestUI) {
                             console.log('[CALL] Showing join request UI...');
                             joinRequestUI.show(requestData);
