@@ -206,15 +206,24 @@ document.addEventListener('DOMContentLoaded', () => {
                         break;
 
                     case 'approved':
-                        console.log('[CALL] ✅ Approved by host - Starting WebRTC connection');
+                        console.log('[CALL] ✅✅✅ APPROVED BY HOST - Starting WebRTC connection');
+
+                        // Hide waiting room
                         if (waitingRoomUI) {
+                            console.log('[CALL] Hiding waiting room UI');
                             waitingRoomUI.hide();
                         }
 
                         // Initialize WebRTC if not already initialized
                         if (!webrtc) {
+                            console.log('[CALL] Initializing WebRTC for guest...');
                             webrtc = new WebRTCManager(socket, roomID);
-                            await webrtc.initialize();
+                            const initialized = await webrtc.initialize();
+
+                            if (!initialized) {
+                                console.error('[CALL] ❌ Failed to initialize WebRTC!');
+                                break;
+                            }
 
                             // Initialize adaptive quality
                             if (window.AdaptiveQuality) {
@@ -223,14 +232,27 @@ document.addEventListener('DOMContentLoaded', () => {
                             }
 
                             window.webrtc = webrtc;
-                            console.log('[CALL] WebRTC initialized for approved guest');
+                            console.log('[CALL] ✅ WebRTC initialized successfully');
+                        } else {
+                            console.log('[CALL] WebRTC already initialized');
                         }
 
                         // Send join message to trigger offer/answer exchange
+                        console.log('[CALL] Sending JOIN message to trigger WebRTC negotiation...');
                         socket.send(JSON.stringify({
                             type: 'join',
                             room: roomID
                         }));
+
+                        // Mark as initiator after small delay if no peer connected
+                        setTimeout(() => {
+                            if (!peerConnected) {
+                                isInitiator = false; // Guest is NOT initiator, host is
+                                console.log('[CALL] Guest waiting for host offer');
+                            }
+                        }, 500);
+
+                        console.log('[CALL] ✅ Approval process complete, WebRTC should connect now!');
                         break;
 
                     case 'rejected':
@@ -283,9 +305,20 @@ document.addEventListener('DOMContentLoaded', () => {
                         break;
 
                     case 'join':
-                        console.log('[CALL] Partner joined');
-                        if (isInitiator && webrtc) {
+                        console.log('[CALL] 🎯 Partner joined! isInitiator:', isInitiator, 'isHostSession:', isHostSession);
+
+                        // Host should always create offer when guest joins
+                        // Use isHostSession as reliable indicator
+                        if (isHostSession && webrtc) {
+                            console.log('[CALL] HOST creating offer for guest...');
                             await webrtc.createOffer();
+                            peerConnected = true;
+                        } else if (isInitiator && webrtc) {
+                            console.log('[CALL] Initiator creating offer...');
+                            await webrtc.createOffer();
+                            peerConnected = true;
+                        } else {
+                            console.log('[CALL] Waiting for offer from host...');
                         }
                         break;
 
