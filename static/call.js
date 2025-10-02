@@ -156,34 +156,40 @@ document.addEventListener('DOMContentLoaded', () => {
             socket.onopen = async () => {
                 console.log('[CALL] WebSocket connected');
 
-                // Initialize WebRTC
-                webrtc = new WebRTCManager(socket, roomId);
-                const initialized = await webrtc.initialize();
+                // Only initialize WebRTC immediately if we're the host
+                // Guests will initialize after being approved
+                if (isHostSession) {
+                    console.log('[CALL] Host - Initializing WebRTC immediately');
+                    webrtc = new WebRTCManager(socket, roomId);
+                    const initialized = await webrtc.initialize();
 
-                if (initialized) {
-                    // Reset reconnect counter on successful connection
-                    reconnectAttempts = 0;
+                    if (initialized) {
+                        // Reset reconnect counter on successful connection
+                        reconnectAttempts = 0;
 
-                    // Initialize adaptive quality if available
-                    if (window.AdaptiveQuality) {
-                        adaptiveQuality = new window.AdaptiveQuality(webrtc);
-                        window.adaptiveQuality = adaptiveQuality; // Make globally accessible
-                    }
-
-                    // Make webrtc globally accessible for settings panel
-                    window.webrtc = webrtc;
-
-                    socket.send(JSON.stringify({
-                        type: 'join',
-                        room: roomId
-                    }));
-
-                    setTimeout(() => {
-                        if (!peerConnected) {
-                            isInitiator = true;
-                            console.log('[CALL] I am the initiator');
+                        // Initialize adaptive quality if available
+                        if (window.AdaptiveQuality) {
+                            adaptiveQuality = new window.AdaptiveQuality(webrtc);
+                            window.adaptiveQuality = adaptiveQuality; // Make globally accessible
                         }
-                    }, 1000);
+
+                        // Make webrtc globally accessible for settings panel
+                        window.webrtc = webrtc;
+
+                        socket.send(JSON.stringify({
+                            type: 'join',
+                            room: roomId
+                        }));
+
+                        setTimeout(() => {
+                            if (!peerConnected) {
+                                isInitiator = true;
+                                console.log('[CALL] I am the initiator');
+                            }
+                        }, 1000);
+                    }
+                } else {
+                    console.log('[CALL] Guest - Waiting for host approval before initializing WebRTC');
                 }
             };
 
@@ -200,10 +206,31 @@ document.addEventListener('DOMContentLoaded', () => {
                         break;
 
                     case 'approved':
-                        console.log('[CALL] Approved by host');
+                        console.log('[CALL] ✅ Approved by host - Starting WebRTC connection');
                         if (waitingRoomUI) {
                             waitingRoomUI.hide();
                         }
+
+                        // Initialize WebRTC if not already initialized
+                        if (!webrtc) {
+                            webrtc = new WebRTCManager(socket, roomID);
+                            await webrtc.initialize();
+
+                            // Initialize adaptive quality
+                            if (window.AdaptiveQuality) {
+                                adaptiveQuality = new window.AdaptiveQuality(webrtc);
+                                window.adaptiveQuality = adaptiveQuality;
+                            }
+
+                            window.webrtc = webrtc;
+                            console.log('[CALL] WebRTC initialized for approved guest');
+                        }
+
+                        // Send join message to trigger offer/answer exchange
+                        socket.send(JSON.stringify({
+                            type: 'join',
+                            room: roomID
+                        }));
                         break;
 
                     case 'rejected':
