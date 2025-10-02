@@ -28,6 +28,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Timer
     const timerText = document.getElementById('timerText');
 
+    // User name elements
+    const userNameDisplay = document.getElementById('userName');
+    const userLabel = document.getElementById('userLabel');
+
     // State
     let socket = null;
     let webrtc = null;
@@ -40,9 +44,21 @@ document.addEventListener('DOMContentLoaded', () => {
     let peerConnected = false;
     let unreadMessages = 0;
     let reconnectAttempts = 0;
-    let maxReconnectAttempts = 5;
+    let maxReconnectAttempts = 10; // Increased from 5 to 10
     let reconnectTimeout = null;
     let adaptiveQuality = null;
+
+    // Get user info from sessionStorage
+    const guestName = sessionStorage.getItem('guestName') || 'Guest';
+    const isHostSession = sessionStorage.getItem('isHost') === 'true';
+
+    // Set user name in UI
+    if (userNameDisplay) {
+        userNameDisplay.textContent = guestName;
+    }
+    if (userLabel) {
+        userLabel.textContent = isHostSession ? 'Host' : 'Guest';
+    }
 
     // Get room ID from URL
     const pathParts = window.location.pathname.split('/');
@@ -252,21 +268,42 @@ document.addEventListener('DOMContentLoaded', () => {
                 }
             };
 
-            socket.onclose = () => {
-                console.log('[CALL] WebSocket disconnected');
+            socket.onclose = (event) => {
+                console.log('[CALL] WebSocket disconnected', event.code, event.reason);
 
-                // Attempt to reconnect
+                // Clean up current connection state
+                if (webrtc && reconnectAttempts > 0) {
+                    console.log('[CALL] Cleaning up WebRTC for reconnection...');
+                    // Don't fully cleanup, just prepare for reconnect
+                }
+
+                // Attempt to reconnect with better backoff
                 if (reconnectAttempts < maxReconnectAttempts) {
                     reconnectAttempts++;
-                    const delay = Math.min(1000 * Math.pow(2, reconnectAttempts), 10000);
+                    // Exponential backoff: 1s, 2s, 4s, 8s, max 15s
+                    const delay = Math.min(1000 * Math.pow(2, reconnectAttempts - 1), 15000);
                     console.log(`[CALL] Reconnecting in ${delay}ms (attempt ${reconnectAttempts}/${maxReconnectAttempts})`);
 
+                    // Show user-friendly message for longer delays
+                    if (delay > 5000 && remotePlaceholder) {
+                        const reconnectMsg = remotePlaceholder.querySelector('.placeholder-text');
+                        if (reconnectMsg) {
+                            reconnectMsg.textContent = `Reconnecting... (${Math.floor(delay/1000)}s)`;
+                        }
+                    }
+
                     reconnectTimeout = setTimeout(() => {
+                        console.log('[CALL] Attempting reconnection...');
                         connectToRoom(roomID);
                     }, delay);
                 } else {
                     console.error('[CALL] Max reconnection attempts reached');
-                    alert('Connection lost. Please refresh the page.');
+                    if (confirm('Connection lost. Retry connection?')) {
+                        reconnectAttempts = 0; // Reset for manual retry
+                        connectToRoom(roomID);
+                    } else {
+                        window.location.href = '/';
+                    }
                 }
             };
 

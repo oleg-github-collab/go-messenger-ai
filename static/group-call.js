@@ -24,6 +24,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     let timerInterval = null;
     let myParticipantId = null;
     let myName = 'You';
+    let reconnectAttempts = 0;
+    let maxReconnectAttempts = 10;
+    let reconnectTimeout = null;
 
     // Get room ID from URL
     const pathParts = window.location.pathname.split('/');
@@ -188,8 +191,28 @@ document.addEventListener('DOMContentLoaded', async () => {
             console.error('[GROUP-CALL] WebSocket error:', error);
         };
 
-        socket.onclose = () => {
-            console.log('[GROUP-CALL] WebSocket closed');
+        socket.onclose = (event) => {
+            console.log('[GROUP-CALL] WebSocket closed', event.code, event.reason);
+
+            // Attempt to reconnect
+            if (reconnectAttempts < maxReconnectAttempts) {
+                reconnectAttempts++;
+                const delay = Math.min(1000 * Math.pow(2, reconnectAttempts - 1), 15000);
+                console.log(`[GROUP-CALL] Reconnecting in ${delay}ms (attempt ${reconnectAttempts}/${maxReconnectAttempts})`);
+
+                reconnectTimeout = setTimeout(() => {
+                    console.log('[GROUP-CALL] Attempting reconnection...');
+                    connectToSFU();
+                }, delay);
+            } else {
+                console.error('[GROUP-CALL] Max reconnection attempts reached');
+                if (confirm('Connection lost. Retry connection?')) {
+                    reconnectAttempts = 0;
+                    connectToSFU();
+                } else {
+                    window.location.href = '/';
+                }
+            }
         };
     }
 
