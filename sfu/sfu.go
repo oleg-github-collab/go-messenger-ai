@@ -76,7 +76,7 @@ func newSFURoom(id string) *SFURoom {
 }
 
 // AddParticipant adds a new participant to the room
-func (r *SFURoom) AddParticipant(participantID, name string, conn *websocket.Conn) (*SFUParticipant, error) {
+func (r *SFURoom) AddParticipant(participantID, name string, conn *websocket.Conn, turnHost, turnUser, turnPass string) (*SFUParticipant, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
@@ -88,13 +88,23 @@ func (r *SFURoom) AddParticipant(participantID, name string, conn *websocket.Con
 		return nil, fmt.Errorf("room is full (max %d participants)", maxParticipants)
 	}
 
-	// Create WebRTC config
+	// Create WebRTC config with TURN
 	config := webrtc.Configuration{
 		ICEServers: []webrtc.ICEServer{
 			{
 				URLs: []string{"stun:stun.l.google.com:19302"},
 			},
 		},
+	}
+
+	// Add TURN server if credentials provided
+	if turnHost != "" && turnUser != "" && turnPass != "" {
+		config.ICEServers = append(config.ICEServers, webrtc.ICEServer{
+			URLs:       []string{fmt.Sprintf("turn:%s:3478?transport=udp", turnHost), fmt.Sprintf("turn:%s:3478?transport=tcp", turnHost)},
+			Username:   turnUser,
+			Credential: turnPass,
+		})
+		log.Printf("[SFU] Added TURN server for participant %s", participantID)
 	}
 
 	// Create peer connection
@@ -353,17 +363,18 @@ func (p *SFUParticipant) forwardTrack(trackInfo *TrackInfo) {
 // SubscribeToTrack subscribes this participant to another participant's track
 func (p *SFUParticipant) SubscribeToTrack(participantID, trackID string, trackLocal *webrtc.TrackLocalStaticRTP) {
 	p.mu.Lock()
-	defer p.mu.Unlock()
 
 	// Check if already subscribed
 	subKey := fmt.Sprintf("%s-%s", participantID, trackID)
 	if _, exists := p.subscribers[subKey]; exists {
+		p.mu.Unlock()
 		return
 	}
 
 	// Add track to peer connection
 	sender, err := p.PeerConnection.AddTrack(trackLocal)
 	if err != nil {
+		p.mu.Unlock()
 		log.Printf("[SFU] Failed to add track for %s: %v", p.ID, err)
 		return
 	}
@@ -376,6 +387,15 @@ func (p *SFUParticipant) SubscribeToTrack(participantID, trackID string, trackLo
 	}
 
 	log.Printf("[SFU] Participant %s subscribed to %s's track", p.ID, participantID)
+
+	p.mu.Unlock()
+
+	// Renegotiate to inform participant about new track
+	go func() {
+		if err := p.Renegotiate(); err != nil {
+			log.Printf("[SFU] Failed to renegotiate for %s: %v", p.ID, err)
+		}
+	}()
 
 	// Handle RTCP packets
 	go func() {

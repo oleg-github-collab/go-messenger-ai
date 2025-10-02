@@ -90,9 +90,36 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Handle incoming tracks
         peerConnection.ontrack = (event) => {
-            console.log('[GROUP-CALL] Received remote track:', event.track.kind);
-            // In SFU, we'll receive tracks from all participants
-            // The SFU will tell us which participant each track belongs to via signaling
+            console.log('[GROUP-CALL] 🎥 Received remote track:', event.track.kind, 'streams:', event.streams.length);
+
+            if (event.streams && event.streams.length > 0) {
+                const stream = event.streams[0];
+                const streamId = stream.id;
+
+                console.log('[GROUP-CALL] Stream ID:', streamId);
+
+                // Try to find participant by stream ID pattern (stream-{participantId})
+                const match = streamId.match(/stream-(.+)/);
+                if (match) {
+                    const participantId = match[1];
+                    const participant = participants.get(participantId);
+
+                    if (participant && participant.videoElement) {
+                        // Attach stream to participant's video element
+                        if (!participant.videoElement.srcObject) {
+                            participant.videoElement.srcObject = stream;
+                            console.log('[GROUP-CALL] ✅ Attached stream to participant:', participant.name);
+                        } else {
+                            // Add track to existing stream
+                            console.log('[GROUP-CALL] ✅ Added track to existing stream for:', participant.name);
+                        }
+                    } else {
+                        console.warn('[GROUP-CALL] ⚠️ Participant not found for stream:', streamId);
+                    }
+                } else {
+                    console.warn('[GROUP-CALL] ⚠️ Could not parse participant ID from stream:', streamId);
+                }
+            }
         };
 
         // ICE candidate handling
@@ -150,6 +177,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         socket.onmessage = async (event) => {
             try {
                 const message = JSON.parse(event.data);
+                console.log('[GROUP-CALL] ← Received:', message.type, message);
                 await handleSignalingMessage(message);
             } catch (err) {
                 console.error('[GROUP-CALL] Failed to parse message:', err);
@@ -182,8 +210,12 @@ document.addEventListener('DOMContentLoaded', async () => {
             case 'answer':
                 // SFU sent answer to our offer
                 const answer = typeof message.data === 'string' ? JSON.parse(message.data) : message.data;
-                await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
-                console.log('[GROUP-CALL] Set remote description (answer)');
+                if (peerConnection.signalingState === 'have-local-offer') {
+                    await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+                    console.log('[GROUP-CALL] ✅ Set remote description (answer)');
+                } else {
+                    console.warn('[GROUP-CALL] ⚠️ Cannot set answer, signaling state:', peerConnection.signalingState);
+                }
                 break;
 
             case 'ice-candidate':
@@ -196,9 +228,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             case 'participants-list':
                 // List of existing participants
                 const existingParticipants = message.data || [];
+                console.log('[GROUP-CALL] 📋 Existing participants:', existingParticipants.length);
                 existingParticipants.forEach(p => {
                     addParticipantTileEnhanced(p.id, p.name);
                 });
+                updateParticipantCount(existingParticipants.length + 1);
                 break;
 
             case 'participant-joined':
@@ -215,11 +249,27 @@ document.addEventListener('DOMContentLoaded', async () => {
                 updateParticipantCount(participants.size + 1);
                 break;
 
+            case 'offer':
+                // SFU sent us a new offer (renegotiation)
+                const renegotiationOffer = typeof message.data === 'string' ? JSON.parse(message.data) : message.data;
+                console.log('[GROUP-CALL] 🔄 Received renegotiation offer');
+
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(renegotiationOffer));
+                const renegotiationAnswer = await peerConnection.createAnswer();
+                await peerConnection.setLocalDescription(renegotiationAnswer);
+
+                socket.send(JSON.stringify({
+                    type: 'answer',
+                    data: JSON.stringify(renegotiationAnswer)
+                }));
+                console.log('[GROUP-CALL] ✅ Sent renegotiation answer');
+                break;
+
             case 'track-published':
                 // A participant published a new track
                 const trackInfo = typeof message.data === 'string' ? JSON.parse(message.data) : message.data;
-                console.log('[GROUP-CALL] Track published:', trackInfo);
-                // The SFU will automatically forward this track to us
+                console.log('[GROUP-CALL] 🎥 Track published:', trackInfo);
+                // The SFU will automatically forward this track to us via renegotiation
                 break;
 
             case 'chat':

@@ -466,11 +466,73 @@ body {
         min-height: 120px;
     }
 
+    .top-controls {
+        padding: 12px;
+    }
+
+    .bottom-controls {
+        padding: 20px 12px;
+        padding-bottom: max(20px, env(safe-area-inset-bottom));
+        gap: 8px;
+    }
+
     .control-btn {
         padding: 10px 12px;
+        min-width: 60px;
     }
 
     .btn-label {
         font-size: 9px;
+    }
+
+    .end-call-btn {
+        width: 52px;
+        height: 52px;
+    }
+
+    .chat-input-area {
+        padding: 12px;
+        padding-bottom: max(12px, env(safe-area-inset-bottom));
+    }
+
+    .recipient-select {
+        font-size: 12px;
+        padding: 6px 10px;
+    }
+
+    #messageInput {
+        font-size: 14px;
+        padding: 10px 14px;
+    }
+}
+
+/* Extra small mobile devices */
+@media (max-width: 400px) {
+    .bottom-controls {
+        gap: 6px;
+        padding: 16px 8px;
+        padding-bottom: max(16px, env(safe-area-inset-bottom));
+    }
+
+    .control-btn {
+        padding: 8px 10px;
+        min-width: 50px;
+    }
+
+    .btn-label {
+        font-size: 8px;
+    }
+
+    .end-call-btn {
+        width: 48px;
+        height: 48px;
+    }
+
+    .participant-count {
+        font-size: 12px;
+    }
+
+    .call-timer {
+        font-size: 11px;
     }
 }

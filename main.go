@@ -572,8 +572,8 @@ func sfuWSHandler(w http.ResponseWriter, r *http.Request) {
 		log.Printf("[SFU-WS] 🔑 Identified as HOST - Query param: %v, UserID match: %v, First participant: %v", isHostParam, userID == hostID, isFirstParticipant)
 	}
 
-	// Add participant to SFU room
-	participant, err := room.AddParticipant(participantID, userName, conn)
+	// Add participant to SFU room with TURN credentials
+	participant, err := room.AddParticipant(participantID, userName, conn, turnHost, turnUsername, turnPassword)
 	if err != nil {
 		log.Printf("[SFU-WS] ❌ Failed to add participant: %v", err)
 		conn.WriteJSON(map[string]string{"error": "failed to join room"})
@@ -662,13 +662,51 @@ func sfuWSHandler(w http.ResponseWriter, r *http.Request) {
 			}
 
 		case "chat":
-			// Broadcast chat to all other participants
-			for _, p := range room.GetAllParticipants() {
-				if p.ID != participantID {
-					p.SendMessage(map[string]interface{}{
+			// Parse chat data
+			var chatData map[string]interface{}
+			if dataMap, ok := msg["data"].(map[string]interface{}); ok {
+				chatData = dataMap
+			} else if dataStr, ok := msg["data"].(string); ok {
+				// If data is string, parse it
+				if err := json.Unmarshal([]byte(dataStr), &chatData); err != nil {
+					// If parsing fails, treat as plain text
+					chatData = map[string]interface{}{
+						"text": dataStr,
+						"to":   "everyone",
+					}
+				}
+			} else {
+				log.Printf("[SFU-WS] Invalid chat data format")
+				continue
+			}
+
+			// Add sender info
+			chatData["from"] = participantID
+			chatData["fromName"] = userName
+
+			// Get recipient
+			recipient := "everyone"
+			if to, ok := chatData["to"].(string); ok {
+				recipient = to
+			}
+
+			// Send to recipient(s)
+			if recipient == "everyone" {
+				// Broadcast to all
+				for _, p := range room.GetAllParticipants() {
+					if p.ID != participantID {
+						p.SendMessage(map[string]interface{}{
+							"type": "chat",
+							"data": chatData,
+						})
+					}
+				}
+			} else {
+				// Send to specific participant
+				if targetParticipant, exists := room.GetParticipant(recipient); exists {
+					targetParticipant.SendMessage(map[string]interface{}{
 						"type": "chat",
-						"data": msg["data"],
-						"from": userName,
+						"data": chatData,
 					})
 				}
 			}
