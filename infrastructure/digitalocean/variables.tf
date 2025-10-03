@@ -4,9 +4,9 @@ variable "do_token" {
   sensitive   = true
 }
 
-variable "ssh_key_fingerprint" {
-  description = "SSH Key Fingerprint for Droplet access"
-  type        = string
+variable "ssh_key_id" {
+  description = "SSH Key ID for Droplet access"
+  type        = number
 }
 
 variable "environment" {
@@ -21,10 +21,16 @@ variable "region" {
   default     = "fra1" # Frankfurt - closest to Ukraine
 }
 
-variable "droplet_size" {
+variable "app_droplet_size" {
+  description = "Droplet size for application server"
+  type        = string
+  default     = "s-2vcpu-4gb" # Optimized for WebRTC + SFU
+}
+
+variable "turn_droplet_size" {
   description = "Droplet size for TURN server"
   type        = string
-  default     = "s-2vcpu-4gb" # Enough for 20 participants
+  default     = "s-1vcpu-2gb" # Sufficient for TURN relay
 }
 
 variable "turn_username" {
@@ -37,4 +43,11 @@ variable "turn_password" {
   description = "TURN server password"
   type        = string
   sensitive   = true
+}
+
+variable "redis_password" {
+  description = "Redis password for session management"
+  type        = string
+  sensitive   = true
+  default     = "" # Will be auto-generated if not provided
 }

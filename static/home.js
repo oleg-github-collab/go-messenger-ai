@@ -134,7 +134,14 @@ document.addEventListener('DOMContentLoaded', () => {
     shareEmail.addEventListener('click', () => {
         const subject = encodeURIComponent('Join my video call');
         const body = encodeURIComponent(`Hi! Join me for a video call:\n\n${currentMeetingURL}\n\nThis link expires in 8 hours.`);
-        window.open(`mailto:?subject=${subject}&body=${body}`, '_blank');
+        const mailtoLink = `mailto:?subject=${subject}&body=${body}`;
+
+        // Force open in external browser
+        if (navigator.userAgent.includes('Telegram')) {
+            window.location.href = mailtoLink;
+        } else {
+            window.open(mailtoLink, '_system');
+        }
         console.log('[HOME] Opened email share');
     });
 
@@ -146,7 +153,13 @@ document.addEventListener('DOMContentLoaded', () => {
         const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
         if (isMobile) {
-            window.open(`sms:?body=${message}`, '_blank');
+            const smsLink = `sms:?body=${message}`;
+            // Force open in external browser/app
+            if (navigator.userAgent.includes('Telegram')) {
+                window.location.href = smsLink;
+            } else {
+                window.open(smsLink, '_system');
+            }
         } else {
             // Desktop - copy and show message
             navigator.clipboard.writeText(currentMeetingURL);
@@ -159,7 +172,10 @@ document.addEventListener('DOMContentLoaded', () => {
     // Share via Telegram
     shareTelegram.addEventListener('click', () => {
         const message = encodeURIComponent(`Join my video call: ${currentMeetingURL}`);
-        window.open(`https://t.me/share/url?url=${encodeURIComponent(currentMeetingURL)}&text=${encodeURIComponent('Join my video call')}`, '_blank');
+        const telegramUrl = `https://t.me/share/url?url=${encodeURIComponent(currentMeetingURL)}&text=${encodeURIComponent('Join my video call')}`;
+
+        // Force open in external browser
+        window.open(telegramUrl, '_blank', 'noopener');
         console.log('[HOME] Opened Telegram share');
     });
 

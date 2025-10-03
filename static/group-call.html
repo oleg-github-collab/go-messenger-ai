@@ -10,12 +10,21 @@
     <link rel="stylesheet" href="/static/group-call.css">
 </head>
 <body>
-    <div class="group-call-container">
+    <div class="group-call-container" data-view-mode="video">
+        <!-- Cinematic subtitle overlay -->
+        <div class="subtitle-overlay" id="subtitleOverlay"></div>
+
         <!-- Participants grid -->
         <div class="participants-grid" id="participantsGrid" data-count="0">
             <!-- Local participant -->
             <div class="participant-tile local" id="localTile">
                 <video id="localVideo" autoplay muted playsinline></video>
+                <div class="speaking-indicator">
+                    🎤 Speaking
+                    <div class="speaking-wave"></div>
+                    <div class="speaking-wave"></div>
+                    <div class="speaking-wave"></div>
+                </div>
                 <div class="participant-name">You</div>
                 <div class="participant-status">
                     <span class="mic-indicator" id="localMicIndicator"></span>
@@ -66,19 +75,26 @@
                 </svg>
             </button>
 
-            <button class="control-btn" id="chatBtn">
+            <button class="control-btn" id="pipBtn" title="Picture-in-Picture">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19 7h-8v6h8V7zm2-4H3c-1.1 0-2 .9-2 2v14c0 1.1.9 1.98 2 1.98h18c1.1 0 2-.88 2-1.98V5c0-1.1-.9-2-2-2zm0 16.01H3V4.98h18v14.03z"/>
+                </svg>
+                <span class="btn-label">PiP</span>
+            </button>
+
+            <button class="control-btn" id="chatToggleBtn">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
                     <path d="M20 2H4c-1.1 0-2 .9-2 2v18l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
                 </svg>
-                <span class="btn-label">Chat</span>
+                <span class="btn-label" id="chatBtnLabel">Chat</span>
                 <span class="chat-badge" id="chatBadge" style="display: none;">0</span>
             </button>
 
-            <button class="control-btn" id="moreBtn">
+            <button class="control-btn" id="participantsBtn">
                 <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M12 8c1.1 0 2-.9 2-2s-.9-2-2-2-2 .9-2 2 .9 2 2 2zm0 2c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2zm0 6c-1.1 0-2 .9-2 2s.9 2 2 2 2-.9 2-2-.9-2-2-2z"/>
+                    <path d="M16 11c1.66 0 2.99-1.34 2.99-3S17.66 5 16 5c-1.66 0-3 1.34-3 3s1.34 3 3 3zm-8 0c1.66 0 2.99-1.34 2.99-3S9.66 5 8 5C6.34 5 5 6.34 5 8s1.34 3 3 3zm0 2c-2.33 0-7 1.17-7 3.5V19h14v-2.5c0-2.33-4.67-3.5-7-3.5zm8 0c-.29 0-.62.02-.97.05 1.16.84 1.97 1.97 1.97 3.45V19h6v-2.5c0-2.33-4.67-3.5-7-3.5z"/>
                 </svg>
-                <span class="btn-label">More</span>
+                <span class="btn-label">People</span>
             </button>
         </div>
 
@@ -116,6 +132,17 @@
             </div>
         </div>
 
+        <!-- Participants List Modal -->
+        <div class="participants-modal" id="participantsModal" style="display: none;">
+            <div class="modal-content">
+                <div class="modal-header">
+                    <h3>Participants</h3>
+                    <button class="modal-close" id="participantsModalClose">✕</button>
+                </div>
+                <div class="participants-list" id="participantsList"></div>
+            </div>
+        </div>
+
         <!-- Emoji/GIF Picker Panel -->
         <div class="emoji-picker-panel" id="emojiPickerPanel">
             <div class="emoji-picker-header">
@@ -150,6 +177,7 @@
         </div>
     </div>
 
+    <script src="/static/force-browser.js"></script>
     <script src="/static/emoji-gif-picker.js"></script>
     <script src="/static/group-call.js"></script>
 </body>

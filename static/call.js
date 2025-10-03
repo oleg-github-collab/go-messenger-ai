@@ -8,7 +8,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const remotePlaceholder = document.getElementById('remotePlaceholder');
     const localPip = document.getElementById('localPip');
 
-    // Buttons
+    // Buttons - with validation
     const backButton = document.getElementById('backButton');
     const cameraBtn = document.getElementById('cameraBtn');
     const microphoneBtn = document.getElementById('microphoneBtn');
@@ -16,6 +16,11 @@ document.addEventListener('DOMContentLoaded', () => {
     const endCallButton = document.getElementById('endCallButton');
     const chatIconBtn = document.getElementById('chatIconBtn');
     const chatBadge = document.getElementById('chatBadge');
+
+    // Validate required elements
+    if (!backButton || !endCallButton) {
+        console.error('[CALL] Critical UI elements missing');
+    }
 
     // Chat
     const chatPanel = document.getElementById('chatPanel');
@@ -297,13 +302,11 @@ document.addEventListener('DOMContentLoaded', () => {
                         connectToRoom(roomID);
                     }, delay);
                 } else {
-                    console.error('[CALL] Max reconnection attempts reached');
-                    if (confirm('Connection lost. Retry connection?')) {
-                        reconnectAttempts = 0; // Reset for manual retry
+                    console.error('[CALL] Max reconnection attempts reached - auto retrying in 5s');
+                    setTimeout(() => {
+                        reconnectAttempts = 0; // Reset and retry automatically
                         connectToRoom(roomID);
-                    } else {
-                        window.location.href = '/';
-                    }
+                    }, 5000);
                 }
             };
 
@@ -386,72 +389,90 @@ document.addEventListener('DOMContentLoaded', () => {
         }
     };
 
-    // Button handlers
-    backButton.addEventListener('click', () => {
-        if (confirm('Leave the call?')) {
-            cleanupCall();
-            window.location.href = '/';
-        }
-    });
-
-    cameraBtn.addEventListener('click', () => {
-        isCameraOn = !isCameraOn;
-        cameraBtn.dataset.active = isCameraOn;
-
-        const iconOn = cameraBtn.querySelector('.icon-camera-on');
-        const iconOff = cameraBtn.querySelector('.icon-camera-off');
-        iconOn.style.display = isCameraOn ? 'block' : 'none';
-        iconOff.style.display = isCameraOn ? 'none' : 'block';
-
-        webrtc.toggleVideo(isCameraOn);
-    });
-
-    microphoneBtn.addEventListener('click', () => {
-        isMicOn = !isMicOn;
-        microphoneBtn.dataset.active = isMicOn;
-
-        const iconOn = microphoneBtn.querySelector('.icon-mic-on');
-        const iconOff = microphoneBtn.querySelector('.icon-mic-off');
-        iconOn.style.display = isMicOn ? 'block' : 'none';
-        iconOff.style.display = isMicOn ? 'none' : 'block';
-
-        webrtc.toggleAudio(isMicOn);
-    });
-
-    flipCameraBtn.addEventListener('click', async () => {
-        if (webrtc) {
-            // Get available cameras
-            const { cameras } = await webrtc.getDevices();
-            if (cameras.length > 1) {
-                // Switch to next camera
-                const currentIndex = cameras.findIndex(c => c.deviceId === webrtc.currentCameraId);
-                const nextIndex = (currentIndex + 1) % cameras.length;
-                await webrtc.switchCamera(cameras[nextIndex].deviceId);
+    // Button handlers with null checks
+    if (backButton) {
+        backButton.addEventListener('click', () => {
+            if (confirm('Leave the call?')) {
+                cleanupCall();
+                window.location.href = '/';
             }
-        }
-    });
+        });
+    }
 
-    endCallButton.addEventListener('click', () => {
-        if (confirm('End the call?')) {
-            cleanupCall();
-            window.location.href = '/';
-        }
-    });
+    if (cameraBtn) {
+        cameraBtn.addEventListener('click', () => {
+            isCameraOn = !isCameraOn;
+            cameraBtn.dataset.active = isCameraOn;
 
-    chatIconBtn.addEventListener('click', () => {
-        chatPanel.classList.add('active');
-        unreadMessages = 0;
-        updateChatBadge();
-    });
+            const iconOn = cameraBtn.querySelector('.icon-camera-on');
+            const iconOff = cameraBtn.querySelector('.icon-camera-off');
+            if (iconOn) iconOn.style.display = isCameraOn ? 'block' : 'none';
+            if (iconOff) iconOff.style.display = isCameraOn ? 'none' : 'block';
 
-    chatBackBtn.addEventListener('click', () => {
-        chatPanel.classList.remove('active');
-    });
+            if (webrtc) webrtc.toggleVideo(isCameraOn);
+        });
+    }
 
-    sendMessageBtn.addEventListener('click', sendMessage);
-    messageInput.addEventListener('keypress', (e) => {
-        if (e.key === 'Enter') sendMessage();
-    });
+    if (microphoneBtn) {
+        microphoneBtn.addEventListener('click', () => {
+            isMicOn = !isMicOn;
+            microphoneBtn.dataset.active = isMicOn;
+
+            const iconOn = microphoneBtn.querySelector('.icon-mic-on');
+            const iconOff = microphoneBtn.querySelector('.icon-mic-off');
+            if (iconOn) iconOn.style.display = isMicOn ? 'block' : 'none';
+            if (iconOff) iconOff.style.display = isMicOn ? 'none' : 'block';
+
+            if (webrtc) webrtc.toggleAudio(isMicOn);
+        });
+    }
+
+    if (flipCameraBtn) {
+        flipCameraBtn.addEventListener('click', async () => {
+            if (webrtc) {
+                // Get available cameras
+                const { cameras } = await webrtc.getDevices();
+                if (cameras.length > 1) {
+                    // Switch to next camera
+                    const currentIndex = cameras.findIndex(c => c.deviceId === webrtc.currentCameraId);
+                    const nextIndex = (currentIndex + 1) % cameras.length;
+                    await webrtc.switchCamera(cameras[nextIndex].deviceId);
+                }
+            }
+        });
+    }
+
+    if (endCallButton) {
+        endCallButton.addEventListener('click', () => {
+            if (confirm('End the call?')) {
+                cleanupCall();
+                window.location.href = '/';
+            }
+        });
+    }
+
+    if (chatIconBtn) {
+        chatIconBtn.addEventListener('click', () => {
+            if (chatPanel) chatPanel.classList.add('active');
+            unreadMessages = 0;
+            updateChatBadge();
+        });
+    }
+
+    if (chatBackBtn) {
+        chatBackBtn.addEventListener('click', () => {
+            if (chatPanel) chatPanel.classList.remove('active');
+        });
+    }
+
+    if (sendMessageBtn) {
+        sendMessageBtn.addEventListener('click', sendMessage);
+    }
+    if (messageInput) {
+        messageInput.addEventListener('keypress', (e) => {
+            if (e.key === 'Enter') sendMessage();
+        });
+    }
 
     // PiP expand (swap videos)
     const pipExpandBtn = document.getElementById('pipExpandBtn');

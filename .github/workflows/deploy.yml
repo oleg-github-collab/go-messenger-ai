@@ -1,139 +1,140 @@
-name: Deploy to Production
+name: Deploy to DigitalOcean
 
 on:
   push:
-    branches: [main]
-  workflow_dispatch: # Allow manual trigger
+    branches:
+      - main
+  workflow_dispatch:
 
 env:
   GO_VERSION: '1.21'
+  APP_NAME: messenger
+  DEPLOY_PATH: /opt/messenger
+  SERVER_USER: root
+  SERVER_HOST: 157.230.79.144
 
 jobs:
-  test:
-    name: Test Application
+  build-and-deploy:
     runs-on: ubuntu-latest
+
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
 
       - name: Set up Go
-        uses: actions/setup-go@v4
+        uses: actions/setup-go@v5
         with:
           go-version: ${{ env.GO_VERSION }}
-
-      - name: Cache Go modules
-        uses: actions/cache@v3
-        with:
-          path: ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('**/go.sum') }}
-          restore-keys: |
-            ${{ runner.os }}-go-
+          cache: true
 
       - name: Download dependencies
         run: go mod download
 
-      - name: Run tests
-        run: go test -v ./...
-
-      - name: Run linter
-        uses: golangci/golangci-lint-action@v3
-        with:
-          version: latest
-
-  deploy-railway:
-    name: Deploy to Railway
-    runs-on: ubuntu-latest
-    needs: [test]
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Install Railway CLI
-        run: npm install -g @railway/cli
-
-      - name: Deploy to Railway
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      - name: Build Go binary for Linux
         run: |
-          railway link ${{ secrets.RAILWAY_PROJECT_ID }}
-          railway up --detach
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -ldflags="-w -s" -o ${{ env.APP_NAME }} .
+          chmod +x ${{ env.APP_NAME }}
+          ls -lh ${{ env.APP_NAME }}
 
-      - name: Wait for deployment
-        run: sleep 30
-
-      - name: Check deployment health
+      - name: Create deployment package
         run: |
-          curl -f https://go-messenger-production.up.railway.app/health || exit 1
+          mkdir -p deploy-package
+          cp ${{ env.APP_NAME }} deploy-package/
+          cp -r static deploy-package/
+          tar -czf ${{ env.APP_NAME }}-deploy.tar.gz -C deploy-package .
+          ls -lh ${{ env.APP_NAME }}-deploy.tar.gz
 
-  deploy-turn:
-    name: Deploy TURN Server
-    runs-on: ubuntu-latest
-    needs: [test]
-    if: github.ref == 'refs/heads/main' && contains(github.event.head_commit.message, '[turn]')
-    steps:
-      - name: Checkout code
-        uses: actions/checkout@v4
-
-      - name: Setup Terraform
-        uses: hashicorp/setup-terraform@v3
-        with:
-          terraform_version: 1.6.0
-
-      - name: Terraform Format Check
-        working-directory: ./infrastructure/digitalocean
-        run: terraform fmt -check
-
-      - name: Terraform Init
-        working-directory: ./infrastructure/digitalocean
-        run: terraform init
-
-      - name: Terraform Plan
-        working-directory: ./infrastructure/digitalocean
-        env:
-          TF_VAR_do_token: ${{ secrets.DIGITALOCEAN_TOKEN }}
-          TF_VAR_ssh_key_fingerprint: ${{ secrets.DO_SSH_KEY_FINGERPRINT }}
-          TF_VAR_turn_username: ${{ secrets.TURN_USERNAME }}
-          TF_VAR_turn_password: ${{ secrets.TURN_PASSWORD }}
-        run: terraform plan
-
-      - name: Terraform Apply
-        working-directory: ./infrastructure/digitalocean
-        env:
-          TF_VAR_do_token: ${{ secrets.DIGITALOCEAN_TOKEN }}
-          TF_VAR_ssh_key_fingerprint: ${{ secrets.DO_SSH_KEY_FINGERPRINT }}
-          TF_VAR_turn_username: ${{ secrets.TURN_USERNAME }}
-          TF_VAR_turn_password: ${{ secrets.TURN_PASSWORD }}
-        run: terraform apply -auto-approve
-
-      - name: Get TURN Server IP
-        id: turn_ip
-        working-directory: ./infrastructure/digitalocean
+      - name: Setup SSH key
         run: |
-          echo "ip=$(terraform output -raw turn_server_ip)" >> $GITHUB_OUTPUT
+          mkdir -p ~/.ssh
+          echo "${{ secrets.SSH_PRIVATE_KEY }}" > ~/.ssh/deploy_key
+          chmod 600 ~/.ssh/deploy_key
+          ssh-keyscan -H ${{ env.SERVER_HOST }} >> ~/.ssh/known_hosts
 
-      - name: Update Railway Environment
-        env:
-          RAILWAY_TOKEN: ${{ secrets.RAILWAY_TOKEN }}
+      - name: Upload deployment package to server
         run: |
-          railway link ${{ secrets.RAILWAY_PROJECT_ID }}
-          railway variables set TURN_SERVER=turn:${{ steps.turn_ip.outputs.ip }}:3478
-          railway variables set TURN_USERNAME=${{ secrets.TURN_USERNAME }}
-          railway variables set TURN_PASSWORD=${{ secrets.TURN_PASSWORD }}
+          scp -i ~/.ssh/deploy_key \
+            -o StrictHostKeyChecking=no \
+            ${{ env.APP_NAME }}-deploy.tar.gz \
+            ${{ env.SERVER_USER }}@${{ env.SERVER_HOST }}:/tmp/
 
-  notify:
-    name: Notify Deployment
-    runs-on: ubuntu-latest
-    needs: [deploy-railway]
-    if: always()
-    steps:
-      - name: Deployment Success
-        if: needs.deploy-railway.result == 'success'
+      - name: Deploy on server
         run: |
+          ssh -i ~/.ssh/deploy_key \
+            -o StrictHostKeyChecking=no \
+            ${{ env.SERVER_USER }}@${{ env.SERVER_HOST }} << 'ENDSSH'
+
+          set -e
+
+          echo "=== Stopping messenger service ==="
+          systemctl stop messenger || true
+
+          echo "=== Creating backup ==="
+          BACKUP_DIR="/opt/messenger/backups/$(date +%Y%m%d_%H%M%S)"
+          mkdir -p "$BACKUP_DIR"
+          if [ -f "${{ env.DEPLOY_PATH }}/app/${{ env.APP_NAME }}" ]; then
+            cp -r ${{ env.DEPLOY_PATH }}/app/* "$BACKUP_DIR/" || true
+            echo "Backup created at: $BACKUP_DIR"
+          fi
+
+          echo "=== Extracting new deployment ==="
+          mkdir -p ${{ env.DEPLOY_PATH }}/app
+          tar -xzf /tmp/${{ env.APP_NAME }}-deploy.tar.gz -C ${{ env.DEPLOY_PATH }}/app/
+          chmod +x ${{ env.DEPLOY_PATH }}/app/${{ env.APP_NAME }}
+
+          echo "=== Starting messenger service ==="
+          systemctl start messenger
+
+          echo "=== Cleaning up ==="
+          rm -f /tmp/${{ env.APP_NAME }}-deploy.tar.gz
+
+          echo "=== Deployment completed successfully ==="
+          ENDSSH
+
+      - name: Verify deployment
+        run: |
+          ssh -i ~/.ssh/deploy_key \
+            -o StrictHostKeyChecking=no \
+            ${{ env.SERVER_USER }}@${{ env.SERVER_HOST }} << 'ENDSSH'
+
+          echo "=== Service Status ==="
+          systemctl status messenger --no-pager || true
+
+          echo ""
+          echo "=== Checking process ==="
+          ps aux | grep ${{ env.APP_NAME }} | grep -v grep || echo "Process not found"
+
+          echo ""
+          echo "=== Testing HTTP endpoint ==="
+          sleep 3
+          curl -f http://localhost:8080/login || echo "HTTP check failed"
+
+          echo ""
+          echo "=== Recent logs ==="
+          journalctl -u messenger -n 20 --no-pager || true
+          ENDSSH
+
+      - name: Cleanup SSH key
+        if: always()
+        run: |
+          rm -f ~/.ssh/deploy_key
+
+      - name: Deployment summary
+        if: success()
+        run: |
+          echo "==================================="
           echo "✅ Deployment successful!"
-          echo "URL: https://go-messenger-production.up.railway.app"
+          echo "Server: ${{ env.SERVER_HOST }}"
+          echo "Application: ${{ env.APP_NAME }}"
+          echo "Time: $(date)"
+          echo "==================================="
 
-      - name: Deployment Failed
-        if: needs.deploy-railway.result == 'failure'
+      - name: Notify on failure
+        if: failure()
         run: |
-          echo "❌ Deployment failed!"
-          exit 1
+          echo "==================================="
+          echo "❌ Deployment FAILED!"
+          echo "Server: ${{ env.SERVER_HOST }}"
+          echo "Time: $(date)"
+          echo "Please check the logs above"
+          echo "==================================="

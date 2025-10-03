@@ -47,7 +47,8 @@ class WebRTCManager {
                 const turnServer = {
                     urls: [
                         `turn:${creds.host}:3478?transport=udp`,
-                        `turn:${creds.host}:3478?transport=tcp`
+                        `turn:${creds.host}:3478?transport=tcp`,
+                        `turns:${creds.host}:5349?transport=tcp`
                     ],
                     username: creds.username,
                     credential: creds.password
@@ -55,7 +56,8 @@ class WebRTCManager {
 
                 this.iceServers.iceServers.push(turnServer);
                 this.turnConfigLoaded = true;
-                console.log('[WebRTC] ✅ TURN server configured:', creds.host);
+                console.log('[WebRTC] ✅ TURN/TURNS server configured:', creds.host);
+                console.log('[WebRTC] 🔧 ICE Servers:', this.iceServers.iceServers.length, 'servers');
             } else {
                 console.warn('[WebRTC] ⚠️  TURN credentials not available');
             }

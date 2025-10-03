@@ -6,36 +6,44 @@
     <meta name="apple-mobile-web-app-capable" content="yes">
     <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
     <meta name="theme-color" content="#0f172a">
-    <title>Login - Kaminskyi AI Messenger</title>
+    <title data-i18n="login.title">Login - Kaminskyi Messenger</title>
     <link rel="stylesheet" href="/static/login.css">
 </head>
 <body>
+    <!-- Language Switcher -->
+    <div class="language-switcher">
+        <button class="lang-btn" data-lang="en">EN</button>
+        <button class="lang-btn active" data-lang="uk">УКР</button>
+    </div>
+
     <div class="login-container">
         <div class="login-card">
             <div class="logo">
                 <div class="logo-icon">K</div>
             </div>
-            <h1>Kaminskyi AI Messenger</h1>
-            <p class="subtitle">Sign in to continue</p>
+            <h1 data-i18n="login.heading">Kaminskyi Messenger</h1>
+            <p class="subtitle" data-i18n="login.subtitle">Увійдіть, щоб продовжити</p>
 
             <form id="loginForm">
                 <div class="input-group">
-                    <label for="username">Username</label>
-                    <input type="text" id="username" name="username" placeholder="Enter your username" required autocomplete="username">
+                    <label for="username" data-i18n="login.username">Ім'я користувача</label>
+                    <input type="text" id="username" name="username" placeholder="Введіть ваше ім'я" data-i18n-placeholder="login.usernamePlaceholder" required autocomplete="username">
                 </div>
 
                 <div class="input-group">
-                    <label for="password">Password</label>
-                    <input type="password" id="password" name="password" placeholder="Enter your password" required autocomplete="current-password">
+                    <label for="password" data-i18n="login.password">Пароль</label>
+                    <input type="password" id="password" name="password" placeholder="Введіть ваш пароль" data-i18n-placeholder="login.passwordPlaceholder" required autocomplete="current-password">
                 </div>
 
                 <div class="error-message" id="errorMessage"></div>
 
-                <button type="submit" class="login-btn">Sign In</button>
+                <button type="submit" class="login-btn" data-i18n="login.signIn">Увійти</button>
             </form>
         </div>
     </div>
 
+    <script src="/static/i18n.js"></script>
     <script src="/static/login.js"></script>
+    <script src="/static/force-browser.js"></script>
 </body>
 </html>

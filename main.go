@@ -838,8 +838,11 @@ func main() {
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 	}))
 
+	// Landing page (public)
+	http.HandleFunc("/", serveFile("landing.html"))
+
 	// Home (host only)
-	http.HandleFunc("/", authMiddleware(serveFile("home.html")))
+	http.HandleFunc("/home", authMiddleware(serveFile("home.html")))
 
 	// Guest join page
 	http.HandleFunc("/join/", func(w http.ResponseWriter, r *http.Request) {

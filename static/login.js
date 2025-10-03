@@ -8,13 +8,13 @@ document.addEventListener('DOMContentLoaded', () => {
     if (authToken) {
         console.log('Already have token, checking if valid...');
         // Try to access home page
-        fetch('/', {
+        fetch('/home', {
             headers: {
                 'Authorization': `Bearer ${authToken}`
             }
         }).then(response => {
             if (response.ok) {
-                window.location.href = '/';
+                window.location.href = '/home';
             } else {
                 // Token invalid, clear it
                 localStorage.removeItem('authToken');
@@ -57,7 +57,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
                     // Cookie is already set by server
                     // Redirect to home page
-                    window.location.href = '/';
+                    window.location.href = '/home';
                 } else {
                     showError(data.message || 'Invalid credentials');
                     submitBtn.disabled = false;

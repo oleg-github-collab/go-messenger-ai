@@ -11,6 +11,13 @@ body {
     overflow: hidden;
     width: 100vw;
     height: 100vh;
+    height: 100dvh; /* Use dynamic viewport height for mobile - respects browser UI */
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    padding-bottom: env(safe-area-inset-bottom); /* iOS safe area */
 }
 
 .group-call-container {
@@ -19,6 +26,7 @@ body {
     position: relative;
     display: flex;
     flex-direction: column;
+    touch-action: pan-y;
 }
 
 /* Participants Grid */
@@ -789,5 +797,396 @@ body {
         width: 36px;
         height: 36px;
         font-size: 20px;
+    }
+}
+
+/* ============================================ */
+/* CINEMATIC SUBTITLE OVERLAY */
+/* ============================================ */
+.subtitle-overlay {
+    position: fixed;
+    bottom: 100px;
+    left: 50%;
+    transform: translateX(-50%);
+    width: 90%;
+    max-width: 800px;
+    z-index: 50;
+    pointer-events: none;
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+.subtitle-message {
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(10px);
+    padding: 12px 24px;
+    border-radius: 8px;
+    color: white;
+    font-size: 16px;
+    line-height: 1.5;
+    text-align: center;
+    animation: subtitleFadeIn 0.3s ease;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+}
+
+.subtitle-message.fade-out {
+    animation: subtitleFadeOut 0.3s ease forwards;
+}
+
+.subtitle-author {
+    color: #3b82f6;
+    font-weight: 600;
+    margin-right: 8px;
+}
+
+.subtitle-message img {
+    max-width: 200px;
+    max-height: 150px;
+    border-radius: 8px;
+    margin-top: 8px;
+    display: block;
+    margin-left: auto;
+    margin-right: auto;
+}
+
+@keyframes subtitleFadeIn {
+    from {
+        opacity: 0;
+        transform: translateY(20px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+@keyframes subtitleFadeOut {
+    from {
+        opacity: 1;
+        transform: translateY(0);
+    }
+    to {
+        opacity: 0;
+        transform: translateY(-20px);
+    }
+}
+
+/* ============================================ */
+/* PARTICIPANTS MODAL */
+/* ============================================ */
+.participants-modal {
+    position: fixed;
+    top: 0;
+    left: 0;
+    right: 0;
+    bottom: 0;
+    background: rgba(0, 0, 0, 0.8);
+    backdrop-filter: blur(10px);
+    z-index: 3000;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    padding: 20px;
+}
+
+.participants-modal .modal-content {
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    border-radius: 20px;
+    max-width: 500px;
+    width: 100%;
+    max-height: 70vh;
+    display: flex;
+    flex-direction: column;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+}
+
+.participants-modal .modal-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 24px;
+    border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+}
+
+.participants-modal .modal-header h3 {
+    margin: 0;
+    color: white;
+    font-size: 20px;
+    font-weight: 600;
+}
+
+.participants-modal .modal-close {
+    background: rgba(255, 255, 255, 0.1);
+    border: none;
+    color: white;
+    width: 32px;
+    height: 32px;
+    border-radius: 50%;
+    cursor: pointer;
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    transition: background 0.2s;
+}
+
+.participants-modal .modal-close:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+.participants-list {
+    flex: 1;
+    overflow-y: auto;
+    padding: 16px;
+}
+
+.participant-item {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    padding: 12px 16px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+    margin-bottom: 8px;
+    transition: background 0.2s;
+}
+
+.participant-item:hover {
+    background: rgba(255, 255, 255, 0.08);
+}
+
+.participant-avatar {
+    width: 40px;
+    height: 40px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    color: white;
+    font-weight: 600;
+    font-size: 16px;
+}
+
+.participant-info {
+    flex: 1;
+}
+
+.participant-info-name {
+    color: white;
+    font-weight: 500;
+    margin-bottom: 2px;
+}
+
+.participant-info-status {
+    color: #94a3b8;
+    font-size: 12px;
+}
+
+.participant-speaking {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: #10b981;
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; }
+    50% { opacity: 0.5; }
+}
+
+/* ============================================ */
+/* SIMPLIFIED VIEW SYSTEM */
+/* ============================================ */
+
+/* Split View (Desktop only) */
+@media (min-width: 769px) {
+    .group-call-container.split-view {
+        display: flex !important;
+        flex-direction: row !important;
+    }
+
+    .group-call-container.split-view .participants-grid {
+        width: 50% !important;
+        flex: none !important;
+    }
+
+    .group-call-container.split-view .chat-panel {
+        position: relative !important;
+        transform: translateX(0) !important;
+        width: 50% !important;
+        flex: none !important;
+    }
+
+    .group-call-container.split-view .bottom-controls {
+        left: 0;
+        right: 50%;
+    }
+
+    .group-call-container.split-view .subtitle-overlay {
+        left: 25%;
+        width: 45%;
+    }
+}
+
+/* Split View Hint */
+.split-view-hint {
+    background: linear-gradient(135deg, #3b82f6, #8b5cf6);
+    padding: 16px;
+    border-radius: 12px;
+    margin: 16px;
+    animation: slideIn 0.3s ease;
+}
+
+.hint-content {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    flex-wrap: wrap;
+    color: white;
+    font-size: 14px;
+}
+
+.hint-button {
+    background: rgba(255, 255, 255, 0.2);
+    border: 1px solid rgba(255, 255, 255, 0.3);
+    color: white;
+    padding: 8px 16px;
+    border-radius: 8px;
+    cursor: pointer;
+    font-weight: 600;
+    font-size: 13px;
+    transition: all 0.2s;
+}
+
+.hint-button:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: scale(1.05);
+}
+
+.hint-close {
+    background: transparent;
+    border: none;
+    color: white;
+    cursor: pointer;
+    font-size: 20px;
+    width: 28px;
+    height: 28px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    margin-left: auto;
+}
+
+.hint-close:hover {
+    background: rgba(255, 255, 255, 0.2);
+}
+
+@keyframes slideIn {
+    from {
+        opacity: 0;
+        transform: translateY(-10px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* ============================================ */
+/* SPEAKING INDICATOR */
+/* ============================================ */
+.participant-tile.speaking {
+    box-shadow: 0 0 0 3px #10b981;
+    animation: speakingPulse 1s ease-in-out infinite;
+}
+
+@keyframes speakingPulse {
+    0%, 100% {
+        box-shadow: 0 0 0 3px #10b981;
+    }
+    50% {
+        box-shadow: 0 0 0 6px rgba(16, 185, 129, 0.4);
+    }
+}
+
+.participant-tile .speaking-indicator {
+    position: absolute;
+    top: 8px;
+    left: 8px;
+    background: #10b981;
+    color: white;
+    padding: 4px 8px;
+    border-radius: 8px;
+    font-size: 11px;
+    font-weight: 600;
+    display: none;
+    align-items: center;
+    gap: 4px;
+}
+
+.participant-tile.speaking .speaking-indicator {
+    display: flex;
+}
+
+.speaking-wave {
+    width: 3px;
+    height: 12px;
+    background: white;
+    border-radius: 2px;
+    animation: speakingWave 0.5s ease-in-out infinite;
+}
+
+.speaking-wave:nth-child(2) {
+    animation-delay: 0.1s;
+}
+
+.speaking-wave:nth-child(3) {
+    animation-delay: 0.2s;
+}
+
+@keyframes speakingWave {
+    0%, 100% { height: 8px; }
+    50% { height: 16px; }
+}
+
+/* Mobile adjustments for new features */
+@media (max-width: 768px) {
+    .subtitle-overlay {
+        bottom: 80px;
+        width: 95%;
+    }
+
+    .subtitle-message {
+        font-size: 14px;
+        padding: 10px 16px;
+    }
+
+    .view-mode-menu {
+        bottom: 80px;
+        right: 10px;
+    }
+
+    /* Force video-only mode on mobile */
+    .group-call-container[data-view-mode="split"] {
+        flex-direction: column;
+    }
+
+    .group-call-container[data-view-mode="split"] .participants-grid {
+        width: 100%;
+        height: 50%;
+    }
+
+    .group-call-container[data-view-mode="split"] .chat-panel {
+        width: 100%;
+        height: 50%;
+    }
+
+    .group-call-container[data-view-mode="split"] .bottom-controls {
+        left: 0;
+        right: 0;
     }
 }

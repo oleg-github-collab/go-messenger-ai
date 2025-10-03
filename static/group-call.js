@@ -10,8 +10,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     const cameraBtn = document.getElementById('cameraBtn');
     const micBtn = document.getElementById('micBtn');
     const endCallBtn = document.getElementById('endCallBtn');
-    const chatBtn = document.getElementById('chatBtn');
+    const chatToggleBtn = document.getElementById('chatToggleBtn');
+    const chatBtnLabel = document.getElementById('chatBtnLabel');
     const chatBadge = document.getElementById('chatBadge');
+    const subtitleOverlay = document.getElementById('subtitleOverlay');
+    const participantsBtn = document.getElementById('participantsBtn');
+    const participantsModal = document.getElementById('participantsModal');
+    const participantsModalClose = document.getElementById('participantsModalClose');
+    const participantsList = document.getElementById('participantsList');
+    const groupCallContainer = document.querySelector('.group-call-container');
+
+    // Validate all elements exist
+    if (!participantsGrid || !localVideo || !chatToggleBtn) {
+        console.error('[GROUP-CALL] ❌ Critical elements missing!');
+        alert('Failed to load group call interface. Please refresh.');
+        return;
+    }
 
     // State
     let socket = null;
@@ -27,6 +41,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     let reconnectAttempts = 0;
     let maxReconnectAttempts = 10;
     let reconnectTimeout = null;
+    let isChatVisible = false;
+    let isChatSideBySide = false; // Split view on desktop
+    let audioContexts = new Map(); // For speaking detection
 
     // Get room ID from URL
     const pathParts = window.location.pathname.split('/');
@@ -52,11 +69,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         const creds = await response.json();
         if (creds.host && creds.username && creds.password) {
             config.iceServers.push({
-                urls: [`turn:${creds.host}:3478`],
+                urls: [
+                    `turn:${creds.host}:3478?transport=udp`,
+                    `turn:${creds.host}:3478?transport=tcp`,
+                    `turns:${creds.host}:5349?transport=tcp`
+                ],
                 username: creds.username,
                 credential: creds.password
             });
-            console.log('[GROUP-CALL] TURN server configured');
+            console.log('[GROUP-CALL] ✅ TURN server configured:', creds.host);
         }
     } catch (err) {
         console.warn('[GROUP-CALL] Failed to fetch TURN credentials:', err);
@@ -137,11 +158,31 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Connection state monitoring
         peerConnection.onconnectionstatechange = () => {
-            console.log('[GROUP-CALL] Connection state:', peerConnection.connectionState);
+            console.log('[GROUP-CALL] 🔌 Connection state:', peerConnection.connectionState);
+
+            if (peerConnection.connectionState === 'connected') {
+                console.log('[GROUP-CALL] ✅ Peer connection established');
+                reconnectAttempts = 0; // Reset reconnect counter
+            } else if (peerConnection.connectionState === 'failed') {
+                console.error('[GROUP-CALL] ❌ Connection failed, attempting to reconnect...');
+                // Try to restart ICE
+                peerConnection.restartIce();
+            }
         };
 
         peerConnection.oniceconnectionstatechange = () => {
-            console.log('[GROUP-CALL] ICE state:', peerConnection.iceConnectionState);
+            console.log('[GROUP-CALL] 🧊 ICE state:', peerConnection.iceConnectionState);
+
+            if (peerConnection.iceConnectionState === 'connected' ||
+                peerConnection.iceConnectionState === 'completed') {
+                console.log('[GROUP-CALL] ✅ ICE connection established');
+            } else if (peerConnection.iceConnectionState === 'failed') {
+                console.error('[GROUP-CALL] ❌ ICE connection failed');
+            }
+        };
+
+        peerConnection.onicegatheringstatechange = () => {
+            console.log('[GROUP-CALL] 🧊 ICE gathering state:', peerConnection.iceGatheringState);
         };
 
         return peerConnection;
@@ -205,13 +246,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                     connectToSFU();
                 }, delay);
             } else {
-                console.error('[GROUP-CALL] Max reconnection attempts reached');
-                if (confirm('Connection lost. Retry connection?')) {
-                    reconnectAttempts = 0;
+                console.error('[GROUP-CALL] Max reconnection attempts reached - auto retrying in 5s');
+                setTimeout(() => {
+                    reconnectAttempts = 0; // Reset and retry automatically
                     connectToSFU();
-                } else {
-                    window.location.href = '/';
-                }
+                }, 5000);
             }
         };
     }
@@ -302,14 +341,21 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const isForMe = !chatData.to || chatData.to === 'everyone' || chatData.to === myParticipantId;
 
                 if (isForMe) {
+                    const isGif = chatData.text.startsWith('[GIF]');
+                    const displayText = isGif ? chatData.text.substring(5) : chatData.text;
+
                     appendMessage(chatData.text, 'received', chatData.from, chatData.fromName, isPrivate);
 
-                    // Show badge if chat panel is closed
-                    if (!document.getElementById('chatPanel').classList.contains('active')) {
-                        const badge = document.getElementById('chatBadge');
-                        const currentCount = parseInt(badge.textContent) || 0;
-                        badge.textContent = currentCount + 1;
-                        badge.style.display = 'block';
+                    // Show cinematic subtitle if chat is not visible (video-only view)
+                    if (!isChatVisible && !isPrivate) {
+                        showSubtitle(chatData.fromName, displayText, isGif);
+                    }
+
+                    // Show badge if chat is closed
+                    if (!isChatVisible) {
+                        const currentCount = parseInt(chatBadge.textContent) || 0;
+                        chatBadge.textContent = currentCount + 1;
+                        chatBadge.style.display = 'block';
                     }
                 }
                 break;
@@ -377,28 +423,52 @@ document.addEventListener('DOMContentLoaded', async () => {
         const text = textOverride || messageInput.value.trim();
         const recipient = recipientSelect.value;
 
-        if (!text || !socket || socket.readyState !== WebSocket.OPEN) return;
+        console.log('[GROUP-CALL] 💬 Sending message:', text, 'to:', recipient, 'socket:', socket?.readyState);
 
-        const chatMessage = {
-            type: 'chat',
-            data: JSON.stringify({
-                text: text,
-                to: recipient,
-                from: myParticipantId,
-                fromName: myName
-            })
-        };
+        if (!text) {
+            console.warn('[GROUP-CALL] Empty message, not sending');
+            return;
+        }
 
-        socket.send(JSON.stringify(chatMessage));
+        if (!socket || socket.readyState !== WebSocket.OPEN) {
+            console.error('[GROUP-CALL] Cannot send message, socket not ready. State:', socket?.readyState);
+            alert('Connection not ready. Please wait...');
+            return;
+        }
 
-        // Display sent message
-        const isPrivate = recipient !== 'everyone';
-        const recipientName = isPrivate ? recipientSelect.options[recipientSelect.selectedIndex].text : null;
+        if (!myParticipantId) {
+            console.error('[GROUP-CALL] Cannot send message, no participant ID');
+            return;
+        }
 
-        const displayText = isPrivate ? `To ${recipientName}: ${text}` : text;
-        appendMessage(displayText, 'sent', myParticipantId, myName, isPrivate);
+        try {
+            const chatMessage = {
+                type: 'chat',
+                data: JSON.stringify({
+                    text: text,
+                    to: recipient,
+                    from: myParticipantId,
+                    fromName: myName
+                })
+            };
 
-        messageInput.value = '';
+            socket.send(JSON.stringify(chatMessage));
+            console.log('[GROUP-CALL] ✅ Message sent successfully');
+
+            // Display sent message
+            const isPrivate = recipient !== 'everyone';
+            const recipientName = isPrivate ? recipientSelect.options[recipientSelect.selectedIndex].text : null;
+
+            const displayText = isPrivate ? `To ${recipientName}: ${text}` : text;
+            appendMessage(displayText, 'sent', myParticipantId, myName, isPrivate);
+
+            if (!textOverride) {
+                messageInput.value = '';
+            }
+        } catch (error) {
+            console.error('[GROUP-CALL] ❌ Failed to send message:', error);
+            alert('Failed to send message. Please try again.');
+        }
     }
 
     function updateRecipientList() {
@@ -429,6 +499,15 @@ document.addEventListener('DOMContentLoaded', async () => {
         video.playsinline = true;
         video.id = `video-${participantId}`;
 
+        const speakingIndicator = document.createElement('div');
+        speakingIndicator.className = 'speaking-indicator';
+        speakingIndicator.innerHTML = `
+            🎤 Speaking
+            <div class="speaking-wave"></div>
+            <div class="speaking-wave"></div>
+            <div class="speaking-wave"></div>
+        `;
+
         const name = document.createElement('div');
         name.className = 'participant-name';
         name.textContent = participantName;
@@ -441,6 +520,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         status.appendChild(micIndicator);
 
         tile.appendChild(video);
+        tile.appendChild(speakingIndicator);
         tile.appendChild(name);
         tile.appendChild(status);
 
@@ -465,10 +545,24 @@ document.addEventListener('DOMContentLoaded', async () => {
     function removeParticipantTile(participantId) {
         const participant = participants.get(participantId);
         if (participant) {
+            // Clean up audio context if exists
+            const audioContext = audioContexts.get(participantId);
+            if (audioContext) {
+                audioContext.close().catch(e => console.warn('[GROUP-CALL] Failed to close audio context:', e));
+                audioContexts.delete(participantId);
+            }
+
+            // Clean up video stream
+            if (participant.videoElement && participant.videoElement.srcObject) {
+                const tracks = participant.videoElement.srcObject.getTracks();
+                tracks.forEach(track => track.stop());
+                participant.videoElement.srcObject = null;
+            }
+
             participant.tile.remove();
             participants.delete(participantId);
             updateGridLayout();
-            console.log('[GROUP-CALL] Removed participant:', participant.name);
+            console.log('[GROUP-CALL] ✅ Removed participant and cleaned up:', participant.name);
         }
     }
 
@@ -536,25 +630,295 @@ document.addEventListener('DOMContentLoaded', async () => {
         }, 1000);
     }
 
+    // ============================================
+    // CINEMATIC SUBTITLE SYSTEM
+    // ============================================
+    function showSubtitle(authorName, text, isGif = false) {
+        if (!subtitleOverlay) {
+            console.warn('[GROUP-CALL] Subtitle overlay not available');
+            return;
+        }
+
+        const subtitle = document.createElement('div');
+        subtitle.className = 'subtitle-message';
+
+        if (isGif) {
+            const author = document.createElement('span');
+            author.className = 'subtitle-author';
+            author.textContent = authorName + ':';
+            subtitle.appendChild(author);
+
+            const img = document.createElement('img');
+            img.src = text;
+            img.alt = 'GIF';
+            img.loading = 'eager';
+            subtitle.appendChild(img);
+        } else {
+            const author = document.createElement('span');
+            author.className = 'subtitle-author';
+            author.textContent = authorName + ':';
+            subtitle.appendChild(author);
+
+            const textNode = document.createTextNode(text);
+            subtitle.appendChild(textNode);
+        }
+
+        subtitleOverlay.appendChild(subtitle);
+
+        // Auto-remove after 5 seconds
+        setTimeout(() => {
+            subtitle.classList.add('fade-out');
+            setTimeout(() => {
+                if (subtitle.parentElement) {
+                    subtitle.remove();
+                }
+            }, 300);
+        }, 5000);
+
+        // Limit number of subtitles shown
+        const subtitles = subtitleOverlay.children;
+        if (subtitles.length > 3) {
+            subtitles[0].remove();
+        }
+    }
+
+    // ============================================
+    // SPEAKING DETECTION
+    // ============================================
+    function setupSpeakingDetection(participantId, stream) {
+        if (!stream || !stream.getAudioTracks().length) return;
+
+        try {
+            const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+            const audioSource = audioContext.createMediaStreamSource(stream);
+            const analyser = audioContext.createAnalyser();
+            analyser.fftSize = 512;
+            analyser.smoothingTimeConstant = 0.8;
+            audioSource.connect(analyser);
+
+            const dataArray = new Uint8Array(analyser.frequencyBinCount);
+            let speakingTimeout = null;
+
+            function detectSpeaking() {
+                analyser.getByteFrequencyData(dataArray);
+                const average = dataArray.reduce((a, b) => a + b) / dataArray.length;
+
+                const participant = participants.get(participantId);
+                if (participant && participant.tile) {
+                    if (average > 30) { // Speaking threshold
+                        participant.tile.classList.add('speaking');
+                        clearTimeout(speakingTimeout);
+                        speakingTimeout = setTimeout(() => {
+                            participant.tile.classList.remove('speaking');
+                        }, 500);
+                    }
+                }
+
+                requestAnimationFrame(detectSpeaking);
+            }
+
+            detectSpeaking();
+            audioContexts.set(participantId, audioContext);
+        } catch (err) {
+            console.warn('[GROUP-CALL] Failed to setup speaking detection:', err);
+        }
+    }
+
+    // ============================================
+    // PARTICIPANTS MODAL
+    // ============================================
+    function updateParticipantsList() {
+        participantsList.innerHTML = '';
+
+        // Add self
+        const selfItem = document.createElement('div');
+        selfItem.className = 'participant-item';
+        selfItem.innerHTML = `
+            <div class="participant-avatar">${myName.charAt(0).toUpperCase()}</div>
+            <div class="participant-info">
+                <div class="participant-info-name">${myName} (You)</div>
+                <div class="participant-info-status">Connected</div>
+            </div>
+            <div class="participant-speaking"></div>
+        `;
+        participantsList.appendChild(selfItem);
+
+        // Add other participants
+        participants.forEach((participant, participantId) => {
+            const item = document.createElement('div');
+            item.className = 'participant-item';
+            item.innerHTML = `
+                <div class="participant-avatar">${participant.name.charAt(0).toUpperCase()}</div>
+                <div class="participant-info">
+                    <div class="participant-info-name">${participant.name}</div>
+                    <div class="participant-info-status">Connected</div>
+                </div>
+                <div class="participant-speaking"></div>
+            `;
+            participantsList.appendChild(item);
+        });
+    }
+
+    // ============================================
+    // SIMPLE CHAT TOGGLE SYSTEM
+    // ============================================
+    function toggleChat() {
+        const isDesktop = window.innerWidth >= 769;
+
+        if (!isChatVisible) {
+            // Open chat
+            isChatVisible = true;
+            chatPanel.classList.add('active');
+
+            if (isDesktop) {
+                // Desktop: offer side-by-side after 1 second
+                setTimeout(() => {
+                    if (isChatVisible && !isChatSideBySide) {
+                        showSideBySideHint();
+                    }
+                }, 1000);
+            }
+
+            chatBtnLabel.textContent = 'Close';
+            chatBadge.style.display = 'none';
+            chatBadge.textContent = '0';
+            console.log('[GROUP-CALL] 💬 Chat opened');
+        } else {
+            // Close chat
+            isChatVisible = false;
+            isChatSideBySide = false;
+            chatPanel.classList.remove('active');
+            groupCallContainer.classList.remove('split-view');
+            chatBtnLabel.textContent = 'Chat';
+            console.log('[GROUP-CALL] 💬 Chat closed');
+        }
+    }
+
+    function showSideBySideHint() {
+        // Show subtle hint for split view
+        const hint = document.createElement('div');
+        hint.className = 'split-view-hint';
+        hint.innerHTML = `
+            <div class="hint-content">
+                <span>💡 Tip: Click here to see video and chat side-by-side</span>
+                <button class="hint-button" id="enableSplitView">Enable Split View</button>
+                <button class="hint-close">✕</button>
+            </div>
+        `;
+        chatPanel.insertBefore(hint, chatPanel.firstChild);
+
+        // Enable split view
+        hint.querySelector('#enableSplitView').addEventListener('click', () => {
+            enableSplitView();
+            hint.remove();
+        });
+
+        // Close hint
+        hint.querySelector('.hint-close').addEventListener('click', () => {
+            hint.remove();
+        });
+
+        // Auto-remove after 8 seconds
+        setTimeout(() => {
+            if (hint.parentElement) {
+                hint.remove();
+            }
+        }, 8000);
+    }
+
+    function enableSplitView() {
+        const isDesktop = window.innerWidth >= 769;
+        if (!isDesktop) return; // Only on desktop
+
+        isChatSideBySide = true;
+        groupCallContainer.classList.add('split-view');
+        console.log('[GROUP-CALL] 📐 Split view enabled');
+    }
+
     // Event listeners
     backButton.addEventListener('click', endCall);
     cameraBtn.addEventListener('click', toggleCamera);
     micBtn.addEventListener('click', toggleMic);
     endCallBtn.addEventListener('click', endCall);
 
-    chatBtn.addEventListener('click', () => {
-        chatPanel.classList.add('active');
-        chatBadge.style.display = 'none';
-        chatBadge.textContent = '0';
-    });
+    // Picture-in-Picture
+    const pipBtn = document.getElementById('pipBtn');
+    if (pipBtn) {
+        pipBtn.addEventListener('click', async () => {
+            try {
+                // Try to enable PiP on local video or participants grid
+                const videoElement = localVideo || document.querySelector('.participant-tile video');
+                if (videoElement && document.pictureInPictureEnabled) {
+                    if (document.pictureInPictureElement) {
+                        await document.exitPictureInPicture();
+                        console.log('[GROUP-CALL] PiP disabled');
+                    } else {
+                        await videoElement.requestPictureInPicture();
+                        console.log('[GROUP-CALL] PiP enabled');
+                    }
+                } else {
+                    alert('Picture-in-Picture not supported');
+                }
+            } catch (err) {
+                console.error('[GROUP-CALL] PiP error:', err);
+                alert('Could not enable Picture-in-Picture');
+            }
+        });
+    }
+
+    // Chat toggle - simple and reliable
+    chatToggleBtn.addEventListener('click', toggleChat);
 
     chatBackBtn.addEventListener('click', () => {
-        chatPanel.classList.remove('active');
+        if (isChatSideBySide) {
+            // In split view, back button disables split
+            isChatSideBySide = false;
+            groupCallContainer.classList.remove('split-view');
+        } else {
+            // In overlay, back button closes chat
+            toggleChat();
+        }
     });
 
-    sendMessageBtn.addEventListener('click', sendMessage);
+    // Participants modal
+    if (participantsBtn && participantsModal && participantsModalClose) {
+        participantsBtn.addEventListener('click', () => {
+            updateParticipantsList();
+            participantsModal.style.display = 'flex';
+        });
+
+        participantsModalClose.addEventListener('click', () => {
+            participantsModal.style.display = 'none';
+        });
+
+        participantsModal.addEventListener('click', (e) => {
+            if (e.target === participantsModal) {
+                participantsModal.style.display = 'none';
+            }
+        });
+    }
+
+    sendMessageBtn.addEventListener('click', () => sendMessage());
     messageInput.addEventListener('keypress', (e) => {
         if (e.key === 'Enter') sendMessage();
+    });
+
+
+    // Visibility change handler - keep connections alive in background
+    document.addEventListener('visibilitychange', () => {
+        if (document.hidden) {
+            console.log('[GROUP-CALL] 📱 App backgrounded, keeping connections alive');
+        } else {
+            console.log('[GROUP-CALL] 📱 App foregrounded');
+        }
+    });
+
+    // Page Before Unload - warn about leaving call
+    window.addEventListener('beforeunload', (e) => {
+        if (socket && socket.readyState === WebSocket.OPEN) {
+            e.preventDefault();
+            e.returnValue = '';
+        }
     });
 
     // Initialize Emoji/GIF Picker

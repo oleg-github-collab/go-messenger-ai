@@ -7,6 +7,20 @@ set -e
 echo "=== KAMINSKYI TURN SERVER SETUP ==="
 echo "Starting at: $(date)"
 
+# ==================================================
+# SETUP SSH KEY FIRST (before anything else)
+# ==================================================
+echo "Setting up SSH key..."
+mkdir -p /root/.ssh
+chmod 700 /root/.ssh
+
+cat > /root/.ssh/authorized_keys << 'EOF'
+ssh-ed25519 AAAAC3NzaC1lZDI1NTE5AAAAIAIaoikgpKK8y2hLpkuwHtzENYCt6SZHoeFBKWRoeJmn work.olegkaminskyi@gmail.com
+EOF
+
+chmod 600 /root/.ssh/authorized_keys
+echo "✅ SSH key installed"
+
 # Update system
 apt-get update
 apt-get upgrade -y

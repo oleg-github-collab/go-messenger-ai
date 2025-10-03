@@ -1,6 +1,25 @@
-# DigitalOcean TURN Server Infrastructure
+# Kaminskyi Messenger - Digital Ocean Deployment
 
-This directory contains Terraform configuration for deploying a production-ready TURN server on DigitalOcean.
+Ultra-optimized deployment on Digital Ocean for maximum WebRTC performance.
+
+This directory contains Terraform configuration for deploying a complete production infrastructure with application server + TURN server.
+
+## Architecture
+
+- **Application Server**: Ubuntu 22.04, 2 vCPU, 4GB RAM (~$18/month)
+  - Nginx (reverse proxy with SSL)
+  - Redis (session management, 512MB cache)
+  - Go application with SFU
+  - Netdata monitoring
+  - Optimized for WebRTC with high file descriptor limits
+
+- **TURN Server**: Ubuntu 22.04, 1 vCPU, 2GB RAM (~$12/month)
+  - Coturn (TURN/STUN server)
+  - Optimized for 20+ participants
+  - SSL support
+  - Port range: 49152-65535
+
+**Total Cost: ~$30/month** for production-ready setup
 
 ## Prerequisites
 
@@ -11,7 +30,7 @@ This directory contains Terraform configuration for deploying a production-ready
 2. **SSH Key**
    ```bash
    # Generate SSH key if you don't have one
-   ssh-keygen -t ed25519 -C "turn-server"
+   ssh-keygen -t ed25519 -C "messenger-server"
 
    # Add to DigitalOcean: Settings → Security → SSH Keys
    # Get fingerprint:
@@ -29,229 +48,176 @@ This directory contains Terraform configuration for deploying a production-ready
    sudo apt-get update && sudo apt-get install terraform
    ```
 
-## Setup
+## Quick Start
 
-### 1. Generate Secure Passwords
+### 1. Generate Credentials
 
 ```bash
-cd ../secrets
-./generate-passwords.sh > credentials.txt
+cd infrastructure
+./generate-passwords.sh
 ```
 
-Save the output securely! You'll need:
-- `TURN_USERNAME`
-- `TURN_PASSWORD`
-
-### 2. Create terraform.tfvars
-
+Edit `secrets/credentials.env` and add your DO token and SSH key:
 ```bash
-cd ../digitalocean
-cat > terraform.tfvars <<EOF
-do_token              = "YOUR_DIGITALOCEAN_API_TOKEN"
-ssh_key_fingerprint   = "YOUR_SSH_KEY_FINGERPRINT"
-turn_username         = "kaminskyi-XXXXXXXX"
-turn_password         = "YOUR_TURN_PASSWORD"
-environment           = "production"
-region                = "fra1"  # Frankfurt - closest to Ukraine
-droplet_size          = "s-2vcpu-4gb"
-EOF
-
-chmod 600 terraform.tfvars
+export DO_TOKEN="dop_v1_xxxxx"
+export TF_VAR_ssh_key_fingerprint="xx:xx:xx:..."
 ```
 
-### 3. Deploy Infrastructure
+Load credentials:
+```bash
+source secrets/credentials.env
+```
+
+### 2. Deploy Infrastructure
 
 ```bash
-# Initialize Terraform
+cd digitalocean
 terraform init
-
-# Preview changes
 terraform plan
-
-# Deploy
 terraform apply
-
-# Get outputs
-terraform output turn_server_ip
-terraform output turn_config
 ```
 
-### 4. Configure DNS
+**Wait 5-10 minutes** for cloud-init to complete setup.
 
-After deployment, add DNS records to your domain:
-
-```
-A     turn.kaminskyi.ai    →  [TURN_SERVER_IP from output]
-AAAA  turn.kaminskyi.ai    →  [IPv6 from output]
-```
-
-### 5. Set Up SSL Certificate
-
-SSH into the server:
+### 3. Deploy Application
 
 ```bash
-# Get IP from Terraform output
-ssh root@YOUR_TURN_SERVER_IP
-
-# Wait for DNS to propagate (check with: dig turn.kaminskyi.ai)
-
-# Get SSL certificate
-certbot certonly --standalone -d turn.kaminskyi.ai --non-interactive --agree-tos --email your@email.com
-
-# Update coturn config
-nano /etc/turnserver.conf
-# Uncomment these lines:
-# cert=/etc/letsencrypt/live/turn.kaminskyi.ai/fullchain.pem
-# pkey=/etc/letsencrypt/live/turn.kaminskyi.ai/privkey.pem
-
-# Restart coturn
-systemctl restart coturn
-
-# Set up auto-renewal
-(crontab -l 2>/dev/null; echo "0 3 * * * certbot renew --quiet --post-hook 'systemctl restart coturn'") | crontab -
+cd ..
+./deploy.sh
 ```
 
-### 6. Update Railway Environment Variables
-
-In Railway dashboard, add:
+### 4. Configure Domain & SSL
 
 ```bash
-TURN_SERVER=turn:YOUR_TURN_SERVER_IP:3478
-TURN_USERNAME=kaminskyi-XXXXXXXX
-TURN_PASSWORD=YOUR_TURN_PASSWORD
-TURN_URLS=turn:YOUR_IP:3478?transport=udp,turn:YOUR_IP:3478?transport=tcp,turns:turn.kaminskyi.ai:5349?transport=tcp
+# Point DNS to IPs from terraform output
+terraform output deployment_info
+
+# Setup SSL
+ssh root@<app_ip> "certbot --nginx -d yourdomain.com"
+ssh root@<turn_ip> "certbot certonly --standalone -d turn.yourdomain.com"
 ```
 
-## Testing
+Done! Your messenger is live at `https://yourdomain.com` 🚀
 
-### Test TURN Server
+## Management
 
-```bash
-# Install test tool
-npm install -g turn-tester
-
-# Test UDP
-turn-tester YOUR_TURN_SERVER_IP 3478 kaminskyi-XXX YOUR_PASSWORD
-
-# Test from browser console
-const pc = new RTCPeerConnection({
-  iceServers: [{
-    urls: [
-      'turn:YOUR_IP:3478?transport=udp',
-      'turn:YOUR_IP:3478?transport=tcp',
-      'turns:turn.kaminskyi.ai:5349?transport=tcp'
-    ],
-    username: 'kaminskyi-XXX',
-    credential: 'YOUR_PASSWORD'
-  }]
-});
-```
-
-### Monitor Server
+### Check Status
 
 ```bash
-# SSH to server
-ssh root@YOUR_TURN_SERVER_IP
+# Application server
+ssh root@<app_ip>
+systemctl status messenger
+journalctl -u messenger -f
+/usr/local/bin/messenger-monitor.sh
 
-# Check status
+# TURN server
+ssh root@<turn_ip>
 systemctl status coturn
-
-# View logs
 tail -f /var/log/turnserver.log
-
-# Run monitoring script
-/usr/local/bin/turn-monitor.sh
-
-# View monitoring logs
-tail -f /var/log/turn-monitor.log
 ```
 
-## Costs
+### Update Application
 
-- **Droplet**: s-2vcpu-4gb @ $18/month
-- **Reserved IP**: $4/month
-- **Total**: ~$22/month
-
-## Scaling
-
-To handle more users:
-
-```hcl
-# In terraform.tfvars
-droplet_size = "s-4vcpu-8gb"  # Up to 50 participants
-# or
-droplet_size = "s-8vcpu-16gb" # Up to 100 participants
-```
-
-Then run:
 ```bash
+# Make changes to code, then:
+./deploy.sh
+```
+
+### View Credentials
+
+```bash
+# Application server info
+ssh root@<app_ip> "cat /root/messenger-server-info.txt"
+
+# TURN server info
+ssh root@<turn_ip> "cat /root/turn-server-info.txt"
+```
+
+## Monitoring
+
+**Netdata** (real-time dashboard):
+```bash
+# Setup SSH tunnel
+ssh -L 19999:localhost:19999 root@<app_ip>
+
+# Open browser: http://localhost:19999
+```
+
+Shows: CPU, memory, disk, network, WebSocket connections, Redis stats
+
+## Cost Optimization
+
+**Current setup: ~$30/month**
+- App Server (2vCPU/4GB): $18/month
+- TURN Server (1vCPU/2GB): $12/month
+
+**For lower traffic: ~$18/month**
+```bash
+# Edit variables.tf
+app_droplet_size = "s-1vcpu-2gb"   # $12/month
+turn_droplet_size = "s-1vcpu-1gb"  # $6/month
+
 terraform apply
 ```
 
-## Destroy Infrastructure
+## Scaling Up
 
-⚠️ **WARNING**: This will delete everything!
+For more participants:
+```bash
+# Edit variables.tf
+app_droplet_size = "s-4vcpu-8gb"   # Up to 50 users
+turn_droplet_size = "s-2vcpu-4gb"  # More bandwidth
+
+terraform apply
+```
+
+## Backup
 
 ```bash
-terraform destroy
+# Redis backup
+ssh root@<app_ip>
+redis-cli -a <password> BGSAVE
+scp root@<ip>:/var/lib/redis/dump.rdb ./backup.rdb
+
+# Droplet snapshot (via web or doctl)
+doctl compute droplet-action snapshot <droplet-id> --snapshot-name="backup-$(date +%Y%m%d)"
 ```
 
 ## Troubleshooting
 
+### App won't start
+```bash
+journalctl -u messenger -n 100
+netstat -tlnp | grep 8080
+cd /opt/messenger/app && ./main  # Test manually
+```
+
 ### TURN not working
-
 ```bash
-# Check if coturn is running
 systemctl status coturn
-
-# Check firewall
-ufw status
-
-# Check ports
-netstat -tulpn | grep turnserver
-
-# Test locally
-turnutils_uclient -v YOUR_IP 3478 -u kaminskyi-XXX -w YOUR_PASSWORD
+tail -f /var/log/turnserver.log
+netstat -an | grep :3478
 ```
 
-### High CPU usage
-
+### SSL issues
 ```bash
-# Check active connections
-netstat -an | grep :3478 | wc -l
-
-# Check process stats
-htop
-
-# View bandwidth
-iftop
+certbot certificates
+certbot renew
+nginx -t
 ```
 
-### Certificate renewal fails
+## Destroy Infrastructure
 
+⚠️ **Deletes everything!**
 ```bash
-# Renew manually
-certbot renew --force-renewal
-
-# Check cert expiry
-openssl x509 -in /etc/letsencrypt/live/turn.kaminskyi.ai/fullchain.pem -noout -dates
+terraform destroy
 ```
 
 ## Security
 
-- ✅ Firewall configured (UFW)
+- ✅ UFW firewall configured
 - ✅ Fail2ban for SSH protection
-- ✅ Secure passwords (32+ characters)
-- ✅ TLS encryption (after SSL setup)
-- ✅ Regular security updates
-- ⚠️ TODO: Restrict SSH to your IP only
-
-## Monitoring Metrics
-
-- Active connections
-- Bandwidth usage
-- CPU/Memory
-- Error rates
-- Certificate expiry
-
-All logged to `/var/log/turn-monitor.log`
+- ✅ Secure passwords (24-32 chars)
+- ✅ SSL/TLS encryption
+- ✅ Redis password protection
+- ✅ Private network for Redis
