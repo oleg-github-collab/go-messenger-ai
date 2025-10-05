@@ -159,6 +159,29 @@ h1 {
     background: rgba(59, 130, 246, 0.1);
 }
 
+.language-select {
+    width: 100%;
+    padding: 14px 16px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    border-radius: 12px;
+    background: rgba(255, 255, 255, 0.05);
+    color: white;
+    font-size: 16px;
+    outline: none;
+    transition: all 0.2s ease;
+    cursor: pointer;
+}
+
+.language-select:focus {
+    border-color: #3b82f6;
+    background: rgba(59, 130, 246, 0.1);
+}
+
+.language-select option {
+    background: #1e293b;
+    color: white;
+}
+
 /* Media options */
 .media-options {
     margin-bottom: 20px;

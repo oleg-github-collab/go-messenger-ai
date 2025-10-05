@@ -132,8 +132,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Share via Email
     shareEmail.addEventListener('click', () => {
-        const subject = encodeURIComponent('Join my video call');
-        const body = encodeURIComponent(`Hi! Join me for a video call:\n\n${currentMeetingURL}\n\nThis link expires in 8 hours.`);
+        const subject = encodeURIComponent('🎥 Join my secure video call - Kaminskyi Messenger');
+        const body = encodeURIComponent(`Hi! 👋\n\nI'm inviting you to join a secure video call on Kaminskyi Messenger.\n\n🔗 Join here: ${currentMeetingURL}\n\n✨ Features:\n• End-to-end encrypted video & audio\n• No registration required\n• Works on any device\n• Link expires in 8 hours\n\nSee you there!\n\n---\nPowered by Kaminskyi Messenger - Decentralized Web 3.0 Communication`);
         const mailtoLink = `mailto:?subject=${subject}&body=${body}`;
 
         // Force open in external browser
@@ -147,7 +147,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Share via SMS
     shareSMS.addEventListener('click', () => {
-        const message = encodeURIComponent(`Join my video call: ${currentMeetingURL}`);
+        const message = encodeURIComponent(`🎥 Join my secure video call on Kaminskyi Messenger: ${currentMeetingURL} (Link expires in 8h)`);
 
         // iOS/Android detection
         const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
@@ -171,8 +171,8 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Share via Telegram
     shareTelegram.addEventListener('click', () => {
-        const message = encodeURIComponent(`Join my video call: ${currentMeetingURL}`);
-        const telegramUrl = `https://t.me/share/url?url=${encodeURIComponent(currentMeetingURL)}&text=${encodeURIComponent('Join my video call')}`;
+        const text = '🎥 Join my secure video call on Kaminskyi Messenger (Decentralized Web 3.0)';
+        const telegramUrl = `https://t.me/share/url?url=${encodeURIComponent(currentMeetingURL)}&text=${encodeURIComponent(text)}`;
 
         // Force open in external browser
         window.open(telegramUrl, '_blank', 'noopener');

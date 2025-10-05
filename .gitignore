@@ -32,3 +32,10 @@ Thumbs.db
 *.swp
 *.swo
 *~
+
+# Claude context (contains sensitive info)
+.claude_context.md
+
+# Deployment
+deploy.tar.gz
+main

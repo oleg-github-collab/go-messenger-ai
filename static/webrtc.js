@@ -17,18 +17,32 @@ class WebRTCManager {
         this.remotePlaceholder = document.getElementById('remotePlaceholder');
         this.connectionStatus = document.getElementById('connectionStatus');
 
-        // ICE servers for STUN/TURN (multiple for reliability)
+        // ICE servers for STUN/TURN (optimized for speed)
         this.iceServers = {
             iceServers: [
                 { urls: 'stun:stun.l.google.com:19302' },
                 { urls: 'stun:stun1.l.google.com:19302' },
-                { urls: 'stun:stun2.l.google.com:19302' },
-                { urls: 'stun:stun3.l.google.com:19302' },
-                { urls: 'stun:stun4.l.google.com:19302' },
-                { urls: 'stun:stun.services.mozilla.com' },
-                { urls: 'stun:stun.voip.blackberry.com:3478' }
+                // Fallback TURN servers from openrelay.metered.ca
+                {
+                    urls: 'turn:openrelay.metered.ca:80',
+                    username: 'openrelayproject',
+                    credential: 'openrelayproject'
+                },
+                {
+                    urls: 'turn:openrelay.metered.ca:443',
+                    username: 'openrelayproject',
+                    credential: 'openrelayproject'
+                },
+                {
+                    urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+                    username: 'openrelayproject',
+                    credential: 'openrelayproject'
+                }
             ],
-            iceCandidatePoolSize: 10
+            iceCandidatePoolSize: 10,
+            bundlePolicy: 'max-bundle',
+            rtcpMuxPolicy: 'require',
+            iceTransportPolicy: 'all' // Use both STUN and TURN
         };
 
         // Load TURN credentials
@@ -36,33 +50,45 @@ class WebRTCManager {
 
         // Current quality settings
         this.currentConstraints = this.getConstraints('1080p', 30, 'high');
+
+        // Connection quality monitoring
+        this.qualityMonitorInterval = null;
+        this.currentBitrateLevel = 'high';
+        this.consecutiveCriticalQuality = 0;
+        this.lastQualityCheck = null;
     }
 
     async loadTURNCredentials() {
         try {
+            console.log('[WebRTC] 📡 Fetching TURN credentials...');
             const response = await fetch('/api/turn-credentials');
             const creds = await response.json();
+            console.log('[WebRTC] 📡 TURN credentials received:', { host: creds.host, username: creds.username, hasPassword: !!creds.password });
 
             if (creds.host && creds.username && creds.password) {
+                // Ensure host doesn't contain port
+                const host = creds.host.split(':')[0];
+
                 const turnServer = {
                     urls: [
-                        `turn:${creds.host}:3478?transport=udp`,
-                        `turn:${creds.host}:3478?transport=tcp`,
-                        `turns:${creds.host}:5349?transport=tcp`
+                        `turn:${host}:3478`,
+                        `turn:${host}:3478?transport=tcp`
                     ],
                     username: creds.username,
                     credential: creds.password
                 };
 
+                console.log('[WebRTC] 🔧 TURN server URLs:', turnServer.urls);
+
                 this.iceServers.iceServers.push(turnServer);
                 this.turnConfigLoaded = true;
-                console.log('[WebRTC] ✅ TURN/TURNS server configured:', creds.host);
-                console.log('[WebRTC] 🔧 ICE Servers:', this.iceServers.iceServers.length, 'servers');
+                console.log('[WebRTC] ✅ TURN server configured:', host);
+                console.log('[WebRTC] 🔧 Total ICE Servers:', this.iceServers.iceServers.length);
             } else {
-                console.warn('[WebRTC] ⚠️  TURN credentials not available');
+                console.warn('[WebRTC] ⚠️  TURN credentials incomplete:', creds);
             }
         } catch (err) {
-            console.error('[WebRTC] Failed to load TURN credentials:', err);
+            console.error('[WebRTC] ❌ Failed to load TURN credentials:', err);
         }
     }
 
@@ -102,16 +128,45 @@ class WebRTCManager {
 
     async initialize() {
         try {
-            console.log('[WebRTC] Initializing with constraints:', this.currentConstraints);
+            // Get user preferences from sessionStorage
+            const enableVideo = sessionStorage.getItem('enableVideo') !== 'false';
+            const enableAudio = sessionStorage.getItem('enableAudio') !== 'false';
+            const cameraId = sessionStorage.getItem('cameraId');
+            const microphoneId = sessionStorage.getItem('microphoneId');
 
-            // Wait for TURN credentials (max 2 seconds)
+            console.log('[WebRTC] 🎥 Media preferences:', { enableVideo, enableAudio, cameraId, microphoneId });
+
+            // Override constraints with user preferences
+            const constraints = {
+                audio: enableAudio ? {
+                    deviceId: microphoneId ? { exact: microphoneId } : undefined,
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true
+                } : false,
+                video: enableVideo ? {
+                    deviceId: cameraId ? { exact: cameraId } : undefined,
+                    width: { ideal: 1920 },
+                    height: { ideal: 1080 },
+                    frameRate: { ideal: 30 },
+                    facingMode: 'user'
+                } : false
+            };
+
+            console.log('[WebRTC] Initializing with constraints:', constraints);
+
+            // Wait for TURN credentials (max 3 seconds for better reliability)
             if (!this.turnConfigLoaded) {
                 console.log('[WebRTC] Waiting for TURN credentials...');
-                await new Promise(resolve => setTimeout(resolve, 500));
+                await new Promise(resolve => setTimeout(resolve, 1000));
             }
 
+            // Create peer connection FIRST (before getting user media)
+            this.createPeerConnection();
+            console.log('[WebRTC] ✅ Peer connection created with', this.iceServers.iceServers.length, 'ICE servers');
+
             // Get user media
-            this.localStream = await navigator.mediaDevices.getUserMedia(this.currentConstraints);
+            this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
 
             // Show local video
             this.localVideo.srcObject = this.localStream;
@@ -121,9 +176,6 @@ class WebRTCManager {
             }
 
             console.log('[WebRTC] ✅ Local stream acquired');
-
-            // Create peer connection
-            this.createPeerConnection();
 
             // Add local tracks to peer connection
             this.localStream.getTracks().forEach(track => {
@@ -142,20 +194,29 @@ class WebRTCManager {
     createPeerConnection() {
         this.peerConnection = new RTCPeerConnection(this.iceServers);
 
-        // Handle ICE candidates
+        // Handle ICE candidates - with null check
         this.peerConnection.onicecandidate = (event) => {
             if (event.candidate) {
-                console.log('[WebRTC] Sending ICE candidate');
-                this.socket.send(JSON.stringify({
-                    type: 'ice-candidate',
-                    data: JSON.stringify(event.candidate)
-                }));
+                console.log('[WebRTC] 🧊 Sending ICE candidate:', event.candidate.type);
+                if (this.socket && this.socket.readyState === WebSocket.OPEN) {
+                    this.socket.send(JSON.stringify({
+                        type: 'ice-candidate',
+                        data: JSON.stringify(event.candidate)
+                    }));
+                }
+            } else {
+                console.log('[WebRTC] 🧊 ICE gathering complete');
             }
+        };
+
+        // Handle ICE gathering state
+        this.peerConnection.onicegatheringstatechange = () => {
+            console.log('[WebRTC] 🧊 ICE gathering state:', this.peerConnection.iceGatheringState);
         };
 
         // Handle remote stream
         this.peerConnection.ontrack = (event) => {
-            console.log('[WebRTC] ✅ Received remote track:', event.track.kind);
+            console.log('[WebRTC] ✅ Received remote track:', event.track.kind, 'readyState:', event.track.readyState);
 
             if (!this.remoteStream) {
                 this.remoteStream = new MediaStream();
@@ -163,34 +224,91 @@ class WebRTCManager {
             }
 
             this.remoteStream.addTrack(event.track);
+
+            // Monitor track state
+            event.track.onended = () => {
+                console.log('[WebRTC] ⚠️  Remote track ended:', event.track.kind);
+            };
+
+            event.track.onmute = () => {
+                console.log('[WebRTC] 🔇 Remote track muted:', event.track.kind);
+            };
+
+            event.track.onunmute = () => {
+                console.log('[WebRTC] 🔊 Remote track unmuted:', event.track.kind);
+            };
+
             if (this.remotePlaceholder) {
                 this.remotePlaceholder.classList.add('hidden');
                 this.remotePlaceholder.style.display = 'none';
             }
             this.updateStatus('Connected', 'success');
+
+            // Configure jitter buffer when track is added
+            this.configureJitterBuffer();
         };
 
         // Handle connection state
         this.peerConnection.onconnectionstatechange = () => {
-            console.log('[WebRTC] Connection state:', this.peerConnection.connectionState);
+            console.log('[WebRTC] 🔗 Connection state:', this.peerConnection.connectionState);
 
             switch (this.peerConnection.connectionState) {
+                case 'connecting':
+                    this.updateStatus('Connecting...', 'warning');
+                    break;
                 case 'connected':
                     this.updateStatus('Connected', 'success');
+                    console.log('[WebRTC] ✅ Peer connection established!');
+                    // Start quality monitoring when connected
+                    this.startQualityMonitoring();
                     break;
                 case 'disconnected':
                     this.updateStatus('Disconnected', 'warning');
+                    console.warn('[WebRTC] ⚠️  Connection disconnected');
                     break;
                 case 'failed':
                     this.updateStatus('Connection failed', 'error');
-                    this.reconnect();
+                    console.error('[WebRTC] ❌ Connection failed');
+                    // Try ICE restart first (faster than full reconnect)
+                    this.restartIce();
                     break;
             }
         };
 
         // Handle ICE connection state
         this.peerConnection.oniceconnectionstatechange = () => {
-            console.log('[WebRTC] ICE state:', this.peerConnection.iceConnectionState);
+            console.log('[WebRTC] 🧊 ICE connection state:', this.peerConnection.iceConnectionState);
+
+            switch (this.peerConnection.iceConnectionState) {
+                case 'checking':
+                    console.log('[WebRTC] 🧊 ICE checking...');
+                    break;
+                case 'connected':
+                    console.log('[WebRTC] ✅ ICE connected!');
+                    break;
+                case 'completed':
+                    console.log('[WebRTC] ✅ ICE completed!');
+                    break;
+                case 'failed':
+                    console.error('[WebRTC] ❌ ICE connection failed');
+                    // Attempt ICE restart
+                    this.restartIce();
+                    break;
+                case 'disconnected':
+                    console.warn('[WebRTC] ⚠️  ICE disconnected');
+                    // Wait a bit, then try ICE restart if still disconnected
+                    setTimeout(() => {
+                        if (this.peerConnection.iceConnectionState === 'disconnected') {
+                            this.restartIce();
+                        }
+                    }, 3000);
+                    break;
+            }
+        };
+
+        // Handle signaling state
+        this.peerConnection.onsignalingstatechange = () => {
+            console.log('[WebRTC] 📡 Signaling state:', this.peerConnection.signalingState);
         };
     }
 
@@ -297,8 +415,12 @@ class WebRTCManager {
             const audioTrack = this.localStream.getAudioTracks()[0];
             if (audioTrack) {
                 audioTrack.enabled = enabled;
-                console.log('[WebRTC] Audio:', enabled ? 'ON' : 'OFF');
+                console.log('[WebRTC] 🎤 Audio track enabled:', audioTrack.enabled, 'readyState:', audioTrack.readyState);
+            } else {
+                console.warn('[WebRTC] ⚠️  No audio track found in localStream');
             }
+        } else {
+            console.warn('[WebRTC] ⚠️  No localStream available');
         }
     }
 
@@ -399,8 +521,29 @@ class WebRTCManager {
         }
     }
 
+    async restartIce() {
+        console.log('[WebRTC] 🔄 Attempting ICE restart (fast recovery)...');
+        this.updateStatus('Reconnecting...', 'warning');
+
+        try {
+            // ICE restart - much faster than full reconnect
+            const offer = await this.peerConnection.createOffer({ iceRestart: true });
+            await this.peerConnection.setLocalDescription(offer);
+
+            this.socket.send(JSON.stringify({
+                type: 'offer',
+                data: JSON.stringify(offer)
+            }));
+
+            console.log('[WebRTC] ✅ ICE restart offer sent');
+        } catch (error) {
+            console.error('[WebRTC] ICE restart failed, trying full reconnect:', error);
+            this.reconnect();
+        }
+    }
+
     reconnect() {
-        console.log('[WebRTC] Attempting to reconnect...');
+        console.log('[WebRTC] Attempting full reconnect...');
         this.updateStatus('Reconnecting...', 'warning');
 
         // Close existing connection
@@ -429,8 +572,214 @@ class WebRTCManager {
         }
     }
 
+    // Start connection quality monitoring
+    startQualityMonitoring() {
+        if (this.qualityMonitorInterval) {
+            clearInterval(this.qualityMonitorInterval);
+        }
+
+        console.log('[WebRTC] 📊 Starting quality monitoring');
+
+        this.qualityMonitorInterval = setInterval(async () => {
+            if (!this.peerConnection) return;
+
+            const quality = await this.calculateConnectionQuality();
+
+            if (quality) {
+                this.lastQualityCheck = quality;
+
+                // Adaptive bitrate control based on quality
+                if (quality.score < 0.3 && this.currentBitrateLevel !== 'low') {
+                    console.log('[WebRTC] ⚠️ Poor connection, switching to low bitrate');
+                    this.adjustBitrate('low');
+                } else if (quality.score >= 0.3 && quality.score < 0.6 && this.currentBitrateLevel !== 'medium') {
+                    console.log('[WebRTC] 📉 Fair connection, switching to medium bitrate');
+                    this.adjustBitrate('medium');
+                } else if (quality.score >= 0.6 && this.currentBitrateLevel !== 'high') {
+                    console.log('[WebRTC] 📈 Good connection, switching to high bitrate');
+                    this.adjustBitrate('high');
+                }
+
+                // Preemptive reconnection for critical quality
+                if (quality.score < 0.3) {
+                    this.consecutiveCriticalQuality++;
+                    if (this.consecutiveCriticalQuality >= 3) {
+                        console.log('[WebRTC] 🔄 Critical quality detected, initiating preemptive ICE restart');
+                        this.peerConnection.restartIce();
+                        this.consecutiveCriticalQuality = 0;
+                    }
+                } else {
+                    this.consecutiveCriticalQuality = 0;
+                }
+
+                // Update UI with quality status
+                let statusMessage = 'Connected';
+                let statusType = 'success';
+
+                if (quality.rating === 'excellent') {
+                    statusMessage = 'Excellent connection';
+                } else if (quality.rating === 'good') {
+                    statusMessage = 'Good connection';
+                } else if (quality.rating === 'poor') {
+                    statusMessage = 'Poor connection';
+                    statusType = 'warning';
+                } else if (quality.rating === 'critical') {
+                    statusMessage = 'Critical connection';
+                    statusType = 'error';
+                }
+
+                this.updateStatus(statusMessage, statusType);
+            }
+        }, 2000); // Check every 2 seconds
+    }
+
+    // Calculate connection quality
+    async calculateConnectionQuality() {
+        if (!this.peerConnection) return null;
+
+        try {
+            const stats = await this.peerConnection.getStats();
+            let packetLoss = 0;
+            let rtt = 0;
+            let jitter = 0;
+            let bytesReceived = 0;
+
+            stats.forEach(report => {
+                if (report.type === 'inbound-rtp' && report.kind === 'video') {
+                    if (report.packetsLost !== undefined && report.packetsReceived !== undefined) {
+                        const totalPackets = report.packetsLost + report.packetsReceived;
+                        if (totalPackets > 0) {
+                            packetLoss = (report.packetsLost / totalPackets) * 100;
+                        }
+                    }
+                    if (report.jitter !== undefined) {
+                        jitter = report.jitter * 1000; // Convert to ms
+                    }
+                    if (report.bytesReceived !== undefined) {
+                        bytesReceived = report.bytesReceived;
+                    }
+                }
+
+                if (report.type === 'candidate-pair' && report.state === 'succeeded') {
+                    if (report.currentRoundTripTime !== undefined) {
+                        rtt = report.currentRoundTripTime * 1000; // Convert to ms
+                    }
+                }
+            });
+
+            // Calculate quality score (0-1)
+            let score = 1.0;
+
+            // Penalty for packet loss (0-5% = good, >10% = bad)
+            if (packetLoss > 10) {
+                score -= 0.5;
+            } else if (packetLoss > 5) {
+                score -= 0.3;
+            } else if (packetLoss > 2) {
+                score -= 0.1;
+            }
+
+            // Penalty for RTT (0-100ms = good, >300ms = bad)
+            if (rtt > 300) {
+                score -= 0.3;
+            } else if (rtt > 200) {
+                score -= 0.2;
+            } else if (rtt > 100) {
+                score -= 0.1;
+            }
+
+            // Penalty for jitter (0-30ms = good, >100ms = bad)
+            if (jitter > 100) {
+                score -= 0.2;
+            } else if (jitter > 50) {
+                score -= 0.1;
+            }
+
+            score = Math.max(0, Math.min(1, score));
+
+            let rating = 'excellent';
+            if (score < 0.3) rating = 'critical';
+            else if (score < 0.6) rating = 'poor';
+            else if (score < 0.8) rating = 'good';
+
+            console.log(`[WebRTC] 📊 Quality: ${rating} (${(score * 100).toFixed(0)}%) | Loss: ${packetLoss.toFixed(1)}% | RTT: ${rtt.toFixed(0)}ms | Jitter: ${jitter.toFixed(1)}ms`);
+
+            return { score, rating, packetLoss, rtt, jitter, bytesReceived };
+        } catch (error) {
+            console.error('[WebRTC] Failed to calculate quality:', error);
+            return null;
+        }
+    }
+
+    // Adjust bitrate based on connection quality
+    async adjustBitrate(level) {
+        if (!this.peerConnection) return;
+
+        this.currentBitrateLevel = level;
+
+        const bitrateSettings = {
+            low: { video: 200000, audio: 32000, fps: 15 },      // 200 Kbps video, 32 Kbps audio
+            medium: { video: 600000, audio: 48000, fps: 24 },   // 600 Kbps video, 48 Kbps audio
+            high: { video: 1500000, audio: 64000, fps: 30 }     // 1.5 Mbps video, 64 Kbps audio
+        };
+
+        const settings = bitrateSettings[level];
+
+        try {
+            const senders = this.peerConnection.getSenders();
+
+            for (const sender of senders) {
+                if (!sender.track) continue;
+
+                const params = sender.getParameters();
+                if (!params.encodings || params.encodings.length === 0) {
+                    params.encodings = [{}];
+                }
+
+                if (sender.track.kind === 'video') {
+                    params.encodings[0].maxBitrate = settings.video;
+                    params.encodings[0].maxFramerate = settings.fps;
+                } else if (sender.track.kind === 'audio') {
+                    params.encodings[0].maxBitrate = settings.audio;
+                }
+
+                await sender.setParameters(params);
+            }
+
+            console.log(`[WebRTC] 📊 Bitrate adjusted to ${level}:`, settings);
+        } catch (error) {
+            console.error('[WebRTC] Failed to adjust bitrate:', error);
+        }
+    }
+
+    // Configure jitter buffer for lower latency
+    configureJitterBuffer() {
+        if (!this.peerConnection) return;
+
+        try {
+            const receivers = this.peerConnection.getReceivers();
+            receivers.forEach(receiver => {
+                if (receiver.track && receiver.track.kind === 'audio') {
+                    // Try to set jitter buffer target to 50ms for lower latency
+                    if (receiver.jitterBufferTarget) {
+                        receiver.jitterBufferTarget = 50;
+                        console.log('[WebRTC] 🎯 Jitter buffer set to 50ms');
+                    }
+                }
+            });
+        } catch (error) {
+            console.warn('[WebRTC] Could not configure jitter buffer:', error);
+        }
+    }
+
     cleanup() {
         console.log('[WebRTC] Cleaning up...');
+
+        // Stop quality monitoring
+        if (this.qualityMonitorInterval) {
+            clearInterval(this.qualityMonitorInterval);
+            this.qualityMonitorInterval = null;
+        }
 
         // Stop all tracks
         if (this.localStream) {

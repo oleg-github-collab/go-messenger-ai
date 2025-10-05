@@ -1,7 +1,19 @@
-document.addEventListener('DOMContentLoaded', async () => {
-    console.log('[GROUP-CALL] Initializing...');
+console.log('[GROUP-CALL] Script loaded! Starting initialization...');
 
-    // UI Elements
+document.addEventListener('DOMContentLoaded', async () => {
+    console.log('[GROUP-CALL] DOM ready - Initializing...');
+
+    // UI Elements - Settings Screen
+    const settingsScreen = document.getElementById('settingsScreen');
+    const groupCallContainer = document.getElementById('groupCallContainer');
+    const previewVideo = document.getElementById('previewVideo');
+    const previewStatus = document.getElementById('previewStatus');
+    const nameInput = document.getElementById('nameInput');
+    const cameraToggle = document.getElementById('cameraToggle');
+    const micToggle = document.getElementById('micToggle');
+    const joinButton = document.getElementById('joinButton');
+
+    // UI Elements - Call Screen
     const participantsGrid = document.getElementById('participantsGrid');
     const localVideo = document.getElementById('localVideo');
     const participantCount = document.getElementById('participantCount');
@@ -18,10 +30,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const participantsModal = document.getElementById('participantsModal');
     const participantsModalClose = document.getElementById('participantsModalClose');
     const participantsList = document.getElementById('participantsList');
-    const groupCallContainer = document.querySelector('.group-call-container');
 
     // Validate all elements exist
-    if (!participantsGrid || !localVideo || !chatToggleBtn) {
+    if (!settingsScreen || !groupCallContainer || !previewVideo || !joinButton) {
         console.error('[GROUP-CALL] ❌ Critical elements missing!');
         alert('Failed to load group call interface. Please refresh.');
         return;
@@ -32,18 +43,30 @@ document.addEventListener('DOMContentLoaded', async () => {
     let localStream = null;
     let peerConnection = null;
     let participants = new Map(); // participantId -> { name, videoElement, stream }
+    let orphanStreams = new Map(); // streamId -> MediaStream (streams waiting for participant)
     let isCameraOn = true;
     let isMicOn = true;
     let callStartTime = Date.now();
     let timerInterval = null;
     let myParticipantId = null;
-    let myName = 'You';
+    let myName = 'User';
     let reconnectAttempts = 0;
     let maxReconnectAttempts = 10;
     let reconnectTimeout = null;
     let isChatVisible = false;
     let isChatSideBySide = false; // Split view on desktop
     let audioContexts = new Map(); // For speaking detection
+    let pendingIceCandidates = []; // Queue for ICE candidates that arrive before offer
+
+    // Connection quality tracking
+    let currentQuality = 'excellent'; // excellent, good, poor, critical
+    let qualityScoreHistory = [];
+    let adaptiveBitrateEnabled = true;
+    let currentBitrateLevel = 'high'; // low, medium, high
+
+    // Dynacast - track visibility optimization
+    let visibilityCheckInterval = null;
+    let participantVisibility = new Map(); // participantId -> boolean
 
     // Get room ID from URL
     const pathParts = window.location.pathname.split('/');
@@ -55,137 +78,835 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
-    // WebRTC configuration
+    // Set default name from sessionStorage
+    const savedName = sessionStorage.getItem('guestName') || sessionStorage.getItem('userName') || '';
+    if (savedName) {
+        nameInput.value = savedName;
+        myName = savedName;
+    }
+    console.log('[GROUP-CALL] 👤 Default name:', myName);
+
+    // WebRTC configuration - optimized for speed and reliability
     const config = {
         iceServers: [
+            // STUN servers for NAT traversal
             { urls: 'stun:stun.l.google.com:19302' },
             { urls: 'stun:stun1.l.google.com:19302' }
-        ]
+        ],
+        iceCandidatePoolSize: 20, // Increased for faster connection
+        bundlePolicy: 'max-bundle', // Fastest connection
+        rtcpMuxPolicy: 'require',
+        iceTransportPolicy: 'all' // Use all available candidates
     };
 
     // Fetch TURN credentials
     try {
+        console.log('[GROUP-CALL] 📡 Fetching TURN credentials...');
         const response = await fetch('/api/turn-credentials');
         const creds = await response.json();
+        console.log('[GROUP-CALL] 📡 TURN credentials received:', { host: creds.host, username: creds.username, hasPassword: !!creds.password });
+
         if (creds.host && creds.username && creds.password) {
-            config.iceServers.push({
+            // Ensure host doesn't contain port
+            const host = creds.host.split(':')[0];
+
+            const turnServer = {
                 urls: [
-                    `turn:${creds.host}:3478?transport=udp`,
-                    `turn:${creds.host}:3478?transport=tcp`,
-                    `turns:${creds.host}:5349?transport=tcp`
+                    `turn:${host}:3478`,
+                    `turn:${host}:3478?transport=tcp`
                 ],
                 username: creds.username,
                 credential: creds.password
-            });
-            console.log('[GROUP-CALL] ✅ TURN server configured:', creds.host);
+            };
+
+            console.log('[GROUP-CALL] 🔧 TURN server URLs:', turnServer.urls);
+
+            config.iceServers.push(turnServer);
+            console.log('[GROUP-CALL] ✅ Primary TURN server configured:', host);
+        } else {
+            console.warn('[GROUP-CALL] ⚠️  TURN credentials incomplete:', creds);
         }
     } catch (err) {
-        console.warn('[GROUP-CALL] Failed to fetch TURN credentials:', err);
+        console.error('[GROUP-CALL] ❌ Failed to fetch TURN credentials:', err);
     }
 
-    // Initialize local media
-    async function initLocalMedia() {
-        try {
-            localStream = await navigator.mediaDevices.getUserMedia({
-                video: { width: { ideal: 1280 }, height: { ideal: 720 } },
-                audio: true
-            });
-            localVideo.srcObject = localStream;
-            console.log('[GROUP-CALL] Local media initialized');
-            return true;
-        } catch (err) {
-            console.error('[GROUP-CALL] Failed to get local media:', err);
-            alert('Failed to access camera/microphone');
-            return false;
+    // Add fallback TURN servers (free, public) for better reliability
+    config.iceServers.push(
+        // Metered TURN servers (Europe)
+        {
+            urls: 'turn:openrelay.metered.ca:80',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
+        },
+        {
+            urls: 'turn:openrelay.metered.ca:443',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
+        },
+        {
+            urls: 'turn:openrelay.metered.ca:443?transport=tcp',
+            username: 'openrelayproject',
+            credential: 'openrelayproject'
         }
-    }
+    );
+
+    console.log('[GROUP-CALL] 🔧 Total ICE servers configured:', config.iceServers.length);
+    console.log('[GROUP-CALL] 📡 Fallback TURN servers added for reliability');
+
 
     // Initialize WebRTC peer connection
     function initPeerConnection() {
+        console.log('[GROUP-CALL] 🔧 Initializing peer connection...');
+        console.log('[GROUP-CALL] 🔧 localStream exists:', !!localStream);
+
+        if (localStream) {
+            const tracks = localStream.getTracks();
+            console.log('[GROUP-CALL] 🔧 localStream has', tracks.length, 'tracks:', tracks.map(t => t.kind));
+        }
+
         peerConnection = new RTCPeerConnection(config);
+
+        // Optimize jitter buffer for lower latency
+        console.log('[JITTER] 🎯 Configuring jitter buffer optimization...');
+        const receivers = peerConnection.getReceivers();
+        receivers.forEach(receiver => {
+            if (receiver.track && receiver.track.kind === 'video') {
+                try {
+                    // Set jitter buffer target to minimize latency while maintaining quality
+                    const params = receiver.getParameters();
+                    if (params) {
+                        // Target 50ms jitter buffer (lower = less latency, but needs stable connection)
+                        receiver.jitterBufferTarget = 50;
+                        console.log('[JITTER] ✅ Set jitter buffer target to 50ms for video');
+                    }
+                } catch (err) {
+                    console.warn('[JITTER] ⚠️  Could not set jitter buffer:', err);
+                }
+            }
+        });
 
         // Add local tracks
         if (localStream) {
-            localStream.getTracks().forEach(track => {
-                peerConnection.addTrack(track, localStream);
-                console.log('[GROUP-CALL] Added local track:', track.kind);
+            const tracks = localStream.getTracks();
+            console.log('[GROUP-CALL] 📹 Adding', tracks.length, 'local tracks to peer connection');
+
+            if (tracks.length === 0) {
+                console.error('[GROUP-CALL] ⚠️  localStream exists but has NO tracks!');
+            }
+
+            tracks.forEach(async track => {
+                try {
+                    const sender = peerConnection.addTrack(track, localStream);
+                    console.log('[GROUP-CALL] ✅ Added local track:', track.kind, 'enabled:', track.enabled, 'readyState:', track.readyState, 'muted:', track.muted);
+
+                    // Enable simulcast for video tracks
+                    if (sender && track.kind === 'video') {
+                        try {
+                            const params = sender.getParameters();
+
+                            if (!params.encodings || params.encodings.length === 0) {
+                                params.encodings = [
+                                    {
+                                        rid: 'h',
+                                        maxBitrate: 1500000,  // 1.5 Mbps - High quality
+                                        scaleResolutionDownBy: 1
+                                    },
+                                    {
+                                        rid: 'm',
+                                        maxBitrate: 600000,   // 600 Kbps - Medium quality
+                                        scaleResolutionDownBy: 2
+                                    },
+                                    {
+                                        rid: 'l',
+                                        maxBitrate: 200000,   // 200 Kbps - Low quality
+                                        scaleResolutionDownBy: 4
+                                    }
+                                ];
+
+                                await sender.setParameters(params);
+                                console.log('[SIMULCAST] ✅ Enabled 3-layer simulcast for video (h/m/l)');
+                            }
+                        } catch (err) {
+                            console.warn('[SIMULCAST] ⚠️  Could not enable simulcast:', err);
+                            console.warn('[SIMULCAST] Falling back to single-stream mode');
+                        }
+                    }
+
+                    // Verify sender
+                    if (sender) {
+                        console.log('[GROUP-CALL] ✅ Sender created successfully for', track.kind);
+                    }
+                } catch (err) {
+                    console.error('[GROUP-CALL] ❌ Failed to add track:', track.kind, err);
+                }
             });
+        } else {
+            console.error('[GROUP-CALL] ❌ localStream is NULL - no tracks will be added!');
         }
 
         // Handle incoming tracks
         peerConnection.ontrack = (event) => {
             console.log('[GROUP-CALL] 🎥 Received remote track:', event.track.kind, 'streams:', event.streams.length);
 
+            // Optimize jitter buffer for this receiver
+            if (event.receiver && event.track.kind === 'video') {
+                try {
+                    event.receiver.jitterBufferTarget = 50;
+                    console.log('[JITTER] ✅ Set jitter buffer target for incoming track');
+                } catch (err) {
+                    console.warn('[JITTER] ⚠️  Could not set jitter buffer for receiver:', err);
+                }
+            }
+
             if (event.streams && event.streams.length > 0) {
                 const stream = event.streams[0];
                 const streamId = stream.id;
 
-                console.log('[GROUP-CALL] Stream ID:', streamId);
+                console.log('[GROUP-CALL] 📺 Stream ID:', streamId);
+                console.log('[GROUP-CALL] 📺 Track:', event.track.kind, 'id:', event.track.id, 'enabled:', event.track.enabled, 'muted:', event.track.muted);
+                console.log('[GROUP-CALL] 📺 Stream tracks:', stream.getTracks().map(t => t.kind).join(', '));
 
                 // Try to find participant by stream ID pattern (stream-{participantId})
                 const match = streamId.match(/stream-(.+)/);
                 if (match) {
                     const participantId = match[1];
-                    const participant = participants.get(participantId);
+                    console.log('[GROUP-CALL] 📺 Extracted participant ID:', participantId);
 
-                    if (participant && participant.videoElement) {
-                        // Attach stream to participant's video element
-                        if (!participant.videoElement.srcObject) {
-                            participant.videoElement.srcObject = stream;
+                    // Function to attach stream to participant
+                    const attachStream = () => {
+                        const participant = participants.get(participantId);
+                        console.log('[GROUP-CALL] 📺 Participant found:', !!participant, 'has videoElement:', !!participant?.videoElement);
+
+                        if (participant && participant.videoElement) {
+                            const videoElement = participant.videoElement;
+
+                            // ALWAYS set the full stream object
+                            videoElement.srcObject = stream;
+                            videoElement.playsInline = true;
+                            videoElement.muted = false;
+
                             console.log('[GROUP-CALL] ✅ Attached stream to participant:', participant.name);
-                        } else {
-                            // Add track to existing stream
-                            console.log('[GROUP-CALL] ✅ Added track to existing stream for:', participant.name);
+                            console.log('[GROUP-CALL] 📺 Video element srcObject set. Stream has', stream.getTracks().length, 'tracks');
+
+                            // Force video element to play with mobile-friendly approach
+                            const tryPlay = () => {
+                                videoElement.play()
+                                    .then(() => {
+                                        console.log('[GROUP-CALL] ✅ Video playing for', participant.name);
+                                    })
+                                    .catch(e => {
+                                        console.error('[GROUP-CALL] ❌ Video play failed:', e);
+                                        // Mobile workaround: try again on user interaction
+                                        const playOnInteraction = () => {
+                                            videoElement.play().catch(() => {});
+                                            document.removeEventListener('touchstart', playOnInteraction);
+                                            document.removeEventListener('click', playOnInteraction);
+                                        };
+                                        document.addEventListener('touchstart', playOnInteraction, { once: true });
+                                        document.addEventListener('click', playOnInteraction, { once: true });
+                                    });
+                            };
+
+                            // Try immediately and after short delay
+                            setTimeout(tryPlay, 100);
+                            setTimeout(tryPlay, 500);
+
+                            return true;
                         }
-                    } else {
-                        console.warn('[GROUP-CALL] ⚠️ Participant not found for stream:', streamId);
+                        return false;
+                    };
+
+                    // Try to attach immediately
+                    if (!attachStream()) {
+                        // Save as orphan stream - participant will arrive soon
+                        console.warn('[GROUP-CALL] ⚠️ Participant not found yet, saving orphan stream:', participantId);
+                        orphanStreams.set(participantId, stream);
+
+                        // Retry after a delay
+                        setTimeout(() => {
+                            if (orphanStreams.has(participantId)) {
+                                console.log('[GROUP-CALL] 🔄 Retrying attach for:', participantId);
+                                if (attachStream()) {
+                                    orphanStreams.delete(participantId);
+                                }
+                            }
+                        }, 500);
                     }
                 } else {
                     console.warn('[GROUP-CALL] ⚠️ Could not parse participant ID from stream:', streamId);
                 }
+            } else {
+                console.warn('[GROUP-CALL] ⚠️ Track event has no streams!');
             }
         };
 
-        // ICE candidate handling
+        // ICE candidate handling - improved with logging
         peerConnection.onicecandidate = (event) => {
-            if (event.candidate && socket && socket.readyState === WebSocket.OPEN) {
-                socket.send(JSON.stringify({
-                    type: 'ice-candidate',
-                    data: JSON.stringify(event.candidate)
-                }));
+            if (event.candidate) {
+                console.log('[GROUP-CALL] 🧊 Sending ICE candidate:', event.candidate.type, event.candidate.protocol);
+                if (socket && socket.readyState === WebSocket.OPEN) {
+                    socket.send(JSON.stringify({
+                        type: 'ice-candidate',
+                        data: JSON.stringify(event.candidate)
+                    }));
+                } else {
+                    console.warn('[GROUP-CALL] ⚠️  Cannot send ICE candidate - WebSocket not ready');
+                }
+            } else {
+                console.log('[GROUP-CALL] 🧊 ICE gathering complete');
             }
         };
 
-        // Connection state monitoring
+        // Connection state monitoring with aggressive reconnection
+        let reconnectTimer = null;
         peerConnection.onconnectionstatechange = () => {
             console.log('[GROUP-CALL] 🔌 Connection state:', peerConnection.connectionState);
 
-            if (peerConnection.connectionState === 'connected') {
-                console.log('[GROUP-CALL] ✅ Peer connection established');
-                reconnectAttempts = 0; // Reset reconnect counter
-            } else if (peerConnection.connectionState === 'failed') {
-                console.error('[GROUP-CALL] ❌ Connection failed, attempting to reconnect...');
-                // Try to restart ICE
-                peerConnection.restartIce();
+            switch (peerConnection.connectionState) {
+                case 'connecting':
+                    console.log('[GROUP-CALL] 🔄 Connecting to peers...');
+                    break;
+                case 'connected':
+                    console.log('[GROUP-CALL] ✅ Peer connection established');
+                    reconnectAttempts = 0;
+                    if (reconnectTimer) {
+                        clearTimeout(reconnectTimer);
+                        reconnectTimer = null;
+                    }
+                    break;
+                case 'disconnected':
+                    console.warn('[GROUP-CALL] ⚠️  Connection disconnected, attempting reconnect...');
+                    if (!reconnectTimer) {
+                        reconnectTimer = setTimeout(() => {
+                            if (peerConnection && peerConnection.connectionState === 'disconnected') {
+                                console.log('[GROUP-CALL] 🔄 Triggering ICE restart...');
+                                if (peerConnection.restartIce) {
+                                    peerConnection.restartIce();
+                                }
+                                attemptReconnection();
+                            }
+                        }, 2000);
+                    }
+                    break;
+                case 'failed':
+                    console.error('[GROUP-CALL] ❌ Connection failed, immediate reconnect...');
+                    attemptReconnection();
+                    break;
             }
         };
 
         peerConnection.oniceconnectionstatechange = () => {
-            console.log('[GROUP-CALL] 🧊 ICE state:', peerConnection.iceConnectionState);
+            console.log('[GROUP-CALL] 🧊 ICE connection state:', peerConnection.iceConnectionState);
 
-            if (peerConnection.iceConnectionState === 'connected' ||
-                peerConnection.iceConnectionState === 'completed') {
-                console.log('[GROUP-CALL] ✅ ICE connection established');
-            } else if (peerConnection.iceConnectionState === 'failed') {
-                console.error('[GROUP-CALL] ❌ ICE connection failed');
+            switch (peerConnection.iceConnectionState) {
+                case 'checking':
+                    console.log('[GROUP-CALL] 🧊 ICE checking connectivity...');
+                    break;
+                case 'connected':
+                case 'completed':
+                    console.log('[GROUP-CALL] ✅ ICE connection established!');
+                    reconnectAttempts = 0;
+                    break;
+                case 'failed':
+                    console.error('[GROUP-CALL] ❌ ICE connection failed - triggering reconnect');
+                    attemptReconnection();
+                    break;
+                case 'disconnected':
+                    console.warn('[GROUP-CALL] ⚠️  ICE disconnected, waiting to reconnect...');
+                    setTimeout(() => {
+                        if (peerConnection && peerConnection.iceConnectionState === 'disconnected') {
+                            console.log('[GROUP-CALL] 🔄 ICE restart after disconnect');
+                            if (peerConnection.restartIce) {
+                                peerConnection.restartIce();
+                            }
+                        }
+                    }, 3000);
+                    break;
             }
         };
 
         peerConnection.onicegatheringstatechange = () => {
             console.log('[GROUP-CALL] 🧊 ICE gathering state:', peerConnection.iceGatheringState);
+
+            if (peerConnection.iceGatheringState === 'complete') {
+                console.log('[GROUP-CALL] 🧊 All ICE candidates gathered');
+            }
         };
 
         return peerConnection;
+    }
+
+    // ============================================
+    // ADAPTIVE BITRATE CONTROL & QUALITY MONITORING
+    // ============================================
+
+    // Calculate connection quality score (0-1)
+    async function calculateConnectionQuality() {
+        if (!peerConnection) return 1;
+
+        try {
+            const stats = await peerConnection.getStats();
+            let totalPacketsReceived = 0;
+            let totalPacketsLost = 0;
+            let avgRTT = 0;
+            let rttCount = 0;
+            let avgJitter = 0;
+            let jitterCount = 0;
+
+            stats.forEach(report => {
+                if (report.type === 'inbound-rtp' && report.kind === 'video') {
+                    totalPacketsReceived += report.packetsReceived || 0;
+                    totalPacketsLost += report.packetsLost || 0;
+
+                    if (report.jitter !== undefined) {
+                        avgJitter += report.jitter;
+                        jitterCount++;
+                    }
+                }
+
+                if (report.type === 'candidate-pair' && report.state === 'succeeded') {
+                    if (report.currentRoundTripTime !== undefined) {
+                        avgRTT += report.currentRoundTripTime;
+                        rttCount++;
+                    }
+                }
+            });
+
+            // Calculate metrics
+            const packetLossRate = totalPacketsReceived > 0 ?
+                totalPacketsLost / (totalPacketsReceived + totalPacketsLost) : 0;
+            const rtt = rttCount > 0 ? (avgRTT / rttCount) * 1000 : 0; // Convert to ms
+            const jitter = jitterCount > 0 ? (avgJitter / jitterCount) * 1000 : 0;
+
+            // Calculate quality score (0-1)
+            let qualityScore = 1.0;
+
+            // Packet loss penalty (0-30% loss)
+            if (packetLossRate > 0.30) qualityScore -= 0.5;
+            else if (packetLossRate > 0.15) qualityScore -= 0.3;
+            else if (packetLossRate > 0.05) qualityScore -= 0.15;
+
+            // RTT penalty (0-500ms)
+            if (rtt > 500) qualityScore -= 0.3;
+            else if (rtt > 300) qualityScore -= 0.2;
+            else if (rtt > 150) qualityScore -= 0.1;
+
+            // Jitter penalty (0-100ms)
+            if (jitter > 100) qualityScore -= 0.2;
+            else if (jitter > 50) qualityScore -= 0.1;
+
+            qualityScore = Math.max(0, Math.min(1, qualityScore));
+
+            return {
+                score: qualityScore,
+                packetLoss: packetLossRate,
+                rtt: rtt,
+                jitter: jitter,
+                quality: qualityScore > 0.8 ? 'excellent' :
+                        qualityScore > 0.6 ? 'good' :
+                        qualityScore > 0.3 ? 'poor' : 'critical'
+            };
+        } catch (err) {
+            console.warn('[QUALITY] Failed to calculate quality:', err);
+            return { score: 1, quality: 'excellent', packetLoss: 0, rtt: 0, jitter: 0 };
+        }
+    }
+
+    // Adjust bitrate based on quality (works with simulcast)
+    async function adjustBitrate(level) {
+        if (!peerConnection || !adaptiveBitrateEnabled) return;
+
+        currentBitrateLevel = level;
+
+        const bitrateSettings = {
+            low: {
+                video: { h: 400000, m: 200000, l: 100000 },  // Simulcast layers
+                audio: 32000
+            },
+            medium: {
+                video: { h: 1000000, m: 400000, l: 150000 },
+                audio: 64000
+            },
+            high: {
+                video: { h: 1500000, m: 600000, l: 200000 },
+                audio: 96000
+            }
+        };
+
+        const settings = bitrateSettings[level] || bitrateSettings.high;
+
+        console.log(`[BITRATE] Adjusting to ${level}: high=${settings.video.h/1000}kbps, medium=${settings.video.m/1000}kbps, low=${settings.video.l/1000}kbps`);
+
+        try {
+            const senders = peerConnection.getSenders();
+
+            for (const sender of senders) {
+                if (!sender.track) continue;
+
+                const params = sender.getParameters();
+
+                if (sender.track.kind === 'video') {
+                    // If simulcast is enabled (multiple encodings)
+                    if (params.encodings && params.encodings.length > 1) {
+                        // Update simulcast layers
+                        params.encodings.forEach((encoding, idx) => {
+                            if (encoding.rid === 'h') {
+                                encoding.maxBitrate = settings.video.h;
+                                encoding.scaleResolutionDownBy = 1;
+                                encoding.maxFramerate = level === 'high' ? 30 : 24;
+                            } else if (encoding.rid === 'm') {
+                                encoding.maxBitrate = settings.video.m;
+                                encoding.scaleResolutionDownBy = 2;
+                                encoding.maxFramerate = level === 'high' ? 24 : 20;
+                            } else if (encoding.rid === 'l') {
+                                encoding.maxBitrate = settings.video.l;
+                                encoding.scaleResolutionDownBy = 4;
+                                encoding.maxFramerate = 15;
+                            }
+                        });
+                        console.log('[SIMULCAST] ✅ Updated all simulcast layers');
+                    } else {
+                        // Fallback: single stream mode
+                        if (!params.encodings) {
+                            params.encodings = [{}];
+                        }
+                        params.encodings[0].maxBitrate = settings.video.h;
+
+                        if (level === 'low') {
+                            params.encodings[0].scaleResolutionDownBy = 2;
+                            params.encodings[0].maxFramerate = 15;
+                        } else if (level === 'medium') {
+                            params.encodings[0].scaleResolutionDownBy = 1.5;
+                            params.encodings[0].maxFramerate = 24;
+                        } else {
+                            params.encodings[0].scaleResolutionDownBy = 1;
+                            params.encodings[0].maxFramerate = 30;
+                        }
+                    }
+                } else if (sender.track.kind === 'audio') {
+                    // Audio bitrate
+                    if (!params.encodings) {
+                        params.encodings = [{}];
+                    }
+                    params.encodings[0].maxBitrate = settings.audio;
+                }
+
+                await sender.setParameters(params);
+            }
+
+            console.log(`[BITRATE] ✅ Bitrate adjusted to ${level}`);
+        } catch (err) {
+            console.error('[BITRATE] Failed to adjust bitrate:', err);
+        }
+    }
+
+    // Monitor connection quality and adjust bitrate
+    let qualityMonitorInterval = null;
+    let consecutiveBadQuality = 0;
+    let consecutiveGoodQuality = 0;
+
+    function startQualityMonitoring() {
+        if (qualityMonitorInterval) {
+            clearInterval(qualityMonitorInterval);
+        }
+
+        console.log('[QUALITY] 📊 Starting quality monitoring...');
+
+        qualityMonitorInterval = setInterval(async () => {
+            const quality = await calculateConnectionQuality();
+
+            qualityScoreHistory.push(quality.score);
+            if (qualityScoreHistory.length > 10) {
+                qualityScoreHistory.shift();
+            }
+
+            const avgScore = qualityScoreHistory.reduce((a, b) => a + b, 0) / qualityScoreHistory.length;
+            const previousQuality = currentQuality;
+            currentQuality = quality.quality;
+
+            // Log quality metrics
+            console.log(`[QUALITY] Score: ${quality.score.toFixed(2)} (avg: ${avgScore.toFixed(2)}) | Loss: ${(quality.packetLoss * 100).toFixed(1)}% | RTT: ${quality.rtt.toFixed(0)}ms | Jitter: ${quality.jitter.toFixed(1)}ms | Status: ${quality.quality}`);
+
+            // Adaptive bitrate adjustment
+            if (adaptiveBitrateEnabled) {
+                if (quality.score < 0.4) {
+                    consecutiveBadQuality++;
+                    consecutiveGoodQuality = 0;
+
+                    if (consecutiveBadQuality >= 2) {
+                        if (currentBitrateLevel !== 'low') {
+                            await adjustBitrate('low');
+                            showSubtitle('Connection', 'Reducing quality due to poor connection', false);
+                        }
+                    }
+                } else if (quality.score < 0.7) {
+                    consecutiveBadQuality = 0;
+
+                    if (currentBitrateLevel === 'high') {
+                        await adjustBitrate('medium');
+                    }
+                } else {
+                    consecutiveBadQuality = 0;
+                    consecutiveGoodQuality++;
+
+                    if (consecutiveGoodQuality >= 5 && currentBitrateLevel !== 'high') {
+                        await adjustBitrate('high');
+                        showSubtitle('Connection', 'Connection improved, restoring quality', false);
+                    }
+                }
+            }
+
+            // Update UI quality indicator (if exists)
+            updateQualityIndicator(quality.quality);
+
+            // Quality change notification
+            if (previousQuality !== currentQuality && currentQuality === 'critical') {
+                console.warn('[QUALITY] ⚠️  Connection quality is CRITICAL!');
+            }
+
+        }, 2000); // Check every 2 seconds
+    }
+
+    function stopQualityMonitoring() {
+        if (qualityMonitorInterval) {
+            clearInterval(qualityMonitorInterval);
+            qualityMonitorInterval = null;
+            console.log('[QUALITY] 🛑 Quality monitoring stopped');
+        }
+    }
+
+    // Update quality indicator in UI
+    function updateQualityIndicator(quality) {
+        const indicator = document.getElementById('qualityIndicator');
+        if (!indicator) return;
+
+        const icons = {
+            excellent: '🟢',
+            good: '🟡',
+            poor: '🟠',
+            critical: '🔴'
+        };
+
+        indicator.textContent = icons[quality] || '⚪';
+        indicator.title = `Connection: ${quality}`;
+    }
+
+    // ============================================
+    // PREEMPTIVE RECONNECTION (HYPER-RELIABLE)
+    // ============================================
+
+    let preemptiveReconnectTimer = null;
+    let lastIceRestartTime = 0;
+    let consecutiveCriticalQuality = 0;
+
+    function startPreemptiveReconnection() {
+        if (preemptiveReconnectTimer) {
+            clearInterval(preemptiveReconnectTimer);
+        }
+
+        console.log('[RECONNECT] 🔄 Starting hyper-reliable preemptive reconnection monitoring...');
+
+        preemptiveReconnectTimer = setInterval(async () => {
+            if (!peerConnection) return;
+
+            const quality = await calculateConnectionQuality();
+            const now = Date.now();
+
+            // Track consecutive critical quality
+            if (quality.score < 0.3) {
+                consecutiveCriticalQuality++;
+            } else {
+                consecutiveCriticalQuality = 0;
+            }
+
+            // AGGRESSIVE: Trigger ICE restart if quality < 0.3 for 3 checks (6 seconds)
+            if (quality.score < 0.3 && consecutiveCriticalQuality >= 3) {
+                const timeSinceLastRestart = now - lastIceRestartTime;
+
+                // Don't restart too frequently (minimum 10s between restarts)
+                if (timeSinceLastRestart > 10000) {
+                    console.warn('[RECONNECT] ⚠️  POOR QUALITY DETECTED!');
+                    console.warn(`[RECONNECT] Quality: ${quality.quality} (score: ${quality.score.toFixed(2)})`);
+                    console.warn(`[RECONNECT] Packet Loss: ${(quality.packetLoss * 100).toFixed(1)}%, RTT: ${quality.rtt.toFixed(0)}ms, Jitter: ${quality.jitter.toFixed(1)}ms`);
+                    console.warn('[RECONNECT] 🔄 Triggering PREEMPTIVE ICE RESTART...');
+
+                    if (peerConnection.restartIce) {
+                        peerConnection.restartIce();
+                        lastIceRestartTime = now;
+                        consecutiveCriticalQuality = 0;
+
+                        showSubtitle('Connection', 'Reconnecting to improve quality...', false);
+
+                        // If still bad after 5 seconds, try full reconnection
+                        setTimeout(async () => {
+                            const recheckQuality = await calculateConnectionQuality();
+                            if (recheckQuality.score < 0.2) {
+                                console.error('[RECONNECT] ❌ ICE restart did not help, quality still critical');
+                                console.error(`[RECONNECT] Attempting FULL RECONNECTION...`);
+                                attemptReconnection();
+                            } else {
+                                console.log('[RECONNECT] ✅ ICE restart successful, quality improved to', recheckQuality.quality);
+                            }
+                        }, 5000);
+                    }
+                } else {
+                    console.log(`[RECONNECT] ⏳ Waiting before next restart (${((10000 - timeSinceLastRestart) / 1000).toFixed(0)}s)`);
+                }
+            }
+
+            // CRITICAL: If quality is extremely bad (< 0.2) and getting worse
+            if (quality.score < 0.2 && consecutiveBadQuality >= 4) {
+                console.error('[RECONNECT] 🚨 CRITICAL QUALITY - Immediate full reconnection!');
+                attemptReconnection();
+                consecutiveBadQuality = 0;
+                consecutiveCriticalQuality = 0;
+            }
+
+        }, 2000); // Check every 2 seconds
+    }
+
+    function stopPreemptiveReconnection() {
+        if (preemptiveReconnectTimer) {
+            clearInterval(preemptiveReconnectTimer);
+            preemptiveReconnectTimer = null;
+            console.log('[RECONNECT] 🛑 Preemptive reconnection monitoring stopped');
+        }
+    }
+
+    // ============================================
+    // DYNACAST - DYNAMIC TRACK MANAGEMENT
+    // ============================================
+
+    // Check if participant video tile is visible on screen
+    function isParticipantVisible(participantId) {
+        const participant = participants.get(participantId);
+        if (!participant || !participant.tile) return false;
+
+        const rect = participant.tile.getBoundingClientRect();
+        const windowHeight = window.innerHeight || document.documentElement.clientHeight;
+        const windowWidth = window.innerWidth || document.documentElement.clientWidth;
+
+        // Check if tile is in viewport
+        const isVisible = (
+            rect.top >= 0 &&
+            rect.left >= 0 &&
+            rect.bottom <= windowHeight &&
+            rect.right <= windowWidth
+        );
+
+        return isVisible;
+    }
+
+    // Manage track subscriptions based on visibility
+    function updateTrackSubscriptions() {
+        if (!peerConnection) return;
+
+        participants.forEach((participant, participantId) => {
+            const isVisible = isParticipantVisible(participantId);
+            const wasVisible = participantVisibility.get(participantId) || false;
+
+            // State changed
+            if (isVisible !== wasVisible) {
+                participantVisibility.set(participantId, isVisible);
+
+                // Find video element
+                if (participant.videoElement && participant.videoElement.srcObject) {
+                    const stream = participant.videoElement.srcObject;
+                    const videoTracks = stream.getVideoTracks();
+
+                    videoTracks.forEach(track => {
+                        if (!isVisible) {
+                            // Participant scrolled out of view - disable video track to save bandwidth
+                            track.enabled = false;
+                            console.log(`[DYNACAST] 📴 Disabled video for ${participant.name} (not visible)`);
+                        } else {
+                            // Participant back in view - enable video track
+                            track.enabled = true;
+                            console.log(`[DYNACAST] 📺 Enabled video for ${participant.name} (visible)`);
+                        }
+                    });
+                }
+            }
+        });
+    }
+
+    // Start dynacast monitoring
+    function startDynacast() {
+        if (visibilityCheckInterval) {
+            clearInterval(visibilityCheckInterval);
+        }
+
+        console.log('[DYNACAST] 🎯 Starting dynamic track management...');
+
+        // Check visibility every 500ms
+        visibilityCheckInterval = setInterval(() => {
+            updateTrackSubscriptions();
+        }, 500);
+
+        // Also check on scroll/resize
+        window.addEventListener('scroll', updateTrackSubscriptions);
+        window.addEventListener('resize', updateTrackSubscriptions);
+        participantsGrid.addEventListener('scroll', updateTrackSubscriptions);
+    }
+
+    function stopDynacast() {
+        if (visibilityCheckInterval) {
+            clearInterval(visibilityCheckInterval);
+            visibilityCheckInterval = null;
+            console.log('[DYNACAST] 🛑 Dynamic track management stopped');
+        }
+
+        window.removeEventListener('scroll', updateTrackSubscriptions);
+        window.removeEventListener('resize', updateTrackSubscriptions);
+        participantsGrid.removeEventListener('scroll', updateTrackSubscriptions);
+    }
+
+    // Attempt reconnection with exponential backoff
+    async function attemptReconnection() {
+        if (reconnectAttempts >= maxReconnectAttempts) {
+            console.error('[GROUP-CALL] ❌ Max reconnect attempts reached');
+            showSubtitle('Connection Lost', 'Unable to reconnect. Please refresh.', false);
+            return;
+        }
+
+        reconnectAttempts++;
+        const delay = Math.min(1000 * Math.pow(1.5, reconnectAttempts - 1), 5000);
+        console.log(`[GROUP-CALL] 🔄 Reconnecting in ${delay}ms (attempt ${reconnectAttempts}/${maxReconnectAttempts})`);
+
+        await new Promise(resolve => setTimeout(resolve, delay));
+
+        try {
+            // Close old connection
+            if (peerConnection) {
+                peerConnection.close();
+            }
+
+            // Recreate peer connection
+            initPeerConnection();
+
+            // Create new offer
+            const offer = await peerConnection.createOffer({
+                offerToReceiveAudio: true,
+                offerToReceiveVideo: true,
+                iceRestart: true
+            });
+            await peerConnection.setLocalDescription(offer);
+
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({
+                    type: 'offer',
+                    data: JSON.stringify(offer)
+                }));
+                console.log('[GROUP-CALL] ✅ Reconnection offer sent');
+            } else {
+                console.error('[GROUP-CALL] ❌ WebSocket not ready for reconnection');
+                // Reconnect WebSocket too
+                connectToSFU();
+            }
+        } catch (err) {
+            console.error('[GROUP-CALL] ❌ Reconnection failed:', err);
+            attemptReconnection(); // Retry
+        }
     }
 
     // Connect to SFU via WebSocket
@@ -199,22 +920,35 @@ document.addEventListener('DOMContentLoaded', async () => {
         socket = new WebSocket(wsUrl);
 
         socket.onopen = async () => {
-            console.log('[GROUP-CALL] WebSocket connected');
+            console.log('[GROUP-CALL] ✅ WebSocket connected');
 
-            // Initialize peer connection and create offer
+            // Initialize peer connection WITH local tracks
             initPeerConnection();
 
+            // CLIENT creates offer with tracks, SFU will answer
+            console.log('[GROUP-CALL] 🔄 Creating offer with local tracks...');
             try {
-                const offer = await peerConnection.createOffer();
+                const offer = await peerConnection.createOffer({
+                    offerToReceiveAudio: true,
+                    offerToReceiveVideo: true
+                });
                 await peerConnection.setLocalDescription(offer);
 
+                console.log('[GROUP-CALL] 📤 Sending offer to SFU with', peerConnection.getSenders().length, 'tracks');
                 socket.send(JSON.stringify({
                     type: 'offer',
                     data: JSON.stringify(offer)
                 }));
-                console.log('[GROUP-CALL] Sent offer to SFU');
+
+                // Start quality monitoring, preemptive reconnection, and dynacast
+                setTimeout(() => {
+                    startQualityMonitoring();
+                    startPreemptiveReconnection();
+                    startDynacast();
+                }, 3000); // Wait 3s for connection to establish
+
             } catch (err) {
-                console.error('[GROUP-CALL] Failed to create offer:', err);
+                console.error('[GROUP-CALL] ❌ Failed to create/send offer:', err);
             }
         };
 
@@ -283,8 +1017,19 @@ document.addEventListener('DOMContentLoaded', async () => {
             case 'ice-candidate':
                 // SFU sent ICE candidate
                 const candidate = typeof message.data === 'string' ? JSON.parse(message.data) : message.data;
-                await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
-                console.log('[GROUP-CALL] Added ICE candidate');
+
+                // Check if we have remote description set
+                if (!peerConnection.remoteDescription) {
+                    console.log('[GROUP-CALL] 🧊 Queueing ICE candidate (no remote description yet)');
+                    pendingIceCandidates.push(candidate);
+                } else {
+                    try {
+                        await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+                        console.log('[GROUP-CALL] ✅ Added ICE candidate');
+                    } catch (err) {
+                        console.error('[GROUP-CALL] ❌ Failed to add ICE candidate:', err);
+                    }
+                }
                 break;
 
             case 'participants-list':
@@ -312,19 +1057,40 @@ document.addEventListener('DOMContentLoaded', async () => {
                 break;
 
             case 'offer':
-                // SFU sent us a new offer (renegotiation)
-                const renegotiationOffer = typeof message.data === 'string' ? JSON.parse(message.data) : message.data;
-                console.log('[GROUP-CALL] 🔄 Received renegotiation offer');
+                // SFU sent us an offer (initial or renegotiation)
+                const offer = typeof message.data === 'string' ? JSON.parse(message.data) : message.data;
+                console.log('[GROUP-CALL] 📥 Received offer from SFU');
+                console.log('[GROUP-CALL] 📊 Current signaling state:', peerConnection.signalingState);
 
-                await peerConnection.setRemoteDescription(new RTCSessionDescription(renegotiationOffer));
-                const renegotiationAnswer = await peerConnection.createAnswer();
-                await peerConnection.setLocalDescription(renegotiationAnswer);
+                try {
+                    await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+                    console.log('[GROUP-CALL] ✅ Set remote description (offer)');
 
-                socket.send(JSON.stringify({
-                    type: 'answer',
-                    data: JSON.stringify(renegotiationAnswer)
-                }));
-                console.log('[GROUP-CALL] ✅ Sent renegotiation answer');
+                    // Add any pending ICE candidates
+                    if (pendingIceCandidates.length > 0) {
+                        console.log('[GROUP-CALL] 🧊 Adding', pendingIceCandidates.length, 'pending ICE candidates');
+                        for (const candidate of pendingIceCandidates) {
+                            try {
+                                await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+                                console.log('[GROUP-CALL] ✅ Added pending ICE candidate');
+                            } catch (err) {
+                                console.error('[GROUP-CALL] ❌ Failed to add pending ICE candidate:', err);
+                            }
+                        }
+                        pendingIceCandidates = []; // Clear the queue
+                    }
+
+                    const answer = await peerConnection.createAnswer();
+                    await peerConnection.setLocalDescription(answer);
+
+                    socket.send(JSON.stringify({
+                        type: 'answer',
+                        data: JSON.stringify(answer)
+                    }));
+                    console.log('[GROUP-CALL] ✅ Sent answer to SFU');
+                } catch (err) {
+                    console.error('[GROUP-CALL] ❌ Failed to handle offer:', err);
+                }
                 break;
 
             case 'track-published':
@@ -344,7 +1110,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     const isGif = chatData.text.startsWith('[GIF]');
                     const displayText = isGif ? chatData.text.substring(5) : chatData.text;
 
-                    appendMessage(chatData.text, 'received', chatData.from, chatData.fromName, isPrivate);
+                    appendMessage(chatData.text, 'received', chatData.from, chatData.fromName, isPrivate, chatData.replyTo);
 
                     // Show cinematic subtitle if chat is not visible (video-only view)
                     if (!isChatVisible && !isPrivate) {
@@ -358,6 +1124,81 @@ document.addEventListener('DOMContentLoaded', async () => {
                         chatBadge.style.display = 'block';
                     }
                 }
+                break;
+
+            case 'reaction':
+                // Reaction received from another participant
+                const reactionData = typeof message.data === 'string' ? JSON.parse(message.data) : message.data;
+                console.log('[REACTIONS] Received reaction:', reactionData.emoji, 'from', reactionData.user_name);
+                createFlyingReaction(reactionData.emoji);
+                break;
+
+            case 'raise_hand':
+                // Raise hand notification from another participant
+                const handData = typeof message.data === 'string' ? JSON.parse(message.data) : message.data;
+                console.log('[RAISE-HAND] Received from', handData.user_name, ':', handData.raised);
+                updateRaisedHandIndicator(handData.user_name, handData.raised);
+                break;
+
+            case 'message_reaction':
+                // Message reaction received from another participant
+                const msgReactionData = typeof message.data === 'string' ? JSON.parse(message.data) : message.data;
+                console.log('[MESSAGE-REACTIONS] Received:', msgReactionData.emoji, 'for message:', msgReactionData.message_id);
+
+                // Update local state
+                if (!messageReactions.has(msgReactionData.message_id)) {
+                    messageReactions.set(msgReactionData.message_id, {});
+                }
+                const reactions = messageReactions.get(msgReactionData.message_id);
+                reactions[msgReactionData.emoji] = (reactions[msgReactionData.emoji] || 0) + 1;
+
+                // Update UI
+                updateMessageReactionsUI(msgReactionData.message_id);
+                break;
+
+            case 'host-mute-request':
+                // Host requested to mute our media
+                const muteRequest = typeof message.data === 'string' ? JSON.parse(message.data) : message.data;
+                console.log('[GROUP-CALL] 🔇 Host requested to mute:', muteRequest.mediaType);
+
+                if (muteRequest.mediaType === 'audio' && localStream) {
+                    const audioTrack = localStream.getAudioTracks()[0];
+                    if (audioTrack && audioTrack.enabled) {
+                        audioTrack.enabled = false;
+                        micBtn.dataset.active = 'false';
+                        micBtn.querySelector('.icon-on').style.display = 'none';
+                        micBtn.querySelector('.icon-off').style.display = 'block';
+                        localMicIndicator.classList.remove('active');
+                        console.log('[GROUP-CALL] Microphone muted by host');
+
+                        // Show notification
+                        showSubtitle('Host', 'Your microphone has been muted', false);
+                    }
+                } else if (muteRequest.mediaType === 'video' && localStream) {
+                    const videoTrack = localStream.getVideoTracks()[0];
+                    if (videoTrack && videoTrack.enabled) {
+                        videoTrack.enabled = false;
+                        cameraBtn.dataset.active = 'false';
+                        cameraBtn.querySelector('.icon-on').style.display = 'none';
+                        cameraBtn.querySelector('.icon-off').style.display = 'block';
+                        console.log('[GROUP-CALL] Camera disabled by host');
+
+                        // Show notification
+                        showSubtitle('Host', 'Your camera has been disabled', false);
+                    }
+                }
+                break;
+
+            case 'error':
+                // Server validation error
+                const errorMsg = message.error || 'An error occurred';
+                console.error('[GROUP-CALL] ❌ Server error:', errorMsg);
+
+                // Show error notification to user
+                showSubtitle('Error', errorMsg, false);
+
+                // Also log to console with details
+                console.error('[GROUP-CALL] Error details:', message);
                 break;
 
             default:
@@ -374,7 +1215,11 @@ document.addEventListener('DOMContentLoaded', async () => {
     const sendMessageBtn = document.getElementById('sendMessageBtn');
     const recipientSelect = document.getElementById('recipientSelect');
 
-    function appendMessage(text, type, fromId, fromName, isPrivate) {
+    // Track message reactions
+    const messageReactions = new Map(); // messageId -> {emoji -> count}
+    let messageIdCounter = 0;
+
+    function appendMessage(text, type, fromId, fromName, isPrivate, replyTo = null) {
         if (chatEmpty) {
             chatEmpty.style.display = 'none';
         }
@@ -385,38 +1230,276 @@ document.addEventListener('DOMContentLoaded', async () => {
             messageDiv.classList.add('private');
         }
 
-        // Add header if received message
+        // Generate unique message ID
+        const messageId = `msg_${messageIdCounter++}_${Date.now()}`;
+        messageDiv.dataset.messageId = messageId;
+        messageDiv.dataset.fromId = fromId;
+        messageDiv.dataset.fromName = fromName || 'You';
+
+        // Add header with sender and time
         if (type === 'received') {
             const header = document.createElement('div');
             header.className = 'message-header';
-            header.textContent = fromName || `Participant ${fromId}`;
+
+            const sender = document.createElement('span');
+            sender.className = 'message-sender';
+            sender.textContent = fromName || `Participant ${fromId}`;
+            header.appendChild(sender);
+
             if (isPrivate) {
                 const badge = document.createElement('span');
                 badge.className = 'message-private-badge';
-                badge.textContent = 'PRIVATE';
+                badge.textContent = 'Private';
                 header.appendChild(badge);
             }
+
+            const time = document.createElement('span');
+            time.className = 'message-time';
+            const now = new Date();
+            time.textContent = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit' });
+            header.appendChild(time);
+
             messageDiv.appendChild(header);
         }
 
+        // Create message bubble
+        const bubble = document.createElement('div');
+        bubble.className = 'message-bubble';
+
+        // Add reply/quote if exists
+        if (replyTo && replyTo.messageId) {
+            const replyDiv = document.createElement('div');
+            replyDiv.className = 'message-reply';
+
+            const replySender = document.createElement('div');
+            replySender.className = 'message-reply-sender';
+            replySender.textContent = replyTo.senderName || 'Someone';
+            replyDiv.appendChild(replySender);
+
+            const replyText = document.createElement('div');
+            replyText.className = 'message-reply-text';
+            replyText.textContent = replyTo.text || '';
+            replyDiv.appendChild(replyText);
+
+            bubble.appendChild(replyDiv);
+        }
+
+        // Message content
         const content = document.createElement('div');
+        content.className = 'message-content';
 
         // Check if message is a GIF
         if (text.startsWith('[GIF]')) {
-            const gifUrl = text.substring(5); // Remove [GIF] prefix
+            const gifUrl = text.substring(5);
             const img = document.createElement('img');
             img.src = gifUrl;
             img.alt = 'GIF';
             img.loading = 'lazy';
+            img.style.maxWidth = '240px';
+            img.style.maxHeight = '240px';
+            img.style.borderRadius = '12px';
+            img.style.marginTop = '4px';
             content.appendChild(img);
         } else {
             content.textContent = text;
         }
 
-        messageDiv.appendChild(content);
+        bubble.appendChild(content);
+        messageDiv.appendChild(bubble);
+
+        // Add reactions container
+        const reactionsContainer = document.createElement('div');
+        reactionsContainer.className = 'message-reactions';
+        messageDiv.appendChild(reactionsContainer);
+
+        // Add message actions (reply, react)
+        const actionsDiv = document.createElement('div');
+        actionsDiv.className = 'message-actions';
+
+        const replyBtn = document.createElement('button');
+        replyBtn.className = 'message-action-btn';
+        replyBtn.innerHTML = '↩️ Reply';
+        replyBtn.onclick = () => setReplyTo(messageId, fromName || 'You', text);
+        actionsDiv.appendChild(replyBtn);
+
+        const reactBtn = document.createElement('button');
+        reactBtn.className = 'message-action-btn';
+        reactBtn.innerHTML = '❤️ React';
+        reactBtn.onclick = (e) => {
+            e.stopPropagation();
+            showMessageReactionPicker(messageId, reactBtn);
+        };
+        actionsDiv.appendChild(reactBtn);
+
+        messageDiv.appendChild(actionsDiv);
 
         chatMessages.appendChild(messageDiv);
         chatMessages.scrollTop = chatMessages.scrollHeight;
+
+        // Store message data for replies
+        messageDiv.dataset.text = text.startsWith('[GIF]') ? 'GIF' : text;
+
+        return messageId;
+    }
+
+    // Show quick reaction picker for a message
+    function showMessageReactionPicker(messageId, buttonElement) {
+        // Remove any existing picker
+        const existingPicker = document.querySelector('.message-reaction-picker');
+        if (existingPicker) existingPicker.remove();
+
+        const picker = document.createElement('div');
+        picker.className = 'message-reaction-picker';
+
+        const quickEmojis = ['👍', '❤️', '😂', '😮', '😢', '🔥'];
+        quickEmojis.forEach(emoji => {
+            const btn = document.createElement('button');
+            btn.className = 'message-reaction-option';
+            btn.textContent = emoji;
+            btn.addEventListener('click', () => {
+                addMessageReaction(messageId, emoji);
+                picker.remove();
+            });
+            picker.appendChild(btn);
+        });
+
+        // Position picker near button
+        const rect = buttonElement.getBoundingClientRect();
+        picker.style.position = 'fixed';
+        picker.style.top = (rect.top - 50) + 'px';
+        picker.style.left = rect.left + 'px';
+
+        document.body.appendChild(picker);
+
+        // Close picker when clicking outside
+        setTimeout(() => {
+            document.addEventListener('click', function closePicker(e) {
+                if (!picker.contains(e.target) && e.target !== buttonElement) {
+                    picker.remove();
+                    document.removeEventListener('click', closePicker);
+                }
+            });
+        }, 10);
+    }
+
+    // Add reaction to a message
+    function addMessageReaction(messageId, emoji) {
+        console.log('[MESSAGE-REACTIONS] Adding reaction:', emoji, 'to message:', messageId);
+
+        // Client-side validation
+        if (!messageId || messageId.length > 100) {
+            console.error('[MESSAGE-REACTIONS] Invalid message ID');
+            showSubtitle('Error', 'Invalid message ID', false);
+            return;
+        }
+
+        if (!emoji || emoji.length > 20) {
+            console.error('[MESSAGE-REACTIONS] Invalid emoji');
+            showSubtitle('Error', 'Invalid emoji', false);
+            return;
+        }
+
+        // Validate message ID format
+        if (!messageId.startsWith('msg_')) {
+            console.error('[MESSAGE-REACTIONS] Invalid message ID format');
+            showSubtitle('Error', 'Invalid message format', false);
+            return;
+        }
+
+        // Update local state
+        if (!messageReactions.has(messageId)) {
+            messageReactions.set(messageId, {});
+        }
+        const reactions = messageReactions.get(messageId);
+        reactions[emoji] = (reactions[emoji] || 0) + 1;
+
+        // Update UI
+        updateMessageReactionsUI(messageId);
+
+        // Broadcast to other participants
+        if (socket && socket.readyState === WebSocket.OPEN) {
+            socket.send(JSON.stringify({
+                type: 'message_reaction',
+                room_id: roomID,
+                message_id: messageId,
+                emoji: emoji,
+                user_name: userName
+            }));
+        } else {
+            console.error('[MESSAGE-REACTIONS] Socket not ready');
+            showSubtitle('Error', 'Connection not ready', false);
+        }
+    }
+
+    // Update message reactions UI
+    function updateMessageReactionsUI(messageId) {
+        const messageDiv = document.querySelector(`[data-message-id="${messageId}"]`);
+        if (!messageDiv) return;
+
+        const reactionsContainer = messageDiv.querySelector('.message-reactions');
+        if (!reactionsContainer) return;
+
+        reactionsContainer.innerHTML = '';
+
+        const reactions = messageReactions.get(messageId);
+        if (!reactions) return;
+
+        Object.entries(reactions).forEach(([emoji, count]) => {
+            const reactionItem = document.createElement('div');
+            reactionItem.className = 'reaction-item';
+
+            const reactionEmoji = document.createElement('span');
+            reactionEmoji.className = 'reaction-emoji';
+            reactionEmoji.textContent = emoji;
+            reactionItem.appendChild(reactionEmoji);
+
+            const reactionCount = document.createElement('span');
+            reactionCount.className = 'reaction-count';
+            reactionCount.textContent = count;
+            reactionItem.appendChild(reactionCount);
+
+            reactionItem.addEventListener('click', () => {
+                addMessageReaction(messageId, emoji);
+            });
+
+            reactionsContainer.appendChild(reactionItem);
+        });
+    }
+
+    // Reply functionality
+    let currentReplyTo = null;
+
+    function setReplyTo(messageId, senderName, text) {
+        currentReplyTo = { messageId, senderName, text };
+
+        const replyPreview = document.getElementById('replyPreview');
+        const replyToName = document.getElementById('replyToName');
+        const replyToText = document.getElementById('replyToText');
+
+        if (replyPreview && replyToName && replyToText) {
+            replyToName.textContent = senderName;
+            replyToText.textContent = text.length > 50 ? text.substring(0, 50) + '...' : text;
+            replyPreview.style.display = 'flex';
+        }
+
+        // Focus input
+        if (messageInput) {
+            messageInput.focus();
+        }
+    }
+
+    function clearReplyTo() {
+        currentReplyTo = null;
+        const replyPreview = document.getElementById('replyPreview');
+        if (replyPreview) {
+            replyPreview.style.display = 'none';
+        }
+    }
+
+    // Reply preview close button
+    const replyPreviewClose = document.getElementById('replyPreviewClose');
+    if (replyPreviewClose) {
+        replyPreviewClose.addEventListener('click', clearReplyTo);
     }
 
     function sendMessage(textOverride = null) {
@@ -430,9 +1513,29 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
+        // Client-side validation
+        const isGif = text.startsWith('[GIF]');
+        const maxLength = isGif ? 2000 : 5000;
+
+        if (text.length > maxLength) {
+            console.error('[GROUP-CALL] Message too long:', text.length);
+            showSubtitle('Error', `Message too long (max ${maxLength} characters)`, false);
+            return;
+        }
+
+        // Validate GIF URL
+        if (isGif) {
+            const gifUrl = text.substring(5);
+            if (!gifUrl.startsWith('https://')) {
+                console.error('[GROUP-CALL] Invalid GIF URL');
+                showSubtitle('Error', 'Invalid GIF URL: must use HTTPS', false);
+                return;
+            }
+        }
+
         if (!socket || socket.readyState !== WebSocket.OPEN) {
             console.error('[GROUP-CALL] Cannot send message, socket not ready. State:', socket?.readyState);
-            alert('Connection not ready. Please wait...');
+            showSubtitle('Error', 'Connection not ready. Please wait...', false);
             return;
         }
 
@@ -448,7 +1551,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     text: text,
                     to: recipient,
                     from: myParticipantId,
-                    fromName: myName
+                    fromName: myName,
+                    replyTo: currentReplyTo // Include reply data
                 })
             };
 
@@ -460,11 +1564,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             const recipientName = isPrivate ? recipientSelect.options[recipientSelect.selectedIndex].text : null;
 
             const displayText = isPrivate ? `To ${recipientName}: ${text}` : text;
-            appendMessage(displayText, 'sent', myParticipantId, myName, isPrivate);
+            appendMessage(displayText, 'sent', myParticipantId, myName, isPrivate, currentReplyTo);
 
             if (!textOverride) {
                 messageInput.value = '';
             }
+
+            // Clear reply after sending
+            clearReplyTo();
         } catch (error) {
             console.error('[GROUP-CALL] ❌ Failed to send message:', error);
             alert('Failed to send message. Please try again.');
@@ -486,7 +1593,10 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Add participant tile to grid
     function addParticipantTile(participantId, participantName) {
+        console.log('[GROUP-CALL] 👤 Adding participant tile:', participantName, 'ID:', participantId);
+
         if (participants.has(participantId)) {
+            console.log('[GROUP-CALL] ⚠️ Participant already exists:', participantId);
             return; // Already exists
         }
 
@@ -497,6 +1607,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         const video = document.createElement('video');
         video.autoplay = true;
         video.playsinline = true;
+        video.muted = false; // Remote video should NOT be muted
         video.id = `video-${participantId}`;
 
         const speakingIndicator = document.createElement('div');
@@ -519,6 +1630,43 @@ document.addEventListener('DOMContentLoaded', async () => {
         micIndicator.className = 'mic-indicator active';
         status.appendChild(micIndicator);
 
+        // Add host controls if current user is host
+        const isHost = sessionStorage.getItem('isHost') === 'true';
+        if (isHost) {
+            const hostControls = document.createElement('div');
+            hostControls.className = 'host-controls';
+
+            const muteMicBtn = document.createElement('button');
+            muteMicBtn.className = 'host-control-btn mute-mic-btn';
+            muteMicBtn.title = 'Mute microphone';
+            muteMicBtn.innerHTML = `
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19 11h-1.7c0 .74-.16 1.43-.43 2.05l1.23 1.23c.56-.98.9-2.09.9-3.28zm-4.02.17c0-.06.02-.11.02-.17V5c0-1.66-1.34-3-3-3S9 3.34 9 5v.18l5.98 5.99zM4.27 3L3 4.27l6.01 6.01V11c0 1.66 1.33 3 2.99 3 .22 0 .44-.03.65-.08l1.66 1.66c-.71.33-1.5.52-2.31.52-2.76 0-5.3-2.1-5.3-5.1H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c.91-.13 1.77-.45 2.54-.9L19.73 21 21 19.73 4.27 3z"/>
+                </svg>
+            `;
+            muteMicBtn.onclick = (e) => {
+                e.stopPropagation();
+                requestMuteParticipant(participantId, 'audio');
+            };
+
+            const muteVideoBtn = document.createElement('button');
+            muteVideoBtn.className = 'host-control-btn mute-video-btn';
+            muteVideoBtn.title = 'Disable camera';
+            muteVideoBtn.innerHTML = `
+                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M21 6.5l-4 4V7c0-.55-.45-1-1-1H9.82L21 17.18V6.5zM3.27 2L2 3.27 4.73 6H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.21 0 .39-.08.54-.18L19.73 21 21 19.73 3.27 2z"/>
+                </svg>
+            `;
+            muteVideoBtn.onclick = (e) => {
+                e.stopPropagation();
+                requestMuteParticipant(participantId, 'video');
+            };
+
+            hostControls.appendChild(muteMicBtn);
+            hostControls.appendChild(muteVideoBtn);
+            tile.appendChild(hostControls);
+        }
+
         tile.appendChild(video);
         tile.appendChild(speakingIndicator);
         tile.appendChild(name);
@@ -532,8 +1680,41 @@ document.addEventListener('DOMContentLoaded', async () => {
             tile: tile
         });
 
+        console.log('[GROUP-CALL] 👤 Participant stored. Total participants:', participants.size);
+
+        // Check if there's an orphan stream waiting for this participant
+        if (orphanStreams.has(participantId)) {
+            const stream = orphanStreams.get(participantId);
+            console.log('[GROUP-CALL] 📺 Found orphan stream for:', participantName, 'tracks:', stream.getTracks().length);
+            video.srcObject = stream;
+            video.playsInline = true;
+            video.muted = false;
+            orphanStreams.delete(participantId);
+            console.log('[GROUP-CALL] ✅ Attached orphan stream to participant:', participantName);
+
+            // Force play with mobile-friendly approach
+            const tryPlay = () => {
+                video.play()
+                    .then(() => console.log('[GROUP-CALL] ✅ Orphan video playing for', participantName))
+                    .catch(e => {
+                        console.error('[GROUP-CALL] ❌ Orphan video play failed:', e);
+                        const playOnInteraction = () => {
+                            video.play().catch(() => {});
+                            document.removeEventListener('touchstart', playOnInteraction);
+                            document.removeEventListener('click', playOnInteraction);
+                        };
+                        document.addEventListener('touchstart', playOnInteraction, { once: true });
+                        document.addEventListener('click', playOnInteraction, { once: true });
+                    });
+            };
+            setTimeout(tryPlay, 100);
+            setTimeout(tryPlay, 500);
+        } else {
+            console.log('[GROUP-CALL] ℹ️ No orphan stream yet for:', participantName);
+        }
+
         updateGridLayout();
-        console.log('[GROUP-CALL] Added participant:', participantName);
+        console.log('[GROUP-CALL] ✅ Added participant tile:', participantName);
     }
 
     function addParticipantTileEnhanced(participantId, participantName) {
@@ -583,40 +1764,221 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // Toggle camera
-    function toggleCamera() {
-        if (localStream) {
+    async function toggleCamera() {
+        if (!localStream || localStream.getVideoTracks().length === 0) {
+            // Camera is off - need to request it
+            try {
+                const cameraId = sessionStorage.getItem('cameraId');
+                const videoStream = await navigator.mediaDevices.getUserMedia({
+                    video: {
+                        deviceId: cameraId ? { exact: cameraId } : undefined,
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    }
+                });
+
+                const videoTrack = videoStream.getVideoTracks()[0];
+                localVideo.srcObject = videoStream;
+
+                // Add track to peer connection and trigger renegotiation
+                if (peerConnection) {
+                    const sender = peerConnection.addTrack(videoTrack, videoStream);
+                    console.log('[GROUP-CALL] 📹 Added video track to peer connection, sender:', sender);
+
+                    // Create new offer with video track
+                    try {
+                        const offer = await peerConnection.createOffer();
+                        await peerConnection.setLocalDescription(offer);
+
+                        socket.send(JSON.stringify({
+                            type: 'offer',
+                            data: JSON.stringify(offer)
+                        }));
+                        console.log('[GROUP-CALL] 📤 Sent renegotiation offer with video track');
+                    } catch (err) {
+                        console.error('[GROUP-CALL] ❌ Failed to renegotiate:', err);
+                    }
+                }
+
+                // Merge streams
+                if (!localStream) {
+                    localStream = videoStream;
+                } else {
+                    localStream.addTrack(videoTrack);
+                }
+
+                isCameraOn = true;
+                cameraBtn.dataset.active = 'true';
+                cameraBtn.querySelector('.icon-on').style.display = 'block';
+                cameraBtn.querySelector('.icon-off').style.display = 'none';
+                console.log('[GROUP-CALL] ✅ Camera turned ON');
+            } catch (err) {
+                console.error('[GROUP-CALL] ❌ Failed to turn on camera:', err);
+                alert('Failed to access camera');
+            }
+        } else {
+            // Camera is on - toggle it
             const videoTrack = localStream.getVideoTracks()[0];
             if (videoTrack) {
                 videoTrack.enabled = !videoTrack.enabled;
                 isCameraOn = videoTrack.enabled;
-                cameraBtn.setAttribute('data-active', isCameraOn.toString());
+                cameraBtn.dataset.active = isCameraOn.toString();
+                cameraBtn.querySelector('.icon-on').style.display = isCameraOn ? 'block' : 'none';
+                cameraBtn.querySelector('.icon-off').style.display = isCameraOn ? 'none' : 'block';
             }
         }
     }
 
     // Toggle microphone
-    function toggleMic() {
-        if (localStream) {
+    async function toggleMic() {
+        if (!localStream || localStream.getAudioTracks().length === 0) {
+            // Mic is off - need to request it
+            try {
+                const microphoneId = sessionStorage.getItem('microphoneId');
+                const audioStream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        deviceId: microphoneId ? { exact: microphoneId } : undefined,
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    }
+                });
+
+                const audioTrack = audioStream.getAudioTracks()[0];
+
+                // Add track to peer connection and trigger renegotiation
+                if (peerConnection) {
+                    const sender = peerConnection.addTrack(audioTrack, audioStream);
+                    console.log('[GROUP-CALL] 🎤 Added audio track to peer connection, sender:', sender);
+
+                    // Create new offer with audio track
+                    try {
+                        const offer = await peerConnection.createOffer();
+                        await peerConnection.setLocalDescription(offer);
+
+                        socket.send(JSON.stringify({
+                            type: 'offer',
+                            data: JSON.stringify(offer)
+                        }));
+                        console.log('[GROUP-CALL] 📤 Sent renegotiation offer with audio track');
+                    } catch (err) {
+                        console.error('[GROUP-CALL] ❌ Failed to renegotiate:', err);
+                    }
+                }
+
+                // Merge streams
+                if (!localStream) {
+                    localStream = audioStream;
+                } else {
+                    localStream.addTrack(audioTrack);
+                }
+
+                isMicOn = true;
+                micBtn.dataset.active = 'true';
+                micBtn.querySelector('.icon-on').style.display = 'block';
+                micBtn.querySelector('.icon-off').style.display = 'none';
+                console.log('[GROUP-CALL] ✅ Microphone turned ON');
+            } catch (err) {
+                console.error('[GROUP-CALL] ❌ Failed to turn on microphone:', err);
+                alert('Failed to access microphone');
+            }
+        } else {
+            // Mic is on - toggle it
             const audioTrack = localStream.getAudioTracks()[0];
             if (audioTrack) {
                 audioTrack.enabled = !audioTrack.enabled;
                 isMicOn = audioTrack.enabled;
-                micBtn.setAttribute('data-active', isMicOn.toString());
+                micBtn.dataset.active = isMicOn.toString();
+                micBtn.querySelector('.icon-on').style.display = isMicOn ? 'block' : 'none';
+                micBtn.querySelector('.icon-off').style.display = isMicOn ? 'none' : 'block';
             }
         }
     }
 
-    // End call
-    function endCall() {
+    // Cleanup function - thoroughly clean up all resources
+    function cleanupCall() {
+        console.log('[GROUP-CALL] 🧹 Cleaning up call resources...');
+
+        // Stop monitoring
+        stopQualityMonitoring();
+        stopPreemptiveReconnection();
+        stopDynacast();
+
+        // Stop all local tracks
+        if (localStream) {
+            localStream.getTracks().forEach(track => {
+                track.stop();
+                console.log('[GROUP-CALL] 🛑 Stopped local track:', track.kind);
+            });
+            localStream = null;
+        }
+
+        // Close peer connection
+        if (peerConnection) {
+            peerConnection.getSenders().forEach(sender => {
+                if (sender.track) {
+                    sender.track.stop();
+                }
+            });
+            peerConnection.close();
+            peerConnection = null;
+            console.log('[GROUP-CALL] 🛑 Closed peer connection');
+        }
+
+        // Close WebSocket
         if (socket) {
             socket.close();
+            socket = null;
+            console.log('[GROUP-CALL] 🛑 Closed WebSocket');
         }
-        if (peerConnection) {
-            peerConnection.close();
+
+        // Clear all timers
+        if (timerInterval) {
+            clearInterval(timerInterval);
+            timerInterval = null;
         }
-        if (localStream) {
-            localStream.getTracks().forEach(track => track.stop());
+        if (reconnectTimeout) {
+            clearTimeout(reconnectTimeout);
+            reconnectTimeout = null;
         }
+        if (controlsHideTimer) {
+            clearTimeout(controlsHideTimer);
+            controlsHideTimer = null;
+        }
+
+        // Close all audio contexts
+        audioContexts.forEach((context, participantId) => {
+            context.close().catch(e => console.warn('[GROUP-CALL] Failed to close audio context:', e));
+        });
+        audioContexts.clear();
+
+        // Clear participants and their streams
+        participants.forEach((participant, participantId) => {
+            if (participant.videoElement && participant.videoElement.srcObject) {
+                participant.videoElement.srcObject.getTracks().forEach(track => track.stop());
+                participant.videoElement.srcObject = null;
+            }
+        });
+        participants.clear();
+
+        // Clear orphan streams
+        orphanStreams.forEach((stream, streamId) => {
+            stream.getTracks().forEach(track => track.stop());
+        });
+        orphanStreams.clear();
+
+        // Reset state
+        reconnectAttempts = 0;
+        myParticipantId = null;
+        isChatVisible = false;
+        isChatSideBySide = false;
+
+        console.log('[GROUP-CALL] ✅ Cleanup complete');
+    }
+
+    // End call
+    function endCall() {
+        cleanupCall();
         window.location.href = '/';
     }
 
@@ -913,9 +2275,10 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     });
 
-    // Page Before Unload - warn about leaving call
+    // Page Before Unload - cleanup and warn about leaving call
     window.addEventListener('beforeunload', (e) => {
         if (socket && socket.readyState === WebSocket.OPEN) {
+            cleanupCall();
             e.preventDefault();
             e.returnValue = '';
         }
@@ -939,11 +2302,474 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.log('[GROUP-CALL] Emoji/GIF picker initialized');
     }
 
-    // Initialize
-    const mediaReady = await initLocalMedia();
-    if (mediaReady) {
+    // ============================================
+    // FLYING REACTIONS & RAISE HAND
+    // ============================================
+
+    const reactionsBtn = document.getElementById('reactionsBtn');
+    const raiseHandBtn = document.getElementById('raiseHandBtn');
+    const quickReactionsPanel = document.getElementById('quickReactionsPanel');
+    const flyingReactionsContainer = document.getElementById('flyingReactions');
+
+    // Track raised hands state
+    const raisedHands = new Set();
+    let isHandRaised = false;
+
+    // Toggle quick reactions panel
+    if (reactionsBtn && quickReactionsPanel) {
+        reactionsBtn.addEventListener('click', () => {
+            const isVisible = quickReactionsPanel.style.display !== 'none';
+            quickReactionsPanel.style.display = isVisible ? 'none' : 'flex';
+
+            // Auto-hide after 5 seconds
+            if (!isVisible) {
+                setTimeout(() => {
+                    quickReactionsPanel.style.display = 'none';
+                }, 5000);
+            }
+        });
+
+        // Send reaction when clicked
+        const reactionButtons = quickReactionsPanel.querySelectorAll('.reaction-option');
+        reactionButtons.forEach(btn => {
+            btn.addEventListener('click', () => {
+                const emoji = btn.dataset.emoji;
+                console.log('[REACTIONS] Sending reaction:', emoji);
+
+                // Client-side validation
+                if (!emoji || emoji.length > 20) {
+                    console.error('[REACTIONS] Invalid emoji');
+                    showSubtitle('Error', 'Invalid reaction', false);
+                    return;
+                }
+
+                // Send via WebSocket
+                if (socket && socket.readyState === WebSocket.OPEN) {
+                    socket.send(JSON.stringify({
+                        type: 'reaction',
+                        room_id: roomID,
+                        emoji: emoji,
+                        user_name: myName
+                    }));
+                } else {
+                    console.error('[REACTIONS] Socket not ready');
+                    showSubtitle('Error', 'Connection not ready', false);
+                    return;
+                }
+
+                // Show locally immediately
+                createFlyingReaction(emoji);
+
+                // Hide panel
+                quickReactionsPanel.style.display = 'none';
+            });
+        });
+
+        // Close panel when clicking outside
+        document.addEventListener('click', (e) => {
+            if (!reactionsBtn.contains(e.target) && !quickReactionsPanel.contains(e.target)) {
+                quickReactionsPanel.style.display = 'none';
+            }
+        });
+    }
+
+    // Create flying reaction animation
+    function createFlyingReaction(emoji, startX = null, startY = null) {
+        if (!flyingReactionsContainer) return;
+
+        const reaction = document.createElement('div');
+        reaction.className = 'flying-reaction';
+        reaction.textContent = emoji;
+
+        // Random start position if not specified
+        const x = startX !== null ? startX : Math.random() * (window.innerWidth - 100) + 50;
+        const y = startY !== null ? startY : window.innerHeight - 100;
+
+        // Random drift (-50px to +50px)
+        const driftX = (Math.random() - 0.5) * 100;
+
+        reaction.style.left = x + 'px';
+        reaction.style.top = y + 'px';
+        reaction.style.setProperty('--drift-x', driftX + 'px');
+
+        flyingReactionsContainer.appendChild(reaction);
+
+        // Remove after animation
+        setTimeout(() => {
+            reaction.remove();
+        }, 3000);
+    }
+
+    // Raise hand toggle
+    if (raiseHandBtn) {
+        raiseHandBtn.addEventListener('click', () => {
+            isHandRaised = !isHandRaised;
+
+            console.log('[RAISE-HAND]', isHandRaised ? 'Raising hand' : 'Lowering hand');
+
+            // Update button state
+            raiseHandBtn.style.background = isHandRaised
+                ? 'linear-gradient(135deg, #f59e0b, #d97706)'
+                : '';
+
+            // Send via WebSocket
+            if (socket && socket.readyState === WebSocket.OPEN) {
+                socket.send(JSON.stringify({
+                    type: 'raise_hand',
+                    room_id: roomID,
+                    user_name: myName,
+                    raised: isHandRaised
+                }));
+            }
+
+            // Update local UI
+            updateRaisedHandIndicator(myName, isHandRaised);
+        });
+    }
+
+    // Update raised hand indicator on participant tile
+    function updateRaisedHandIndicator(participantName, raised) {
+        // Find the participant tile
+        const participantTiles = document.querySelectorAll('.participant-tile');
+
+        participantTiles.forEach(tile => {
+            const nameLabel = tile.querySelector('.participant-name');
+            if (nameLabel && nameLabel.textContent === participantName) {
+                // Remove existing indicator
+                const existingIndicator = tile.querySelector('.raised-hand-indicator');
+                if (existingIndicator) {
+                    existingIndicator.remove();
+                }
+
+                // Add indicator if hand is raised
+                if (raised) {
+                    const indicator = document.createElement('div');
+                    indicator.className = 'raised-hand-indicator';
+                    indicator.innerHTML = '✋ <span>HAND</span>';
+                    tile.appendChild(indicator);
+
+                    raisedHands.add(participantName);
+                } else {
+                    raisedHands.delete(participantName);
+                }
+            }
+        });
+    }
+
+    // ============================================
+    // SETTINGS SCREEN LOGIC
+    // ============================================
+
+    // Start camera preview immediately
+    async function startPreview() {
+        try {
+            previewStatus.textContent = 'Starting camera...';
+
+            // Mobile-friendly constraints
+            const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+            const constraints = {
+                video: isCameraOn ? (isMobile ? {
+                    facingMode: 'user',
+                    width: { ideal: 640 },
+                    height: { ideal: 480 }
+                } : {
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 }
+                }) : false,
+                audio: isMicOn ? {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true
+                } : false
+            };
+
+            console.log('[GROUP-CALL] 📱 Device:', isMobile ? 'Mobile' : 'Desktop', 'Requesting media...');
+
+            localStream = await navigator.mediaDevices.getUserMedia(constraints);
+            previewVideo.srcObject = localStream;
+
+            // Log tracks
+            const tracks = localStream.getTracks();
+            console.log('[GROUP-CALL] ✅ Got', tracks.length, 'tracks:', tracks.map(t => `${t.kind} (enabled: ${t.enabled})`).join(', '));
+
+            previewStatus.textContent = isCameraOn ? 'Camera ready' : 'Camera off';
+            console.log('[GROUP-CALL] ✅ Preview started - Camera:', isCameraOn, 'Mic:', isMicOn);
+        } catch (err) {
+            console.error('[GROUP-CALL] ❌ Preview failed:', err.name, '-', err.message);
+            previewStatus.textContent = 'Failed to access camera/mic';
+
+            // Try fallback with basic constraints
+            try {
+                console.log('[GROUP-CALL] 🔄 Trying fallback (basic constraints)...');
+                const fallbackConstraints = { video: isCameraOn, audio: isMicOn };
+                localStream = await navigator.mediaDevices.getUserMedia(fallbackConstraints);
+                previewVideo.srcObject = localStream;
+                previewStatus.textContent = 'Using basic quality';
+                console.log('[GROUP-CALL] ✅ Fallback succeeded');
+            } catch (fallbackErr) {
+                console.error('[GROUP-CALL] ❌ Fallback also failed:', fallbackErr.name, '-', fallbackErr.message);
+            }
+        }
+    }
+
+    // Toggle camera in preview
+    cameraToggle.addEventListener('change', async () => {
+        isCameraOn = cameraToggle.checked;
+
+        if (localStream) {
+            const videoTrack = localStream.getVideoTracks()[0];
+            if (videoTrack) {
+                videoTrack.stop();
+                localStream.removeTrack(videoTrack);
+            }
+
+            if (isCameraOn) {
+                try {
+                    const newStream = await navigator.mediaDevices.getUserMedia({ video: { width: { ideal: 1280 }, height: { ideal: 720 } } });
+                    const newVideoTrack = newStream.getVideoTracks()[0];
+                    localStream.addTrack(newVideoTrack);
+                    previewVideo.srcObject = localStream;
+                    previewStatus.textContent = 'Camera ready';
+                } catch (err) {
+                    console.error('[GROUP-CALL] Failed to enable camera:', err);
+                    previewStatus.textContent = 'Camera unavailable';
+                }
+            } else {
+                previewVideo.srcObject = null;
+                previewStatus.textContent = 'Camera off';
+            }
+        }
+    });
+
+    // Toggle mic in preview
+    micToggle.addEventListener('change', async () => {
+        isMicOn = micToggle.checked;
+
+        if (localStream) {
+            const audioTrack = localStream.getAudioTracks()[0];
+            if (audioTrack) {
+                audioTrack.stop();
+                localStream.removeTrack(audioTrack);
+            }
+
+            if (isMicOn) {
+                try {
+                    const newStream = await navigator.mediaDevices.getUserMedia({
+                        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+                    });
+                    const newAudioTrack = newStream.getAudioTracks()[0];
+                    localStream.addTrack(newAudioTrack);
+                } catch (err) {
+                    console.error('[GROUP-CALL] Failed to enable mic:', err);
+                }
+            }
+        }
+    });
+
+    // Language selector
+    const languageSelect = document.getElementById('languageSelect');
+    if (languageSelect) {
+        // Load saved language or default to Ukrainian
+        const savedLang = localStorage.getItem('preferredLanguage') || 'uk';
+        languageSelect.value = savedLang;
+
+        languageSelect.addEventListener('change', (e) => {
+            const lang = e.target.value;
+            localStorage.setItem('preferredLanguage', lang);
+            console.log('[GROUP-CALL] Language changed to:', lang);
+        });
+    }
+
+    // Join button - hide settings, show call screen, connect
+    joinButton.addEventListener('click', async () => {
+        // Get name
+        myName = nameInput.value.trim() || 'User';
+        sessionStorage.setItem('guestName', myName);
+
+        // Save selected language
+        if (languageSelect) {
+            const selectedLang = languageSelect.value;
+            localStorage.setItem('preferredLanguage', selectedLang);
+        }
+
+        if (!localStream) {
+            alert('Please enable camera or microphone');
+            return;
+        }
+
+        console.log('[GROUP-CALL] 🚀 Joining call as:', myName);
+
+        // Hide settings, show call
+        settingsScreen.style.display = 'none';
+        groupCallContainer.style.display = 'flex';
+
+        // Copy stream to local video
+        localVideo.srcObject = localStream;
+
+        // Update button states
+        cameraBtn.dataset.active = isCameraOn;
+        cameraBtn.querySelector('.icon-on').style.display = isCameraOn ? 'block' : 'none';
+        cameraBtn.querySelector('.icon-off').style.display = isCameraOn ? 'none' : 'block';
+
+        micBtn.dataset.active = isMicOn;
+        micBtn.querySelector('.icon-on').style.display = isMicOn ? 'block' : 'none';
+        micBtn.querySelector('.icon-off').style.display = isMicOn ? 'none' : 'block';
+
+        // Connect to SFU
         connectToSFU();
         startTimer();
         updateGridLayout();
+
+        // Initialize auto-hide controls
+        initAutoHideControls();
+    });
+
+    // Host control functions
+    function requestMuteParticipant(participantId, mediaType) {
+        if (!socket || socket.readyState !== WebSocket.OPEN) {
+            console.warn('[GROUP-CALL] Cannot send mute request - socket not open');
+            return;
+        }
+
+        console.log(`[GROUP-CALL] Host requesting to mute ${mediaType} for participant:`, participantId);
+
+        socket.send(JSON.stringify({
+            type: 'host-mute-request',
+            data: JSON.stringify({
+                targetParticipantId: participantId,
+                mediaType: mediaType // 'audio' or 'video'
+            })
+        }));
     }
+
+    // Auto-hide controls logic
+    let controlsHideTimer = null;
+    let controlsVisible = true;
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+    function initAutoHideControls() {
+        const topControls = document.querySelector('.top-controls');
+        const bottomControls = document.querySelector('.bottom-controls');
+
+        if (!topControls || !bottomControls) {
+            console.warn('[GROUP-CALL] Controls not found for auto-hide');
+            return;
+        }
+
+        function showControls() {
+            if (!controlsVisible) {
+                topControls.classList.remove('hidden');
+                bottomControls.classList.remove('hidden');
+                controlsVisible = true;
+            }
+
+            // Clear existing timer
+            if (controlsHideTimer) {
+                clearTimeout(controlsHideTimer);
+            }
+
+            // Auto-hide after 5 seconds (both desktop and mobile)
+            controlsHideTimer = setTimeout(() => {
+                topControls.classList.add('hidden');
+                bottomControls.classList.add('hidden');
+                controlsVisible = false;
+            }, 5000);
+        }
+
+        function toggleControls() {
+            if (controlsVisible) {
+                topControls.classList.add('hidden');
+                bottomControls.classList.add('hidden');
+                controlsVisible = false;
+                if (controlsHideTimer) {
+                    clearTimeout(controlsHideTimer);
+                }
+            } else {
+                showControls();
+            }
+        }
+
+        // Desktop: mouse movement shows controls
+        if (!isMobile) {
+            groupCallContainer.addEventListener('mousemove', showControls);
+            showControls(); // Show initially
+        }
+
+        // Mobile: tap on video area toggles controls
+        if (isMobile) {
+            groupCallContainer.addEventListener('click', (e) => {
+                // Don't toggle if clicking on buttons, controls, or chat
+                if (e.target.closest('button') ||
+                    e.target.closest('.control-btn') ||
+                    e.target.closest('.top-controls') ||
+                    e.target.closest('.bottom-controls') ||
+                    e.target.closest('#chatPanel')) {
+                    return;
+                }
+                toggleControls();
+            });
+
+            groupCallContainer.addEventListener('touchend', (e) => {
+                // Don't toggle if touching buttons or controls
+                if (e.target.closest('button') ||
+                    e.target.closest('.control-btn') ||
+                    e.target.closest('.top-controls') ||
+                    e.target.closest('.bottom-controls') ||
+                    e.target.closest('#chatPanel')) {
+                    return;
+                }
+                e.preventDefault(); // Prevent double-firing
+                toggleControls();
+            }, { passive: false });
+
+            // Start with controls visible on mobile
+            showControls();
+        }
+
+        console.log('[GROUP-CALL] ✅ Auto-hide controls initialized');
+    }
+
+    // Export sendMessage for GIF picker
+    window.sendChatMessage = function(text) {
+        console.log('[GROUP-CALL] sendChatMessage called with:', text);
+        sendMessage(text);
+    };
+
+    // GIF button handler
+    const gifBtn = document.getElementById('gifBtn');
+    if (gifBtn && window.EmojiGifPicker) {
+        gifBtn.addEventListener('click', () => {
+            const picker = new window.EmojiGifPicker(messageInput, (type, value) => {
+                if (type === 'gif') {
+                    // Send GIF with [GIF] prefix
+                    console.log('[GROUP-CALL] 🎬 Sending GIF:', value);
+                    sendMessage(`[GIF]${value}`);
+                } else {
+                    // Insert emoji at cursor
+                    messageInput.value += value;
+                    messageInput.focus();
+                }
+            });
+            picker.show();
+        });
+    }
+
+    // Emoji button handler
+    const emojiBtn = document.getElementById('emojiBtn');
+    if (emojiBtn && window.EmojiGifPicker) {
+        emojiBtn.addEventListener('click', () => {
+            const picker = new window.EmojiGifPicker(messageInput, (type, value) => {
+                if (type === 'emoji') {
+                    // Insert emoji at cursor
+                    messageInput.value += value;
+                    messageInput.focus();
+                }
+            });
+            picker.show();
+        });
+    }
+
+    // Start preview on page load
+    startPreview();
 });

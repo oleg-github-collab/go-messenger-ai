@@ -13,6 +13,21 @@ html, body {
     position: fixed;
 }
 
+/* Auto-hide controls */
+.hidden {
+    opacity: 0 !important;
+    pointer-events: none !important;
+    transition: opacity 0.3s ease !important;
+}
+
+.back-button,
+.user-info-box,
+.call-timer-box,
+.right-side-controls,
+.bottom-control-bar {
+    transition: opacity 0.3s ease;
+}
+
 .call-container {
     width: 100%;
     height: 100%;
@@ -85,6 +100,7 @@ html, body {
     width: 100%;
     height: 100%;
     object-fit: cover;
+    transform: scaleX(-1); /* Mirror effect for local video */
 }
 
 .pip-expand-btn {

@@ -1,0 +1,131 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="mobile-web-app-capable" content="yes">
+    <meta name="theme-color" content="#0f172a">
+    <meta name="format-detection" content="telephone=no">
+    <meta name="telegram:channel" content="@">
+    <meta property="al:web:should_fallback" content="false">
+    <meta property="og:type" content="website">
+    <title>Kaminskyi AI Messenger</title>
+    <link rel="stylesheet" href="/static/home.css">
+</head>
+<body>
+    <div class="home-container">
+        <div class="header">
+            <div class="user-profile">
+                <div class="user-avatar">O</div>
+                <span class="user-name">Oleh</span>
+            </div>
+            <button class="logout-btn" id="logoutBtn">Logout</button>
+        </div>
+
+        <div class="content">
+            <div class="hero">
+                <div class="app-icon">K</div>
+                <h1>Video Meetings</h1>
+                <p class="description">1-on-1 calls or group meetings up to 20 people</p>
+            </div>
+
+            <button class="create-meeting-btn" id="createMeetingBtn">
+                <span class="btn-icon">+</span>
+                Create Meeting
+            </button>
+
+            <!-- Meeting Type Selection Modal -->
+            <div class="meeting-type-modal" id="meetingTypeModal" style="display: none;">
+                <div class="modal-content">
+                    <h2 class="modal-title">Create Meeting</h2>
+                    <p class="modal-subtitle">Choose the type of meeting and enter your name</p>
+
+                    <div class="input-group" style="margin-bottom: 24px;">
+                        <label for="hostNameInput" style="display: block; font-size: 14px; color: #e2e8f0; margin-bottom: 8px;">Your Name</label>
+                        <input type="text" id="hostNameInput" placeholder="Enter your name..."
+                               style="width: 100%; padding: 12px; background: rgba(255,255,255,0.05); border: 2px solid rgba(59,130,246,0.2); border-radius: 12px; color: white; font-size: 15px; outline: none;"
+                               value="Oleh" />
+                    </div>
+
+                    <div class="meeting-type-options">
+                        <button class="meeting-type-card" id="oneOnOneBtn">
+                            <div class="card-icon">👥</div>
+                            <h3>1-on-1 Call</h3>
+                            <p>Private video call between two people</p>
+                            <div class="card-badge">P2P Connection</div>
+                        </button>
+
+                        <button class="meeting-type-card" id="groupCallBtn">
+                            <div class="card-icon">👨‍👩‍👧‍👦</div>
+                            <h3>Group Call</h3>
+                            <p>Video conference with up to 20 participants</p>
+                            <div class="card-badge">SFU Server</div>
+                        </button>
+                    </div>
+
+                    <button class="modal-cancel" id="cancelMeetingType">Cancel</button>
+                </div>
+            </div>
+
+            <!-- Share Link Section (hidden by default) -->
+            <div class="share-section" id="shareSection" style="display: none;">
+                <div class="share-header">
+                    <h3>Meeting Link</h3>
+                    <button class="close-share" id="closeShare">✕</button>
+                </div>
+
+                <div class="link-container">
+                    <input type="text" id="meetingLink" readonly class="meeting-link-input">
+                    <button class="copy-btn" id="copyBtn">
+                        <span class="icon">📋</span>
+                        Copy
+                    </button>
+                </div>
+
+                <div class="share-buttons">
+                    <button class="share-btn" id="shareEmail">
+                        <span class="icon">✉️</span>
+                        Email
+                    </button>
+                    <button class="share-btn" id="shareSMS">
+                        <span class="icon">💬</span>
+                        SMS
+                    </button>
+                    <button class="share-btn" id="shareTelegram">
+                        <span class="icon">✈️</span>
+                        Telegram
+                    </button>
+                    <button class="share-btn" id="joinNow">
+                        <span class="icon">→</span>
+                        Join Now
+                    </button>
+                </div>
+
+                <div class="link-expires">
+                    <span class="icon">⏰</span>
+                    Link expires in 8 hours
+                </div>
+            </div>
+
+            <div class="features">
+                <div class="feature-item">
+                    <div class="feature-icon">📹</div>
+                    <div class="feature-text">HD Video</div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon">🎤</div>
+                    <div class="feature-text">Clear Audio</div>
+                </div>
+                <div class="feature-item">
+                    <div class="feature-icon">💬</div>
+                    <div class="feature-text">Live Chat</div>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script src="/static/home.js"></script>
+</body>
+</html>

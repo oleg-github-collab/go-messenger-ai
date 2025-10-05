@@ -17,7 +17,51 @@ class EmojiGifPicker {
         this.gifCategoriesContainer = this.panel.querySelector('#gifCategories');
 
         this.currentTab = 'emoji';
-        this.tenorApiKey = 'AIzaSyDOXJT8Y-cVS4k8gQ2g31vLx5YqZSPJLwA';
+        this.tenorApiKey = ''; // Disabled - using custom GIF library
+
+        // Custom GIF library (popular reactions and emotions)
+        this.gifLibrary = {
+            'happy': [
+                'https://media.giphy.com/media/XR9Dp54ZC4dji/giphy.gif',
+                'https://media.giphy.com/media/26gsjCZpPolPr3sBy/giphy.gif',
+                'https://media.giphy.com/media/3oz8xIsloV7zOmt81G/giphy.gif'
+            ],
+            'funny': [
+                'https://media.giphy.com/media/3o7527pa7qs9kCG78A/giphy.gif',
+                'https://media.giphy.com/media/Q7LP0tm86sBWIqjFCL/giphy.gif',
+                'https://media.giphy.com/media/RdKjAkFTNZkWUGyRXF/giphy.gif'
+            ],
+            'love': [
+                'https://media.giphy.com/media/R6gvnAxj2ISzJdbA63/giphy.gif',
+                'https://media.giphy.com/media/3o6Zt6ML6BklcajjsA/giphy.gif',
+                'https://media.giphy.com/media/42YlR8u9gV5Cw/giphy.gif'
+            ],
+            'dance': [
+                'https://media.giphy.com/media/l41lGvinEgARjB2HC/giphy.gif',
+                'https://media.giphy.com/media/BlVnrxJgTGsUw/giphy.gif',
+                'https://media.giphy.com/media/5GoVLqeAOo6PK/giphy.gif'
+            ],
+            'sad': [
+                'https://media.giphy.com/media/L95W4wv8nnb9K/giphy.gif',
+                'https://media.giphy.com/media/d2lcHJTG5Tscg/giphy.gif',
+                'https://media.giphy.com/media/OPU6wzx8JrHna/giphy.gif'
+            ],
+            'wow': [
+                'https://media.giphy.com/media/5VKbvrjxpVJCM/giphy.gif',
+                'https://media.giphy.com/media/3osxYCsLd9qgsgqpGw/giphy.gif',
+                'https://media.giphy.com/media/3o7527pXtcvxqbKV7a/giphy.gif'
+            ],
+            'clap': [
+                'https://media.giphy.com/media/7rj2ZgttvgomY/giphy.gif',
+                'https://media.giphy.com/media/ZdUnQS4AXEl1AERdil/giphy.gif',
+                'https://media.giphy.com/media/fnK0jeA8vIh2QLq3IZ/giphy.gif'
+            ],
+            'party': [
+                'https://media.giphy.com/media/artj92V8o75VPL7AeQ/giphy.gif',
+                'https://media.giphy.com/media/l0MYt5jPR6QX5pnqM/giphy.gif',
+                'https://media.giphy.com/media/g9582DNuQppxC/giphy.gif'
+            ]
+        };
 
         this.init();
     }
@@ -155,14 +199,14 @@ class EmojiGifPicker {
 
     loadGifCategories() {
         const categories = [
-            { emoji: '😊', label: 'Happy', query: 'happy excited' },
-            { emoji: '😂', label: 'Funny', query: 'funny laugh' },
-            { emoji: '❤️', label: 'Love', query: 'love heart' },
-            { emoji: '💃', label: 'Dance', query: 'dance party' },
-            { emoji: '😢', label: 'Sad', query: 'sad cry' },
-            { emoji: '😮', label: 'Wow', query: 'wow shocked amazed' },
-            { emoji: '👏', label: 'Applause', query: 'clap applause' },
-            { emoji: '🎉', label: 'Party', query: 'party celebrate' }
+            { emoji: '😊', label: 'Happy', key: 'happy' },
+            { emoji: '😂', label: 'Funny', key: 'funny' },
+            { emoji: '❤️', label: 'Love', key: 'love' },
+            { emoji: '💃', label: 'Dance', key: 'dance' },
+            { emoji: '😢', label: 'Sad', key: 'sad' },
+            { emoji: '😮', label: 'Wow', key: 'wow' },
+            { emoji: '👏', label: 'Applause', key: 'clap' },
+            { emoji: '🎉', label: 'Party', key: 'party' }
         ];
 
         this.gifCategoriesContainer.innerHTML = '';
@@ -171,43 +215,73 @@ class EmojiGifPicker {
             btn.className = 'gif-category-btn';
             btn.textContent = `${cat.emoji} ${cat.label}`;
             btn.addEventListener('click', () => {
-                this.searchGifs(cat.query);
+                this.loadGifsFromLibrary(cat.key);
                 this.gifSearch.value = '';
             });
             this.gifCategoriesContainer.appendChild(btn);
         });
+
+        // Load happy GIFs by default
+        this.loadGifsFromLibrary('happy');
     }
 
-    async loadTrendingGifs() {
-        try {
-            const limit = 30;
-            const url = `https://tenor.googleapis.com/v2/featured?key=${this.tenorApiKey}&limit=${limit}&media_filter=gif`;
+    loadGifsFromLibrary(category) {
+        console.log('[EMOJI-GIF] Loading GIFs for category:', category);
+        const gifs = this.gifLibrary[category] || this.gifLibrary['happy'];
 
-            const response = await fetch(url);
-            const data = await response.json();
+        this.gifGrid.innerHTML = '';
+        gifs.forEach(gifUrl => {
+            const img = document.createElement('img');
+            img.src = gifUrl;
+            img.className = 'gif-item';
+            img.alt = category + ' gif';
+            img.loading = 'lazy';
+            img.addEventListener('click', () => {
+                this.sendGif(gifUrl);
+            });
+            this.gifGrid.appendChild(img);
+        });
 
-            this.displayGifs(data.results);
-        } catch (error) {
-            console.error('[EMOJI-GIF] Failed to load trending GIFs:', error);
-        }
+        console.log('[EMOJI-GIF] Loaded', gifs.length, 'GIFs');
     }
 
     async searchGifs(query) {
+        console.log('[EMOJI-GIF] Searching for:', query);
+
         if (!query || query.trim() === '') {
-            this.loadTrendingGifs();
+            this.loadGifsFromLibrary('happy');
             return;
         }
 
-        try {
-            const limit = 30;
-            const url = `https://tenor.googleapis.com/v2/search?q=${encodeURIComponent(query)}&key=${this.tenorApiKey}&limit=${limit}&media_filter=gif`;
+        // Search in library by category name
+        const queryLower = query.toLowerCase();
+        let foundCategory = null;
 
-            const response = await fetch(url);
-            const data = await response.json();
+        for (const [category, gifs] of Object.entries(this.gifLibrary)) {
+            if (category.includes(queryLower) || queryLower.includes(category)) {
+                foundCategory = category;
+                break;
+            }
+        }
 
-            this.displayGifs(data.results);
-        } catch (error) {
-            console.error('[EMOJI-GIF] Failed to search GIFs:', error);
+        if (foundCategory) {
+            this.loadGifsFromLibrary(foundCategory);
+        } else {
+            // Show all GIFs if no match
+            this.gifGrid.innerHTML = '';
+            for (const [category, gifs] of Object.entries(this.gifLibrary)) {
+                gifs.forEach(gifUrl => {
+                    const img = document.createElement('img');
+                    img.src = gifUrl;
+                    img.className = 'gif-item';
+                    img.alt = category + ' gif';
+                    img.loading = 'lazy';
+                    img.addEventListener('click', () => {
+                        this.sendGif(gifUrl);
+                    });
+                    this.gifGrid.appendChild(img);
+                });
+            }
         }
     }
 

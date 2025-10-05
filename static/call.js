@@ -1,4 +1,4 @@
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
     console.log('[CALL] Page loaded');
 
     // UI Elements
@@ -49,21 +49,9 @@ document.addEventListener('DOMContentLoaded', () => {
     let peerConnected = false;
     let unreadMessages = 0;
     let reconnectAttempts = 0;
-    let maxReconnectAttempts = 10; // Increased from 5 to 10
+    let maxReconnectAttempts = 10;
     let reconnectTimeout = null;
     let adaptiveQuality = null;
-
-    // Get user info from sessionStorage
-    const guestName = sessionStorage.getItem('guestName') || 'Guest';
-    const isHostSession = sessionStorage.getItem('isHost') === 'true';
-
-    // Set user name in UI
-    if (userNameDisplay) {
-        userNameDisplay.textContent = guestName;
-    }
-    if (userLabel) {
-        userLabel.textContent = isHostSession ? 'Host' : 'Guest';
-    }
 
     // Get room ID from URL
     const pathParts = window.location.pathname.split('/');
@@ -73,6 +61,49 @@ document.addEventListener('DOMContentLoaded', () => {
         alert('No room ID found. Please create a meeting first.');
         window.location.href = '/';
         return;
+    }
+
+    // Get user info from sessionStorage
+    let guestName = sessionStorage.getItem('guestName');
+    const isHostSession = sessionStorage.getItem('isHost') === 'true';
+
+    // If host, try to get name from hostName_roomID storage first
+    if (isHostSession) {
+        const hostName = sessionStorage.getItem('hostName_' + roomID);
+        if (hostName) {
+            guestName = hostName;
+            sessionStorage.setItem('guestName', hostName);
+            console.log('[CALL] ✅ Host name from storage:', hostName);
+        }
+    }
+
+    // If still no guestName, try to get from API
+    if (!guestName) {
+        try {
+            const response = await fetch(`/api/meeting/${roomID}`);
+            const meeting = await response.json();
+            if (meeting.host_name) {
+                guestName = meeting.host_name;
+                sessionStorage.setItem('guestName', guestName);
+                console.log('[CALL] ✅ Got name from API:', guestName);
+            }
+        } catch (e) {
+            console.error('[CALL] Failed to get name from API:', e);
+        }
+    }
+
+    // Fallback to default if still no name
+    if (!guestName) {
+        guestName = isHostSession ? 'Host' : 'Guest';
+        console.warn('[CALL] ⚠️ Using fallback name:', guestName);
+    }
+
+    // Set user name in UI
+    if (userNameDisplay) {
+        userNameDisplay.textContent = guestName;
+    }
+    if (userLabel) {
+        userLabel.textContent = isHostSession ? 'Host' : 'Guest';
     }
 
     // Initialize waiting room UI
@@ -321,6 +352,388 @@ document.addEventListener('DOMContentLoaded', () => {
     }
 
     // Chat functions
+    // Mini-browser modal for URLs
+    function openMiniBrowser(url) {
+        // Validate URL
+        let validUrl = url;
+        try {
+            // Ensure URL has protocol
+            if (!url.startsWith('http://') && !url.startsWith('https://')) {
+                validUrl = 'https://' + url;
+            }
+            new URL(validUrl); // Validate URL format
+        } catch (e) {
+            alert('Invalid URL: ' + url);
+            return;
+        }
+
+        // Detect if in-app browser (Telegram, Instagram, etc.)
+        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        const isInAppBrowser = /FBAN|FBAV|Instagram|Line|WhatsApp|Telegram/i.test(navigator.userAgent);
+
+        // Force external browser on mobile or in-app browsers
+        if (isMobile || isInAppBrowser) {
+            // Try to open in external browser
+            const a = document.createElement('a');
+            a.href = validUrl;
+            a.target = '_blank';
+            a.rel = 'noopener noreferrer';
+
+            // For iOS - try to force Safari
+            if (/iPhone|iPad|iPod/i.test(navigator.userAgent)) {
+                // Show confirmation with option to copy
+                if (confirm(`Open link in browser?\n\n${validUrl}\n\nClick OK to open, or Cancel to copy the link.`)) {
+                    window.open(validUrl, '_blank', 'noopener,noreferrer');
+                } else {
+                    // Copy to clipboard
+                    navigator.clipboard.writeText(validUrl).then(() => {
+                        alert('Link copied to clipboard!');
+                    }).catch(() => {
+                        prompt('Copy this link:', validUrl);
+                    });
+                }
+                return;
+            }
+
+            // For Android - open directly
+            window.open(validUrl, '_blank', 'noopener,noreferrer');
+            return;
+        }
+
+        // Create modal overlay
+        const modal = document.createElement('div');
+        modal.className = 'mini-browser-modal';
+        modal.style.cssText = `
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            z-index: 10000;
+            display: flex;
+            flex-direction: column;
+            animation: fadeIn 0.2s ease;
+        `;
+
+        // Header with controls
+        const header = document.createElement('div');
+        header.style.cssText = `
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            padding: 16px 20px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        `;
+
+        // Close button
+        const closeBtn = document.createElement('button');
+        closeBtn.innerHTML = `
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18 6L6 18M6 6l12 12"/>
+            </svg>
+        `;
+        closeBtn.style.cssText = `
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(255, 68, 68, 0.2);
+            border: 1px solid rgba(255, 68, 68, 0.4);
+            color: #ff4444;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        `;
+        closeBtn.onmouseover = () => {
+            closeBtn.style.background = 'rgba(255, 68, 68, 0.3)';
+            closeBtn.style.transform = 'scale(1.05)';
+        };
+        closeBtn.onmouseout = () => {
+            closeBtn.style.background = 'rgba(255, 68, 68, 0.2)';
+            closeBtn.style.transform = 'scale(1)';
+        };
+        closeBtn.onclick = () => {
+            modal.style.animation = 'fadeOut 0.2s ease';
+            setTimeout(() => document.body.removeChild(modal), 200);
+        };
+
+        // URL display with copy button
+        const urlContainer = document.createElement('div');
+        urlContainer.style.cssText = `
+            flex: 1;
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            background: rgba(0, 0, 0, 0.3);
+            padding: 8px 16px;
+            border-radius: 20px;
+            min-width: 0;
+        `;
+
+        const urlDisplay = document.createElement('div');
+        urlDisplay.textContent = validUrl;
+        urlDisplay.style.cssText = `
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.8);
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+            flex: 1;
+            font-family: monospace;
+        `;
+
+        const copyBtn = document.createElement('button');
+        copyBtn.textContent = '📋';
+        copyBtn.title = 'Copy URL';
+        copyBtn.style.cssText = `
+            background: none;
+            border: none;
+            color: white;
+            cursor: pointer;
+            font-size: 16px;
+            padding: 4px;
+            opacity: 0.7;
+            transition: opacity 0.2s;
+        `;
+        copyBtn.onmouseover = () => copyBtn.style.opacity = '1';
+        copyBtn.onmouseout = () => copyBtn.style.opacity = '0.7';
+        copyBtn.onclick = () => {
+            navigator.clipboard.writeText(validUrl).then(() => {
+                copyBtn.textContent = '✅';
+                setTimeout(() => copyBtn.textContent = '📋', 1500);
+            });
+        };
+
+        urlContainer.appendChild(urlDisplay);
+        urlContainer.appendChild(copyBtn);
+
+        // Open in new tab button
+        const openBtn = document.createElement('button');
+        openBtn.innerHTML = `
+            <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18 13v6a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2V8a2 2 0 0 1 2-2h6"/>
+                <polyline points="15 3 21 3 21 9"/>
+                <line x1="10" y1="14" x2="21" y2="3"/>
+            </svg>
+        `;
+        openBtn.title = 'Open in new tab';
+        openBtn.style.cssText = `
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(59, 130, 246, 0.2);
+            border: 1px solid rgba(59, 130, 246, 0.4);
+            color: #3b82f6;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+            flex-shrink: 0;
+        `;
+        openBtn.onmouseover = () => {
+            openBtn.style.background = 'rgba(59, 130, 246, 0.3)';
+            openBtn.style.transform = 'scale(1.05)';
+        };
+        openBtn.onmouseout = () => {
+            openBtn.style.background = 'rgba(59, 130, 246, 0.2)';
+            openBtn.style.transform = 'scale(1)';
+        };
+        openBtn.onclick = () => window.open(validUrl, '_blank');
+
+        header.appendChild(closeBtn);
+        header.appendChild(urlContainer);
+        header.appendChild(openBtn);
+
+        // Content area with iframe and fallback
+        const contentArea = document.createElement('div');
+        contentArea.style.cssText = `
+            flex: 1;
+            position: relative;
+            display: flex;
+            flex-direction: column;
+            background: #1a1a1a;
+        `;
+
+        // Loading indicator
+        const loadingDiv = document.createElement('div');
+        loadingDiv.style.cssText = `
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: white;
+            font-size: 16px;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 12px;
+            z-index: 1;
+        `;
+        loadingDiv.innerHTML = `
+            <div style="
+                width: 40px;
+                height: 40px;
+                border: 3px solid rgba(255, 255, 255, 0.1);
+                border-top-color: #3b82f6;
+                border-radius: 50%;
+                animation: spin 0.8s linear infinite;
+            "></div>
+            <div>Loading page...</div>
+        `;
+
+        // iframe
+        const iframe = document.createElement('iframe');
+        iframe.src = validUrl;
+        iframe.allow = 'accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture';
+        iframe.style.cssText = `
+            width: 100%;
+            height: 100%;
+            border: none;
+            background: white;
+        `;
+
+        // Error/fallback message
+        const fallbackDiv = document.createElement('div');
+        fallbackDiv.style.cssText = `
+            position: absolute;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: #1a1a1a;
+            color: white;
+            display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            padding: 40px;
+            text-align: center;
+            gap: 20px;
+        `;
+        fallbackDiv.innerHTML = `
+            <div style="font-size: 48px;">🔒</div>
+            <div style="font-size: 20px; font-weight: 600;">Cannot display this page</div>
+            <div style="font-size: 14px; color: rgba(255, 255, 255, 0.6); max-width: 400px;">
+                This website doesn't allow embedding in frames for security reasons.
+            </div>
+            <button id="openExternalBtn" style="
+                background: linear-gradient(135deg, #3b82f6 0%, #2563eb 100%);
+                color: white;
+                border: none;
+                padding: 12px 24px;
+                border-radius: 8px;
+                font-size: 14px;
+                font-weight: 600;
+                cursor: pointer;
+                transition: transform 0.2s;
+            ">Open in New Tab</button>
+        `;
+
+        contentArea.appendChild(loadingDiv);
+        contentArea.appendChild(iframe);
+        contentArea.appendChild(fallbackDiv);
+
+        modal.appendChild(header);
+        modal.appendChild(contentArea);
+
+        // Add CSS animations
+        const style = document.createElement('style');
+        style.textContent = `
+            @keyframes fadeIn {
+                from { opacity: 0; }
+                to { opacity: 1; }
+            }
+            @keyframes fadeOut {
+                from { opacity: 1; }
+                to { opacity: 0; }
+            }
+            @keyframes spin {
+                to { transform: rotate(360deg); }
+            }
+        `;
+        document.head.appendChild(style);
+
+        // iframe load handlers
+        iframe.onload = () => {
+            loadingDiv.style.display = 'none';
+            // Try to detect if iframe loaded successfully
+            try {
+                // If we can access contentWindow, it loaded
+                if (iframe.contentWindow) {
+                    console.log('[MINI-BROWSER] Page loaded successfully');
+                }
+            } catch (e) {
+                // Cross-origin - but that's okay, iframe still loaded
+                console.log('[MINI-BROWSER] Page loaded (cross-origin)');
+            }
+        };
+
+        iframe.onerror = () => {
+            console.error('[MINI-BROWSER] Failed to load page');
+            loadingDiv.style.display = 'none';
+            fallbackDiv.style.display = 'flex';
+        };
+
+        // Detect X-Frame-Options blocking (timeout fallback)
+        const blockDetectTimeout = setTimeout(() => {
+            // If still loading after 8 seconds, assume blocked
+            if (loadingDiv.style.display !== 'none') {
+                console.warn('[MINI-BROWSER] Page may be blocked by X-Frame-Options');
+                loadingDiv.style.display = 'none';
+                fallbackDiv.style.display = 'flex';
+            }
+        }, 8000);
+
+        // Clear timeout if loaded successfully
+        iframe.addEventListener('load', () => clearTimeout(blockDetectTimeout), { once: true });
+
+        // Fallback open button
+        setTimeout(() => {
+            const openExternalBtn = document.getElementById('openExternalBtn');
+            if (openExternalBtn) {
+                openExternalBtn.onclick = () => window.open(validUrl, '_blank');
+                openExternalBtn.onmouseover = () => openExternalBtn.style.transform = 'scale(1.05)';
+                openExternalBtn.onmouseout = () => openExternalBtn.style.transform = 'scale(1)';
+            }
+        }, 100);
+
+        document.body.appendChild(modal);
+
+        // ESC key to close
+        const handleEsc = (e) => {
+            if (e.key === 'Escape') {
+                modal.style.animation = 'fadeOut 0.2s ease';
+                setTimeout(() => {
+                    document.body.removeChild(modal);
+                    document.removeEventListener('keydown', handleEsc);
+                }, 200);
+            }
+        };
+        document.addEventListener('keydown', handleEsc);
+    }
+
+    // Detect URLs in text
+    function detectAndLinkifyURLs(text) {
+        const urlRegex = /(https?:\/\/[^\s]+)/g;
+        const urls = text.match(urlRegex);
+
+        if (urls && urls.length > 0) {
+            return text.replace(urlRegex, (url) => {
+                return `<a href="#" onclick="event.preventDefault(); openMiniBrowserFromChat('${url}');" style="color: #4a9eff; text-decoration: underline;">${url}</a>`;
+            });
+        }
+        return text;
+    }
+
+    // Make openMiniBrowser globally accessible
+    window.openMiniBrowserFromChat = openMiniBrowser;
+
     function appendMessage(text, type) {
         if (chatEmpty) {
             chatEmpty.style.display = 'none';
@@ -341,7 +754,34 @@ document.addEventListener('DOMContentLoaded', () => {
             img.alt = 'GIF';
             div.appendChild(img);
         } else {
-            div.textContent = text;
+            // Check if message contains URLs
+            const urlRegex = /(https?:\/\/[^\s]+)/g;
+            const hasUrl = urlRegex.test(text);
+
+            if (hasUrl && type === 'received') {
+                // Add invitation text for received messages with links
+                const senderName = guestName || 'Your partner';
+                const inviteText = document.createElement('div');
+                inviteText.style.cssText = `
+                    font-size: 13px;
+                    opacity: 0.8;
+                    margin-bottom: 8px;
+                    font-style: italic;
+                `;
+                inviteText.textContent = `${senderName} invites you to visit:`;
+                div.appendChild(inviteText);
+            }
+
+            // Linkify URLs
+            const processedText = detectAndLinkifyURLs(text);
+            if (processedText !== text) {
+                // Contains URLs
+                const contentDiv = document.createElement('div');
+                contentDiv.innerHTML = processedText;
+                div.appendChild(contentDiv);
+            } else {
+                div.textContent = text;
+            }
         }
 
         chatMessages.appendChild(div);
@@ -423,7 +863,10 @@ document.addEventListener('DOMContentLoaded', () => {
             if (iconOn) iconOn.style.display = isMicOn ? 'block' : 'none';
             if (iconOff) iconOff.style.display = isMicOn ? 'none' : 'block';
 
-            if (webrtc) webrtc.toggleAudio(isMicOn);
+            if (webrtc) {
+                webrtc.toggleAudio(isMicOn);
+                console.log('[CALL] 🎤 Microphone toggled:', isMicOn ? 'ON' : 'OFF');
+            }
         });
     }
 
@@ -438,6 +881,28 @@ document.addEventListener('DOMContentLoaded', () => {
                     const nextIndex = (currentIndex + 1) % cameras.length;
                     await webrtc.switchCamera(cameras[nextIndex].deviceId);
                 }
+            }
+        });
+    }
+
+    // Picture-in-Picture
+    const pipBtn = document.getElementById('pipBtn');
+    if (pipBtn) {
+        pipBtn.addEventListener('click', async () => {
+            if (remoteVideo && remoteVideo.srcObject && document.pictureInPictureEnabled) {
+                try {
+                    if (document.pictureInPictureElement) {
+                        await document.exitPictureInPicture();
+                        console.log('[CALL] ✅ Exited PiP');
+                    } else {
+                        await remoteVideo.requestPictureInPicture();
+                        console.log('[CALL] ✅ Entered PiP');
+                    }
+                } catch (err) {
+                    console.error('[CALL] ❌ PiP failed:', err);
+                }
+            } else {
+                console.warn('[CALL] ⚠️ PiP not supported or no video');
             }
         });
     }
@@ -544,6 +1009,84 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // More options button - now handled by initSettingsPanel in call-features.js
 
+    // Auto-hide controls
+    let controlsHideTimer = null;
+    let controlsVisible = true;
+    const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+
+    function showControls() {
+        const backButton = document.querySelector('.back-button');
+        const userInfoBox = document.querySelector('.user-info-box');
+        const callTimerBox = document.querySelector('.call-timer-box');
+        const rightSideControls = document.querySelector('.right-side-controls');
+        const bottomControlBar = document.querySelector('.bottom-control-bar');
+
+        if (backButton) backButton.classList.remove('hidden');
+        if (userInfoBox) userInfoBox.classList.remove('hidden');
+        if (callTimerBox) callTimerBox.classList.remove('hidden');
+        if (rightSideControls) rightSideControls.classList.remove('hidden');
+        if (bottomControlBar) bottomControlBar.classList.remove('hidden');
+        controlsVisible = true;
+
+        // Reset hide timer
+        clearTimeout(controlsHideTimer);
+        controlsHideTimer = setTimeout(() => {
+            if (backButton) backButton.classList.add('hidden');
+            if (userInfoBox) userInfoBox.classList.add('hidden');
+            if (callTimerBox) callTimerBox.classList.add('hidden');
+            if (rightSideControls) rightSideControls.classList.add('hidden');
+            if (bottomControlBar) bottomControlBar.classList.add('hidden');
+            controlsVisible = false;
+        }, 5000);
+    }
+
+    // Show controls on mouse move (PC) or tap (mobile)
+    if (isMobile) {
+        callContainer.addEventListener('touchstart', (e) => {
+            // Don't hide controls when tapping buttons
+            if (!e.target.closest('button')) {
+                if (controlsVisible) {
+                    // Hide if visible
+                    const backButton = document.querySelector('.back-button');
+                    const userInfoBox = document.querySelector('.user-info-box');
+                    const callTimerBox = document.querySelector('.call-timer-box');
+                    const rightSideControls = document.querySelector('.right-side-controls');
+                    const bottomControlBar = document.querySelector('.bottom-control-bar');
+
+                    if (backButton) backButton.classList.add('hidden');
+                    if (userInfoBox) userInfoBox.classList.add('hidden');
+                    if (callTimerBox) callTimerBox.classList.add('hidden');
+                    if (rightSideControls) rightSideControls.classList.add('hidden');
+                    if (bottomControlBar) bottomControlBar.classList.add('hidden');
+                    controlsVisible = false;
+                    clearTimeout(controlsHideTimer);
+                } else {
+                    // Show if hidden
+                    showControls();
+                }
+            }
+        });
+    } else {
+        // PC: show on mouse move
+        document.addEventListener('mousemove', showControls);
+    }
+
+    // Initial hide after 5 seconds
+    setTimeout(() => {
+        const backButton = document.querySelector('.back-button');
+        const userInfoBox = document.querySelector('.user-info-box');
+        const callTimerBox = document.querySelector('.call-timer-box');
+        const rightSideControls = document.querySelector('.right-side-controls');
+        const bottomControlBar = document.querySelector('.bottom-control-bar');
+
+        if (backButton) backButton.classList.add('hidden');
+        if (userInfoBox) userInfoBox.classList.add('hidden');
+        if (callTimerBox) callTimerBox.classList.add('hidden');
+        if (rightSideControls) rightSideControls.classList.add('hidden');
+        if (bottomControlBar) bottomControlBar.classList.add('hidden');
+        controlsVisible = false;
+    }, 5000);
+
     function cleanupCall() {
         console.log('[CALL] Cleaning up call...');
 
@@ -553,5 +1096,6 @@ document.addEventListener('DOMContentLoaded', () => {
         if (adaptiveQuality) adaptiveQuality.stop();
         if (webrtc) webrtc.cleanup();
         releaseWakeLock();
+        clearTimeout(controlsHideTimer);
     }
 });

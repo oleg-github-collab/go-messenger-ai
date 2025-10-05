@@ -76,41 +76,71 @@ func newSFURoom(id string) *SFURoom {
 }
 
 // AddParticipant adds a new participant to the room
-func (r *SFURoom) AddParticipant(participantID, name string, conn *websocket.Conn, turnHost, turnUser, turnPass string) (*SFUParticipant, error) {
+func (r *SFURoom) AddParticipant(participantID, name string, conn *websocket.Conn, turnHost, turnUser, turnPass string) (*SFUParticipant, int, error) {
 	r.mu.Lock()
 	defer r.mu.Unlock()
 
 	if r.closed {
-		return nil, fmt.Errorf("room is closed")
+		return nil, 0, fmt.Errorf("room is closed")
 	}
 
 	if len(r.participants) >= maxParticipants {
-		return nil, fmt.Errorf("room is full (max %d participants)", maxParticipants)
+		return nil, 0, fmt.Errorf("room is full (max %d participants)", maxParticipants)
 	}
 
-	// Create WebRTC config with TURN
+	// Create WebRTC config with optimized settings
 	config := webrtc.Configuration{
 		ICEServers: []webrtc.ICEServer{
 			{
 				URLs: []string{"stun:stun.l.google.com:19302"},
 			},
 		},
+		// Optimize for faster connection and better reliability
+		BundlePolicy:  webrtc.BundlePolicyMaxBundle,
+		RTCPMuxPolicy: webrtc.RTCPMuxPolicyRequire,
 	}
+
+	// Set aggressive ICE settings
+	settingEngine := webrtc.SettingEngine{}
+	settingEngine.SetICETimeouts(
+		time.Second*5,  // Disconnect timeout (faster detection)
+		time.Second*15, // Failed timeout
+		time.Second*2,  // Keepalive interval
+	)
+	settingEngine.SetNetworkTypes([]webrtc.NetworkType{
+		webrtc.NetworkTypeUDP4,
+		webrtc.NetworkTypeUDP6,
+		webrtc.NetworkTypeTCP4,
+		webrtc.NetworkTypeTCP6,
+	})
 
 	// Add TURN server if credentials provided
 	if turnHost != "" && turnUser != "" && turnPass != "" {
+		// Use turnHost as-is (already cleaned in main.go)
 		config.ICEServers = append(config.ICEServers, webrtc.ICEServer{
-			URLs:       []string{fmt.Sprintf("turn:%s:3478?transport=udp", turnHost), fmt.Sprintf("turn:%s:3478?transport=tcp", turnHost)},
+			URLs:       []string{fmt.Sprintf("turn:%s:3478", turnHost), fmt.Sprintf("turn:%s:3478?transport=tcp", turnHost)},
 			Username:   turnUser,
 			Credential: turnPass,
 		})
-		log.Printf("[SFU] Added TURN server for participant %s", participantID)
+		log.Printf("[SFU] ✅ Added TURN server %s:3478 for participant %s", turnHost, participantID)
 	}
 
-	// Create peer connection
-	peerConnection, err := webrtc.NewPeerConnection(config)
+	// Create MediaEngine with codec preferences for better quality
+	mediaEngine := &webrtc.MediaEngine{}
+	if err := mediaEngine.RegisterDefaultCodecs(); err != nil {
+		return nil, 0, fmt.Errorf("failed to register codecs: %v", err)
+	}
+
+	// Create API with optimized settings
+	api := webrtc.NewAPI(
+		webrtc.WithMediaEngine(mediaEngine),
+		webrtc.WithSettingEngine(settingEngine),
+	)
+
+	// Create peer connection with optimized API
+	peerConnection, err := api.NewPeerConnection(config)
 	if err != nil {
-		return nil, fmt.Errorf("failed to create peer connection: %v", err)
+		return nil, 0, fmt.Errorf("failed to create peer connection: %v", err)
 	}
 
 	participant := &SFUParticipant{
@@ -128,12 +158,47 @@ func (r *SFURoom) AddParticipant(participantID, name string, conn *websocket.Con
 
 	r.participants[participantID] = participant
 
-	log.Printf("[SFU] Participant %s (%s) joined room %s (%d total)", participantID, name, r.ID, len(r.participants))
+	participantCount := len(r.participants)
+	log.Printf("[SFU] Participant %s (%s) joined room %s (%d total)", participantID, name, r.ID, participantCount)
+
+	// Collect existing tracks BEFORE releasing lock
+	type existingTrack struct {
+		participantID string
+		trackID       string
+		trackLocal    *webrtc.TrackLocalStaticRTP
+		kind          string
+	}
+	var existingTracks []existingTrack
+
+	for _, other := range r.participants {
+		if other.ID != participantID {
+			other.mu.RLock()
+			for _, trackInfo := range other.Tracks {
+				existingTracks = append(existingTracks, existingTrack{
+					participantID: other.ID,
+					trackID:       trackInfo.Track.ID(),
+					trackLocal:    trackInfo.TrackLocal,
+					kind:          trackInfo.Kind,
+				})
+			}
+			other.mu.RUnlock()
+		}
+	}
 
 	// Notify other participants
 	r.notifyParticipantJoined(participant)
 
-	return participant, nil
+	r.mu.Unlock() // Release room lock BEFORE subscribing
+
+	// Now subscribe to existing tracks WITHOUT holding room lock
+	for _, track := range existingTracks {
+		log.Printf("[SFU] 📺 Subscribing new participant %s to existing track from %s (%s)", participantID, track.participantID, track.kind)
+		participant.SubscribeToTrack(track.participantID, track.trackID, track.trackLocal)
+	}
+
+	r.mu.Lock() // Re-acquire for defer unlock
+
+	return participant, participantCount, nil
 }
 
 // RemoveParticipant removes a participant
@@ -184,7 +249,11 @@ func (r *SFURoom) GetAllParticipants() []*SFUParticipant {
 func (r *SFURoom) Broadcast(message interface{}, excludeID string) {
 	r.mu.RLock()
 	defer r.mu.RUnlock()
+	r.broadcastLocked(message, excludeID)
+}
 
+// broadcastLocked sends a message without taking lock (internal use only)
+func (r *SFURoom) broadcastLocked(message interface{}, excludeID string) {
 	data, err := json.Marshal(message)
 	if err != nil {
 		log.Printf("[SFU] Failed to marshal broadcast message: %v", err)
@@ -200,7 +269,7 @@ func (r *SFURoom) Broadcast(message interface{}, excludeID string) {
 	}
 }
 
-// notifyParticipantJoined notifies all participants about new joiner
+// notifyParticipantJoined notifies all participants about new joiner (assumes lock held)
 func (r *SFURoom) notifyParticipantJoined(p *SFUParticipant) {
 	message := map[string]interface{}{
 		"type": "participant-joined",
@@ -209,7 +278,7 @@ func (r *SFURoom) notifyParticipantJoined(p *SFUParticipant) {
 			"name": p.Name,
 		},
 	}
-	r.Broadcast(message, p.ID)
+	r.broadcastLocked(message, p.ID)
 }
 
 // notifyParticipantLeft notifies all participants about leaver
@@ -244,15 +313,22 @@ func (r *SFURoom) Close() {
 
 // SFUParticipant represents a participant in SFU room
 type SFUParticipant struct {
-	ID             string
-	Name           string
-	Room           *SFURoom
-	Connection     *websocket.Conn
-	PeerConnection *webrtc.PeerConnection
-	Tracks         map[string]*TrackInfo
-	subscribers    map[string]*Subscription
-	mu             sync.RWMutex
-	closed         bool
+	ID                 string
+	Name               string
+	Room               *SFURoom
+	Connection         *websocket.Conn
+	PeerConnection     *webrtc.PeerConnection
+	Tracks             map[string]*TrackInfo
+	subscribers        map[string]*Subscription
+	mu                 sync.RWMutex
+	wsMu               sync.Mutex // Protects WebSocket writes
+	closed             bool
+	pendingRenegotiate bool
+	renegotiateTimer   *time.Timer
+	// ICE candidate batching
+	pendingICECandidates []webrtc.ICECandidateInit
+	iceBatchTimer        *time.Timer
+	iceMu                sync.Mutex
 }
 
 // TrackInfo contains information about a media track
@@ -275,6 +351,13 @@ func (p *SFUParticipant) setupPeerConnection() {
 	// Handle incoming tracks
 	p.PeerConnection.OnTrack(func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
 		log.Printf("[SFU] Participant %s published %s track (SSRC: %d)", p.ID, track.Kind(), track.SSRC())
+
+		// Log simulcast info - check codec parameters
+		codec := track.Codec()
+		log.Printf("[SFU] Track codec: %s, PayloadType: %d", codec.MimeType, codec.PayloadType)
+		if track.RID() != "" {
+			log.Printf("[SIMULCAST] 📹 Participant %s published simulcast layer: RID=%s", p.ID, track.RID())
+		}
 
 		// Create local track for forwarding
 		trackLocal, err := webrtc.NewTrackLocalStaticRTP(
@@ -305,6 +388,36 @@ func (p *SFUParticipant) setupPeerConnection() {
 		// Request PLI periodically for video
 		if track.Kind() == webrtc.RTPCodecTypeVideo {
 			go p.sendPLI(track.SSRC())
+		}
+	})
+
+	// Handle ICE candidates
+	p.PeerConnection.OnICECandidate(func(candidate *webrtc.ICECandidate) {
+		if candidate == nil {
+			log.Printf("[SFU] 🧊 Participant %s ICE gathering complete", p.ID)
+			return
+		}
+
+		log.Printf("[SFU] 🧊 Participant %s generated ICE candidate: %s (type: %s, protocol: %s, address: %s:%d)",
+			p.ID, candidate.String(), candidate.Typ, candidate.Protocol, candidate.Address, candidate.Port)
+
+		// Send ICE candidate to client
+		candidateJSON, err := json.Marshal(candidate.ToJSON())
+		if err != nil {
+			log.Printf("[SFU] ❌ Failed to marshal ICE candidate for %s: %v", p.ID, err)
+			return
+		}
+
+		message := map[string]interface{}{
+			"type": "ice-candidate",
+			"data": string(candidateJSON),
+		}
+
+		log.Printf("[SFU] 📤 Sending ICE candidate to participant %s", p.ID)
+		if err := p.SendMessage(message); err != nil {
+			log.Printf("[SFU] ❌ Failed to send ICE candidate to %s: %v", p.ID, err)
+		} else {
+			log.Printf("[SFU] ✅ ICE candidate sent to %s", p.ID)
 		}
 	})
 
@@ -388,14 +501,28 @@ func (p *SFUParticipant) SubscribeToTrack(participantID, trackID string, trackLo
 
 	log.Printf("[SFU] Participant %s subscribed to %s's track", p.ID, participantID)
 
-	p.mu.Unlock()
+	// Schedule debounced renegotiation
+	if p.renegotiateTimer != nil {
+		p.renegotiateTimer.Stop()
+	}
 
-	// Renegotiate to inform participant about new track
-	go func() {
-		if err := p.Renegotiate(); err != nil {
-			log.Printf("[SFU] Failed to renegotiate for %s: %v", p.ID, err)
+	p.pendingRenegotiate = true
+	p.renegotiateTimer = time.AfterFunc(100*time.Millisecond, func() {
+		p.mu.Lock()
+		if p.pendingRenegotiate && !p.closed {
+			p.pendingRenegotiate = false
+			p.mu.Unlock()
+
+			log.Printf("[SFU] 🔄 Debounced renegotiation for %s", p.ID)
+			if err := p.Renegotiate(); err != nil {
+				log.Printf("[SFU] Failed to renegotiate for %s: %v", p.ID, err)
+			}
+		} else {
+			p.mu.Unlock()
 		}
-	}()
+	})
+
+	p.mu.Unlock()
 
 	// Handle RTCP packets
 	go func() {
@@ -428,6 +555,25 @@ func (p *SFUParticipant) sendPLI(ssrc webrtc.SSRC) {
 	}
 }
 
+// sendREMB sends Receiver Estimated Maximum Bitrate feedback
+func (p *SFUParticipant) sendREMB(ssrc webrtc.SSRC, bitrate uint64) {
+	if p.closed {
+		return
+	}
+
+	// Send REMB packet to inform sender about available bandwidth
+	if err := p.PeerConnection.WriteRTCP([]rtcp.Packet{
+		&rtcp.ReceiverEstimatedMaximumBitrate{
+			Bitrate: float32(bitrate),
+			SSRCs:   []uint32{uint32(ssrc)},
+		},
+	}); err != nil {
+		log.Printf("[REMB] Failed to send REMB for %s: %v", p.ID, err)
+	} else {
+		log.Printf("[REMB] Sent REMB to %s: %d bps", p.ID, bitrate)
+	}
+}
+
 // Close closes the participant connection
 func (p *SFUParticipant) Close() {
 	p.mu.Lock()
@@ -438,6 +584,11 @@ func (p *SFUParticipant) Close() {
 	}
 
 	p.closed = true
+
+	// Stop renegotiation timer
+	if p.renegotiateTimer != nil {
+		p.renegotiateTimer.Stop()
+	}
 
 	// Close peer connection
 	if p.PeerConnection != nil {

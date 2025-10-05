@@ -20,53 +20,23 @@
             <h1>Join Meeting</h1>
             <p class="host-name">Hosted by <span id="hostName">Oleh Kaminskyi</span></p>
 
-            <!-- Video preview -->
-            <div class="preview-container">
-                <video id="previewVideo" autoplay muted playsinline></video>
-                <div class="preview-placeholder" id="previewPlaceholder">
-                    <div class="preview-avatar">?</div>
-                    <p>Camera Off</p>
-                </div>
-            </div>
-
             <form id="guestForm">
                 <div class="input-group">
-                    <label for="guestName">Your Name</label>
+                    <label for="guestName">Your Name / Ваше ім'я</label>
                     <input type="text" id="guestName" name="guestName" placeholder="Enter your name" required autocomplete="name">
                 </div>
 
-                <div class="media-options">
-                    <label class="toggle-option">
-                        <input type="checkbox" id="enableVideo" checked>
-                        <span class="toggle-slider"></span>
-                        <span class="toggle-label">
-                            <span class="icon">📹</span>
-                            Join with Video
-                        </span>
-                    </label>
-
-                    <label class="toggle-option">
-                        <input type="checkbox" id="enableAudio" checked>
-                        <span class="toggle-slider"></span>
-                        <span class="toggle-label">
-                            <span class="icon">🎤</span>
-                            Join with Audio
-                        </span>
-                    </label>
-                </div>
-
-                <div class="device-selects">
-                    <select id="cameraSelect" class="device-select">
-                        <option>Loading cameras...</option>
-                    </select>
-                    <select id="microphoneSelect" class="device-select">
-                        <option>Loading microphones...</option>
+                <div class="input-group">
+                    <label for="languageSelect">Language / Мова</label>
+                    <select id="languageSelect" class="language-select">
+                        <option value="uk">🇺🇦 Українська</option>
+                        <option value="en">🇬🇧 English</option>
                     </select>
                 </div>
 
                 <button type="submit" class="join-btn" id="joinBtn">
                     <span class="btn-icon">→</span>
-                    Join Meeting
+                    <span id="joinBtnText">Приєднатися</span>
                 </button>
             </form>
 
