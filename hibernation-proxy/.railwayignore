@@ -1,0 +1,3 @@
+# Ignore everything except hibernation-proxy
+../*
+!../hibernation-proxy
