@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html>
+<head>
+    <meta charset="UTF-8">
+    <title>Camera Preview Test</title>
+    <style>
+        body {
+            margin: 0;
+            padding: 20px;
+            font-family: Arial, sans-serif;
+            background: #000;
+            color: #fff;
+        }
+        .container {
+            max-width: 800px;
+            margin: 0 auto;
+        }
+        video {
+            width: 100%;
+            max-width: 640px;
+            border: 2px solid #3b82f6;
+            border-radius: 8px;
+        }
+        .status {
+            margin: 10px 0;
+            padding: 10px;
+            background: #1f2937;
+            border-radius: 4px;
+        }
+        button {
+            padding: 10px 20px;
+            margin: 5px;
+            background: #3b82f6;
+            color: white;
+            border: none;
+            border-radius: 4px;
+            cursor: pointer;
+        }
+        button:hover {
+            background: #2563eb;
+        }
+        .error {
+            color: #ef4444;
+        }
+        .success {
+            color: #10b981;
+        }
+    </style>
+</head>
+<body>
+    <div class="container">
+        <h1>Camera Preview Test</h1>
+        <div class="status" id="status">Click "Start Camera" to begin</div>
+        <video id="previewVideo" autoplay muted playsinline></video>
+        <div>
+            <button onclick="testCamera()">Start Camera</button>
+            <button onclick="stopCamera()">Stop Camera</button>
+            <button onclick="testAudioVideo()">Test Audio + Video</button>
+        </div>
+        <div id="log" style="margin-top: 20px; font-family: monospace; font-size: 12px;"></div>
+    </div>
+
+    <script>
+        let localStream = null;
+        const video = document.getElementById('previewVideo');
+        const status = document.getElementById('status');
+        const logDiv = document.getElementById('log');
+
+        function log(msg, isError = false) {
+            console.log(msg);
+            const p = document.createElement('p');
+            p.textContent = msg;
+            p.className = isError ? 'error' : 'success';
+            logDiv.appendChild(p);
+            logDiv.scrollTop = logDiv.scrollHeight;
+        }
+
+        async function testCamera() {
+            try {
+                status.textContent = 'Starting camera...';
+                log('Requesting camera access...');
+
+                const constraints = {
+                    video: {
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    },
+                    audio: false
+                };
+
+                localStream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = localStream;
+
+                const tracks = localStream.getTracks();
+                log(`✅ Got ${tracks.length} tracks: ${tracks.map(t => t.kind).join(', ')}`);
+
+                tracks.forEach(t => {
+                    log(`  - ${t.kind}: enabled=${t.enabled}, readyState=${t.readyState}, muted=${t.muted}`);
+                });
+
+                status.textContent = '✅ Camera ready';
+                status.className = 'status success';
+            } catch (err) {
+                log(`❌ Error: ${err.name} - ${err.message}`, true);
+                status.textContent = `❌ Failed: ${err.message}`;
+                status.className = 'status error';
+            }
+        }
+
+        async function testAudioVideo() {
+            try {
+                status.textContent = 'Starting audio + video...';
+                log('Requesting audio + video access...');
+
+                const constraints = {
+                    video: {
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 }
+                    },
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    }
+                };
+
+                localStream = await navigator.mediaDevices.getUserMedia(constraints);
+                video.srcObject = localStream;
+
+                const tracks = localStream.getTracks();
+                log(`✅ Got ${tracks.length} tracks: ${tracks.map(t => t.kind).join(', ')}`);
+
+                tracks.forEach(t => {
+                    log(`  - ${t.kind}: enabled=${t.enabled}, readyState=${t.readyState}, muted=${t.muted}`);
+                });
+
+                status.textContent = '✅ Audio + Video ready';
+                status.className = 'status success';
+            } catch (err) {
+                log(`❌ Error: ${err.name} - ${err.message}`, true);
+                status.textContent = `❌ Failed: ${err.message}`;
+                status.className = 'status error';
+            }
+        }
+
+        function stopCamera() {
+            if (localStream) {
+                localStream.getTracks().forEach(track => {
+                    track.stop();
+                    log(`Stopped ${track.kind} track`);
+                });
+                video.srcObject = null;
+                localStream = null;
+                status.textContent = 'Camera stopped';
+                status.className = 'status';
+            }
+        }
+
+        // Auto-start on page load
+        window.addEventListener('load', () => {
+            log('Page loaded. Ready to test camera.');
+        });
+    </script>
+</body>
+</html>

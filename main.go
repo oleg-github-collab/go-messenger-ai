@@ -32,6 +32,10 @@ const (
 )
 
 var (
+	openAIAPIKey = getEnv("OPENAI_API_KEY", "")
+)
+
+var (
 	addr = flag.String("addr", ":8080", "HTTP service address")
 	ctx  = context.Background()
 
@@ -45,10 +49,22 @@ var (
 
 	// SFU server for group calls
 	sfuServer *sfu.SFUServer
+
+	// Server start time for uptime tracking
+	startTime time.Time
 )
 
 //go:embed static/*
 var staticFiles embed.FS
+
+// getEnv gets environment variable or returns default value
+func getEnv(key, defaultValue string) string {
+	value := os.Getenv(key)
+	if value == "" {
+		return defaultValue
+	}
+	return value
+}
 
 // Room represents a 1-on-1 video room
 type Room struct {
@@ -79,9 +95,37 @@ type Message struct {
 	User string          `json:"user"`
 }
 
+// NotetakerSession stores active recording session
+type NotetakerSession struct {
+	RoomID       string    `json:"room_id"`
+	AudioChunks  [][]byte  `json:"-"`
+	StartTime    time.Time `json:"start_time"`
+	Participants []string  `json:"participants"`
+	mu           sync.Mutex
+}
+
+// TranscriptSegment represents a piece of transcript
+type TranscriptSegment struct {
+	Speaker string  `json:"speaker"`
+	Text    string  `json:"text"`
+	Start   float64 `json:"start"`
+	End     float64 `json:"end"`
+}
+
+// MeetingAnalysis contains AI-generated summary
+type MeetingAnalysis struct {
+	Summary      string   `json:"summary"`
+	KeyPoints    []string `json:"key_points"`
+	ActionItems  []string `json:"action_items"`
+	Participants []string `json:"participants"`
+	Duration     string   `json:"duration"`
+	Transcript   string   `json:"transcript"`
+}
+
 var (
-	rooms = make(map[string]*Room)
-	mu    sync.RWMutex
+	rooms             = make(map[string]*Room)
+	notetakerSessions = make(map[string]*NotetakerSession)
+	mu                sync.RWMutex
 )
 
 var upgrader = websocket.Upgrader{
@@ -522,7 +566,6 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 		delete(room.WaitingRoom, participantID)
 		remaining := len(room.Participants)
 		waitingCount := len(room.WaitingRoom)
-		isHost := participant.IsHost || (userID != "" && userID == room.HostID)
 		room.mu.Unlock()
 
 		// Notify others
@@ -538,17 +581,14 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 
 		log.Printf("[WS] 👋 %s left room %s (%d active, %d waiting)", participant.Name, roomID, remaining, waitingCount)
 
-		// If host left, deactivate meeting
-		if isHost {
-			log.Printf("[WS] 🔒 Host left - deactivating meeting %s", roomID)
-			if err := deactivateMeeting(roomID); err != nil {
-				log.Printf("[WS] ⚠️  Failed to deactivate meeting: %v", err)
-			}
-		}
+		// NOTE: We do NOT delete/deactivate meeting when host leaves
+		// Meeting stays active until TTL expires or explicitly ended
+		// This allows multiple sessions with same meeting link
 
-		// If room empty and no one waiting, clean up
+		// If room empty and no one waiting, clean up memory
 		if remaining == 0 && waitingCount == 0 {
 			cleanupRoom(roomID)
+			log.Printf("[WS] 🧹 Room %s cleaned up from memory (meeting still active in Redis)", roomID)
 		}
 	}()
 
@@ -808,6 +848,26 @@ func sfuWSHandler(w http.ResponseWriter, r *http.Request) {
 			} else {
 				log.Printf("[SFU-WS] ✅ ICE candidate added successfully")
 			}
+
+		case "quality-update":
+			log.Printf("[SFU-WS] 🎚️ Quality update from %s", participantID)
+			var payload struct {
+				Level string `json:"level"`
+			}
+			if err := json.Unmarshal([]byte(dataStr), &payload); err != nil {
+				log.Printf("[SFU-WS] ⚠️  Invalid quality payload: %v", err)
+				break
+			}
+			if err := participant.SetPreferredQualityString(payload.Level); err != nil {
+				log.Printf("[SFU-WS] ⚠️  Failed to set quality for %s: %v", participantID, err)
+			}
+
+		case "ping":
+			participant.SendMessage(map[string]interface{}{
+				"type": "pong",
+				"data": fmt.Sprintf("%d", time.Now().UnixMilli()),
+			})
+			log.Printf("[SFU-WS] ❤️ Heartbeat ping from %s", participantID)
 
 		case "chat":
 			// Parse chat data
@@ -1216,6 +1276,249 @@ func sfuWSHandler(w http.ResponseWriter, r *http.Request) {
 	// If room is empty, it will be cleaned up by SFU's internal logic
 }
 
+// AI Notetaker Handlers
+
+func startNotetakerHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		RoomID string `json:"room_id"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+
+	mu.Lock()
+	if _, exists := notetakerSessions[req.RoomID]; exists {
+		mu.Unlock()
+		http.Error(w, "notetaker already active", http.StatusConflict)
+		return
+	}
+
+	session := &NotetakerSession{
+		RoomID:       req.RoomID,
+		AudioChunks:  make([][]byte, 0),
+		StartTime:    time.Now(),
+		Participants: make([]string, 0),
+	}
+	notetakerSessions[req.RoomID] = session
+	mu.Unlock()
+
+	log.Printf("[NOTETAKER] 🎙️ Started for room %s", req.RoomID)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":    true,
+		"room_id":    req.RoomID,
+		"start_time": session.StartTime,
+	})
+}
+
+func stopNotetakerHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		RoomID     string `json:"room_id"`
+		AudioData  string `json:"audio_data"` // base64 encoded audio
+		Transcript string `json:"transcript"` // client-side transcript if available
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+
+	mu.Lock()
+	session, exists := notetakerSessions[req.RoomID]
+	if !exists {
+		mu.Unlock()
+		http.Error(w, "notetaker session not found", http.StatusNotFound)
+		return
+	}
+	delete(notetakerSessions, req.RoomID)
+	mu.Unlock()
+
+	duration := time.Since(session.StartTime)
+	log.Printf("[NOTETAKER] 🛑 Stopped for room %s (duration: %v)", req.RoomID, duration)
+
+	// Use provided transcript or return empty
+	transcript := req.Transcript
+	if transcript == "" {
+		transcript = "No transcript available"
+	}
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":    true,
+		"room_id":    req.RoomID,
+		"duration":   duration.String(),
+		"transcript": transcript,
+	})
+}
+
+func notetakerStatusHandler(w http.ResponseWriter, r *http.Request) {
+	roomID := r.URL.Query().Get("room_id")
+	if roomID == "" {
+		http.Error(w, "room_id required", http.StatusBadRequest)
+		return
+	}
+
+	mu.RLock()
+	session, active := notetakerSessions[roomID]
+	mu.RUnlock()
+
+	w.Header().Set("Content-Type", "application/json")
+	if active {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"active":     true,
+			"start_time": session.StartTime,
+			"duration":   time.Since(session.StartTime).String(),
+		})
+	} else {
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"active": false,
+		})
+	}
+}
+
+func analyzeTranscriptHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		Transcript   string   `json:"transcript"`
+		Participants []string `json:"participants"`
+		Duration     string   `json:"duration"`
+	}
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+
+	log.Printf("[NOTETAKER] 🤖 Analyzing transcript (%d chars)", len(req.Transcript))
+
+	// Call OpenAI GPT-4 for analysis
+	analysis, err := generateMeetingAnalysis(req.Transcript, req.Participants, req.Duration)
+	if err != nil {
+		log.Printf("[NOTETAKER] ❌ Analysis failed: %v", err)
+		http.Error(w, fmt.Sprintf("analysis failed: %v", err), http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("[NOTETAKER] ✅ Analysis complete")
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(analysis)
+}
+
+func generateMeetingAnalysis(transcript string, participants []string, duration string) (*MeetingAnalysis, error) {
+	// Prepare GPT-4 prompt
+	prompt := fmt.Sprintf(`You are an expert meeting analyst. Analyze this meeting transcript and provide:
+
+1. Executive Summary (2-3 sentences)
+2. Key Discussion Points (bullet list)
+3. Action Items with assignees (if mentioned)
+4. Important Decisions Made
+
+Meeting Duration: %s
+Participants: %s
+
+Transcript:
+%s
+
+Provide your analysis in JSON format with these fields:
+- summary: string
+- key_points: array of strings
+- action_items: array of strings
+- decisions: array of strings`, duration, strings.Join(participants, ", "), transcript)
+
+	// Call OpenAI API
+	reqBody := map[string]interface{}{
+		"model": "gpt-4o-mini",
+		"messages": []map[string]string{
+			{
+				"role":    "system",
+				"content": "You are a professional meeting analyst. Provide concise, actionable insights.",
+			},
+			{
+				"role":    "user",
+				"content": prompt,
+			},
+		},
+		"temperature":     0.7,
+		"response_format": map[string]string{"type": "json_object"},
+	}
+
+	reqJSON, _ := json.Marshal(reqBody)
+	req, err := http.NewRequest("POST", "https://api.openai.com/v1/chat/completions", strings.NewReader(string(reqJSON)))
+	if err != nil {
+		return nil, err
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("Authorization", "Bearer "+openAIAPIKey)
+
+	client := &http.Client{Timeout: 60 * time.Second}
+	resp, err := client.Do(req)
+	if err != nil {
+		return nil, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != 200 {
+		body, _ := io.ReadAll(resp.Body)
+		return nil, fmt.Errorf("OpenAI API error: %s - %s", resp.Status, string(body))
+	}
+
+	var result struct {
+		Choices []struct {
+			Message struct {
+				Content string `json:"content"`
+			} `json:"message"`
+		} `json:"choices"`
+	}
+
+	if err := json.NewDecoder(resp.Body).Decode(&result); err != nil {
+		return nil, err
+	}
+
+	if len(result.Choices) == 0 {
+		return nil, fmt.Errorf("no response from OpenAI")
+	}
+
+	// Parse the JSON response
+	var analysisData struct {
+		Summary     string   `json:"summary"`
+		KeyPoints   []string `json:"key_points"`
+		ActionItems []string `json:"action_items"`
+		Decisions   []string `json:"decisions"`
+	}
+
+	if err := json.Unmarshal([]byte(result.Choices[0].Message.Content), &analysisData); err != nil {
+		return nil, err
+	}
+
+	// Combine action items and decisions
+	allActionItems := append(analysisData.ActionItems, analysisData.Decisions...)
+
+	return &MeetingAnalysis{
+		Summary:      analysisData.Summary,
+		KeyPoints:    analysisData.KeyPoints,
+		ActionItems:  allActionItems,
+		Participants: participants,
+		Duration:     duration,
+		Transcript:   transcript,
+	}, nil
+}
+
 func main() {
 	flag.Parse()
 
@@ -1319,6 +1622,33 @@ func main() {
 
 		http.Redirect(w, r, "/login", http.StatusSeeOther)
 	}))
+
+	// Health check endpoint for hibernation system (must be before "/" catch-all)
+	http.HandleFunc("/api/health", func(w http.ResponseWriter, r *http.Request) {
+		// Check if all services are ready
+		redisOK := true
+		if err := rdb.Ping(ctx).Err(); err != nil {
+			redisOK = false
+		}
+
+		sfuOK := sfuServer != nil
+
+		status := "ready"
+		if !redisOK || !sfuOK {
+			status = "starting"
+		}
+
+		response := map[string]interface{}{
+			"status":    status,
+			"redis":     redisOK,
+			"sfu":       sfuOK,
+			"uptime":    time.Since(startTime).Seconds(),
+			"timestamp": time.Now().Unix(),
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+	})
 
 	// Landing page (public)
 	http.HandleFunc("/", serveFile("landing.html"))
@@ -1496,6 +1826,15 @@ func main() {
 
 	// WebSocket for group calls (SFU)
 	http.HandleFunc("/ws-sfu", sfuWSHandler)
+
+	// AI Notetaker endpoints
+	http.HandleFunc("/api/notetaker/start", authMiddleware(startNotetakerHandler))
+	http.HandleFunc("/api/notetaker/stop", authMiddleware(stopNotetakerHandler))
+	http.HandleFunc("/api/notetaker/status", authMiddleware(notetakerStatusHandler))
+	http.HandleFunc("/api/notetaker/analyze", authMiddleware(analyzeTranscriptHandler))
+
+	// Initialize start time for health check
+	startTime = time.Now()
 
 	log.Printf("🚀 Kaminskyi AI Messenger v1.0")
 	log.Printf("📝 Host: %s / %s", validUsername, validPassword)

@@ -1,0 +1,443 @@
+<!-- AI Notetaker Analysis Modal -->
+        <div class="notetaker-modal" id="notetakerModal">
+            <div class="notetaker-modal-content">
+                <div class="notetaker-modal-header">
+                    <h2>📝 Meeting Analysis</h2>
+                    <button class="notetaker-modal-close" id="notetakerModalClose">✕</button>
+                </div>
+                <div class="notetaker-modal-body" id="notetakerModalBody">
+                    <div class="notetaker-loading" id="notetakerLoading">
+                        <div class="spinner"></div>
+                        <p>Analyzing meeting with AI...</p>
+                    </div>
+                    <div class="notetaker-results" id="notetakerResults" style="display: none;">
+                        <!-- Summary Section -->
+                        <div class="analysis-section">
+                            <h3>📋 Executive Summary</h3>
+                            <p id="analysisSummary"></p>
+                        </div>
+
+                        <!-- Key Points -->
+                        <div class="analysis-section">
+                            <h3>💡 Key Discussion Points</h3>
+                            <ul id="analysisKeyPoints"></ul>
+                        </div>
+
+                        <!-- Action Items -->
+                        <div class="analysis-section">
+                            <h3>✅ Action Items & Decisions</h3>
+                            <ul id="analysisActionItems"></ul>
+                        </div>
+
+                        <!-- Transcript -->
+                        <div class="analysis-section">
+                            <h3>📄 Full Transcript</h3>
+                            <div class="transcript-box" id="analysisTranscript"></div>
+                        </div>
+
+                        <!-- Export Buttons -->
+                        <div class="analysis-actions">
+                            <button class="export-btn" id="exportDocxBtn">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6zM6 20V4h7v5h5v11H6z"/>
+                                </svg>
+                                Download DOCX
+                            </button>
+                            <button class="export-btn secondary" id="copyTranscriptBtn">
+                                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+                                </svg>
+                                Copy to Clipboard
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+        <div class="notetaker-modal-backdrop" id="notetakerModalBackdrop"></div>
+
+        <!-- Real-time Transcript Panel -->
+        <div class="realtime-transcript-panel" id="realtimeTranscriptPanel">
+            <div class="rt-panel-header">
+                <div class="rt-panel-title">
+                    <span class="rt-recording-indicator">🔴</span>
+                    <span>Live Transcript</span>
+                </div>
+                <div class="rt-panel-controls">
+                    <button class="rt-minimize-btn" id="rtMinimizeBtn" title="Minimize">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M19 13H5v-2h14v2z"/>
+                        </svg>
+                    </button>
+                    <button class="rt-close-btn" id="rtCloseBtn" title="Close">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                        </svg>
+                    </button>
+                </div>
+            </div>
+
+            <!-- Speaker Filter -->
+            <div class="rt-filter-bar">
+                <label class="rt-filter-label">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                    </svg>
+                    Speaker:
+                </label>
+                <div class="rt-filter-buttons">
+                    <button class="rt-filter-btn active" data-filter="both" id="filterBoth">Both</button>
+                    <button class="rt-filter-btn" data-filter="partner" id="filterPartner">Partner</button>
+                    <button class="rt-filter-btn" data-filter="me" id="filterMe">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 3c1.66 0 3 1.34 3 3s-1.34 3-3 3-3-1.34-3-3 1.34-3 3-3zm0 14.2c-2.5 0-4.71-1.28-6-3.22.03-1.99 4-3.08 6-3.08 1.99 0 5.97 1.09 6 3.08-1.29 1.94-3.5 3.22-6 3.22z"/>
+                        </svg>
+                        Me Only
+                    </button>
+                </div>
+            </div>
+
+            <!-- Category Filter (appears when categories exist) -->
+            <div class="rt-category-filter" id="rtCategoryFilter" style="display: none;">
+                <label class="rt-filter-label">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z"/>
+                    </svg>
+                    Show:
+                </label>
+                <div class="rt-category-chips" id="rtCategoryChips">
+                    <button class="rt-category-chip active" data-category="all">
+                        <span class="chip-dot" style="background: linear-gradient(135deg, #3b82f6, #8b5cf6);"></span>
+                        All
+                    </button>
+                    <!-- Category chips will be dynamically added here -->
+                </div>
+            </div>
+
+            <!-- Transcript Content -->
+            <div class="rt-transcript-content" id="rtTranscriptContent">
+                <div class="rt-empty-state">
+                    <div class="rt-empty-icon">🎙️</div>
+                    <div class="rt-empty-text">Start speaking to see live transcript...</div>
+                </div>
+            </div>
+
+            <!-- Stats Footer -->
+            <div class="rt-stats-footer">
+                <span class="rt-stat">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm.5-13H11v6l5.25 3.15.75-1.23-4.5-2.67z"/>
+                    </svg>
+                    <span id="rtDuration">00:00</span>
+                </span>
+                <span class="rt-stat">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M3 13h2v-2H3v2zm0 4h2v-2H3v2zm0-8h2V7H3v2zm4 4h14v-2H7v2zm0 4h14v-2H7v2zM7 7v2h14V7H7z"/>
+                    </svg>
+                    <span id="rtWordCount">0 words</span>
+                </span>
+            </div>
+        </div>
+    </div>
+
+    <!-- AI Recommendation Modal -->
+    <div class="ai-rec-backdrop" id="aiRecBackdrop"></div>
+    <div class="ai-recommendation-modal" id="aiRecommendationModal">
+        <div class="ai-rec-handle"></div>
+        <div class="ai-rec-header">
+            <h3>
+                <span>🤖</span>
+                AI Recommendation
+            </h3>
+            <button class="ai-rec-close" id="aiRecClose">×</button>
+        </div>
+        <div class="ai-rec-body" id="aiRecBody">
+            <!-- Content will be dynamically inserted -->
+        </div>
+    </div>
+
+    <!-- Meeting Configuration Modal -->
+    <div class="config-modal-backdrop" id="configModalBackdrop"></div>
+    <div class="config-modal" id="configModal">
+        <div class="config-modal-header">
+            <div class="config-modal-title">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/>
+                </svg>
+                <h2>AI Assistant Configuration</h2>
+            </div>
+            <button class="config-modal-close" id="configModalClose">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                </svg>
+            </button>
+        </div>
+
+        <div class="config-modal-body">
+            <!-- Tab Navigation -->
+            <div class="config-modal-tabs">
+                <button class="config-modal-tab active" data-tab="role">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                    </svg>
+                    <span>Professional Role</span>
+                </button>
+                <button class="config-modal-tab" data-tab="context">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6z"/>
+                    </svg>
+                    <span>Meeting Context</span>
+                </button>
+                <button class="config-modal-tab" data-tab="categories">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 2l-5.5 9h11z M17.5 13c-2.49 0-4.5 2.01-4.5 4.5s2.01 4.5 4.5 4.5 4.5-2.01 4.5-4.5-2.01-4.5-4.5-4.5zM3 13.5h8v8H3z"/>
+                    </svg>
+                    <span>Highlight Categories</span>
+                </button>
+                <button class="config-modal-tab" data-tab="templates">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
+                    </svg>
+                    <span>Templates</span>
+                </button>
+                <button class="config-modal-tab" data-tab="editor">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M14.06 9.02l.92.92L5.92 19H5v-.92l9.06-9.06M17.66 3c-.25 0-.51.1-.7.29l-1.83 1.83 3.75 3.75 1.83-1.83c.39-.39.39-1.02 0-1.41l-2.34-2.34c-.2-.2-.45-.29-.71-.29zm-3.6 3.19L3 17.25V21h3.75L17.81 9.94l-3.75-3.75z"/>
+                    </svg>
+                    <span>Transcript Editor</span>
+                </button>
+            </div>
+
+            <!-- Tab Content Areas -->
+            <div class="config-modal-content">
+                <!-- Role Tab -->
+                <div class="config-modal-tab-panel active" id="modalRoleTab">
+                    <div class="role-presets-header">
+                        <h3>Select Your Professional Role</h3>
+                        <p>Choose a role preset to automatically configure AI analysis for your profession. Each preset includes specialized categories and analysis focus tailored to your field.</p>
+                    </div>
+                    <div class="role-presets-grid" id="rolePresetsGrid">
+                        <!-- Role presets will be rendered here by JavaScript -->
+                    </div>
+
+                    <!-- Current Role Preview -->
+                    <div class="current-role-preview" id="currentRolePreview" style="display: none;">
+                        <div class="preview-header">
+                            <h4>Current Configuration</h4>
+                            <button class="preview-clear-btn" id="clearRoleBtn">Clear & Customize</button>
+                        </div>
+                        <div class="preview-content">
+                            <div class="preview-role-info">
+                                <span class="preview-role-icon" id="previewRoleIcon"></span>
+                                <div class="preview-role-text">
+                                    <strong id="previewRoleName"></strong>
+                                    <span id="previewRoleDesc"></span>
+                                </div>
+                            </div>
+                            <div class="preview-categories">
+                                <strong>Active Categories:</strong>
+                                <div class="preview-category-chips" id="previewCategoryChips"></div>
+                            </div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Context Tab -->
+                <div class="config-modal-tab-panel" id="modalContextTab">
+                    <div class="config-modal-grid">
+                        <div class="config-modal-section">
+                            <label class="config-modal-label">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                                </svg>
+                                Meeting Objective
+                            </label>
+                            <p class="config-modal-help">What do you want to achieve in this meeting?</p>
+                            <textarea class="config-modal-textarea" id="modalMeetingGoal" placeholder="Example: Negotiate contract terms, close sales deal, resolve customer issue, establish partnership..."></textarea>
+                        </div>
+
+                        <div class="config-modal-section">
+                            <label class="config-modal-label">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
+                                </svg>
+                                Partner Information
+                            </label>
+                            <p class="config-modal-help">The more context you provide, the better AI recommendations</p>
+                            <textarea class="config-modal-textarea large" id="modalPartnerInfo" placeholder="Name, role, company, personality traits, background, previous interactions, preferences, pain points, decision-making style..."></textarea>
+                        </div>
+
+                        <div class="config-modal-section">
+                            <label class="config-modal-label">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M9 11H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2zm2-7h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11z"/>
+                                </svg>
+                                Meeting Type
+                            </label>
+                            <select class="config-modal-select" id="modalMeetingType">
+                                <option value="sales">💰 Sales & Negotiation</option>
+                                <option value="support">🎧 Customer Support</option>
+                                <option value="interview">👔 Interview</option>
+                                <option value="partnership">🤝 Partnership Discussion</option>
+                                <option value="conflict">⚡ Conflict Resolution</option>
+                                <option value="brainstorm">💡 Brainstorming</option>
+                                <option value="technical">🔧 Technical Discussion</option>
+                                <option value="general">💬 General Meeting</option>
+                            </select>
+                        </div>
+
+                        <div class="config-modal-section">
+                            <label class="config-modal-label">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M11 7h2v2h-2zm0 4h2v6h-2zm1-9C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
+                                </svg>
+                                Key Points to Watch
+                            </label>
+                            <p class="config-modal-help">What should AI pay special attention to?</p>
+                            <textarea class="config-modal-textarea" id="modalKeyPoints" placeholder="Example: Pricing discussions, technical requirements, deadlines, commitments, objections, specific topics..."></textarea>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Categories Tab -->
+                <div class="config-modal-tab-panel" id="modalCategoriesTab">
+                    <div class="categories-header-large">
+                        <div>
+                            <h3 class="categories-title-large">Custom Highlight Categories</h3>
+                            <p class="categories-subtitle">AI will analyze and color-code statements in real-time</p>
+                        </div>
+                        <button class="add-category-btn-large" id="modalAddCategoryBtn">
+                            <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                            </svg>
+                            Add Category
+                        </button>
+                    </div>
+
+                    <div class="categories-list-large" id="modalCategoriesList">
+                        <!-- Categories will be rendered here -->
+                    </div>
+
+                    <div class="categories-help-large">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M11 17h2v-6h-2v6zm1-15C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8zM11 9h2V7h-2v2z"/>
+                        </svg>
+                        <div>
+                            <strong>How it works:</strong> AI analyzes each statement during the conversation and highlights it with your category color if it matches. Click on any highlighted statement to get detailed recommendations.
+                        </div>
+                    </div>
+                </div>
+
+                <!-- Templates Tab -->
+                <div class="config-modal-tab-panel" id="modalTemplatesTab">
+                    <h3 class="templates-title-large">Quick Start Templates</h3>
+                    <p class="templates-subtitle">Choose a pre-configured setup for common meeting types</p>
+                    <div class="templates-grid-large" id="modalTemplatesGrid">
+                        <!-- Templates will be rendered here -->
+                    </div>
+                </div>
+
+                <!-- Transcript Editor Tab -->
+                <div class="config-modal-tab-panel" id="modalEditorTab">
+                    <div class="editor-header">
+                        <div class="editor-header-left">
+                            <h3>Transcript Editor</h3>
+                            <div class="selection-info" id="selectionInfo">No items selected</div>
+                        </div>
+                        <div class="editor-header-right">
+                            <button class="editor-toolbar-btn" id="syncTranscriptBtn" title="Sync from live transcript">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M12 4V1L8 5l4 4V6c3.31 0 6 2.69 6 6 0 1.01-.25 1.97-.7 2.8l1.46 1.46C19.54 15.03 20 13.57 20 12c0-4.42-3.58-8-8-8zm0 14c-3.31 0-6-2.69-6-6 0-1.01.25-1.97.7-2.8L5.24 7.74C4.46 8.97 4 10.43 4 12c0 4.42 3.58 8 8 8v3l4-4-4-4v3z"/>
+                                </svg>
+                                Sync
+                            </button>
+                            <button class="editor-toolbar-btn primary" id="exportAllBtn" title="Export full transcript">
+                                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2z"/>
+                                </svg>
+                                Export All
+                            </button>
+                        </div>
+                    </div>
+
+                    <div class="editor-toolbar">
+                        <div class="editor-toolbar-group">
+                            <button class="editor-toolbar-btn" id="selectAllBtn" title="Select all visible">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M3 5h2V3c-1.1 0-2 .9-2 2zm0 8h2v-2H3v2zm4 8h2v-2H7v2zM3 9h2V7H3v2zm10-6h-2v2h2V3zm6 0v2h2c0-1.1-.9-2-2-2zM5 21v-2H3c0 1.1.9 2 2 2zm-2-4h2v-2H3v2zM9 3H7v2h2V3zm2 18h2v-2h-2v2zm8-8h2v-2h-2v2zm0 8c1.1 0 2-.9 2-2h-2v2zm0-12h2V7h-2v2zm0 8h2v-2h-2v2zm-4 4h2v-2h-2v2zm0-16h2V3h-2v2zM7 17h10V7H7v10zm2-8h6v6H9V9z"/>
+                                </svg>
+                                Select All
+                            </button>
+                            <button class="editor-toolbar-btn" id="deselectAllBtn" title="Deselect all">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                                </svg>
+                                Deselect All
+                            </button>
+                        </div>
+
+                        <div class="editor-toolbar-group">
+                            <button class="editor-toolbar-btn" id="filterAllBtn" title="Show all">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M10 18h4v-2h-4v2zM3 6v2h18V6H3zm3 7h12v-2H6v2z"/>
+                                </svg>
+                                All
+                            </button>
+                            <button class="editor-toolbar-btn" id="filterSelectedBtn" title="Show selected only">
+                                <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                    <path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/>
+                                </svg>
+                                Selected
+                            </button>
+                            <select class="editor-filter-select" id="categoryFilterSelect">
+                                <option value="all">All Categories</option>
+                            </select>
+                        </div>
+
+                        <div class="editor-toolbar-group">
+                            <input type="text" class="editor-search-input" id="transcriptSearchInput" placeholder="Search transcript...">
+                        </div>
+                    </div>
+
+                    <div class="editor-actions-bar">
+                        <button class="editor-action-btn" id="copySelectedBtn" title="Copy selected to clipboard">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M16 1H4c-1.1 0-2 .9-2 2v14h2V3h12V1zm3 4H8c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h11c1.1 0 2-.9 2-2V7c0-1.1-.9-2-2-2zm0 16H8V7h11v14z"/>
+                            </svg>
+                            Copy Selected
+                        </button>
+                        <button class="editor-action-btn" id="exportSelectedBtn" title="Export selected as file">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2z"/>
+                            </svg>
+                            Export Selected
+                        </button>
+                        <button class="editor-action-btn danger" id="deleteSelectedBtn" title="Delete selected">
+                            <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                            </svg>
+                            Delete Selected
+                        </button>
+                    </div>
+
+                    <div class="editor-entries-container">
+                        <div class="editor-entries-list" id="transcriptEntriesList">
+                            <div class="editor-empty-state">
+                                Click "Sync" button to load transcript entries
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <div class="config-modal-footer">
+            <button class="config-modal-btn secondary" id="configModalCancel">Cancel</button>
+            <button class="config-modal-btn primary" id="configModalSave">
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/>
+                </svg>
+                Save & Close
+            </button>
+        </div>
+    </div>

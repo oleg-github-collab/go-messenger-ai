@@ -1,0 +1,528 @@
+/* Improved AI Notetaker Panel - Modern Design with Visible Close Button */
+
+.notetaker-floating-panel {
+    position: fixed;
+    top: 80px;
+    right: 20px;
+    width: 420px;
+    max-height: calc(100vh - 100px);
+    overflow-y: auto;
+    z-index: 9999;
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+}
+
+.notetaker-settings-group {
+    position: relative;
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    border: 2px solid rgba(99, 102, 241, 0.3);
+    border-radius: 20px;
+    padding: 28px;
+    box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+    backdrop-filter: blur(20px);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.notetaker-settings-group:hover {
+    border-color: rgba(99, 102, 241, 0.5);
+    box-shadow: 0 25px 70px rgba(99, 102, 241, 0.3);
+}
+
+/* Header with Close Button */
+.notetaker-header {
+    position: relative;
+    margin-bottom: 24px;
+    padding-right: 50px; /* Space for close button */
+}
+
+.notetaker-title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: flex-start;
+    margin-bottom: 10px;
+    position: relative;
+}
+
+.notetaker-main-label {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 20px;
+    font-weight: 700;
+    color: #f1f5f9;
+    margin: 0;
+}
+
+.notetaker-icon-large {
+    font-size: 32px;
+    filter: drop-shadow(0 0 8px rgba(99, 102, 241, 0.5));
+}
+
+/* Close Button - Highly Visible */
+.notetaker-close-btn {
+    position: absolute !important;
+    top: -8px !important;
+    right: -8px !important;
+    width: 40px !important;
+    height: 40px !important;
+    border: 2px solid rgba(239, 68, 68, 0.4) !important;
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.2), rgba(220, 38, 38, 0.3)) !important;
+    color: #fca5a5 !important;
+    border-radius: 50% !important;
+    font-size: 22px !important;
+    font-weight: 700 !important;
+    cursor: pointer !important;
+    display: flex !important;
+    align-items: center !important;
+    justify-content: center !important;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1) !important;
+    z-index: 1000 !important;
+    box-shadow: 0 4px 12px rgba(239, 68, 68, 0.3) !important;
+}
+
+.notetaker-close-btn:hover {
+    background: linear-gradient(135deg, rgba(239, 68, 68, 0.4), rgba(220, 38, 38, 0.5)) !important;
+    color: #ffffff !important;
+    transform: scale(1.15) rotate(90deg) !important;
+    border-color: rgba(239, 68, 68, 0.8) !important;
+    box-shadow: 0 6px 20px rgba(239, 68, 68, 0.5) !important;
+}
+
+.notetaker-close-btn:active {
+    transform: scale(1.05) rotate(90deg) !important;
+}
+
+/* Status Badge */
+.notetaker-status-badge {
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 16px;
+    background: rgba(16, 185, 129, 0.15);
+    border: 1.5px solid rgba(16, 185, 129, 0.4);
+    border-radius: 24px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #6ee7b7;
+    margin-top: 4px;
+}
+
+.notetaker-status-badge.recording {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.4);
+    color: #fca5a5;
+    animation: recording-pulse 2s ease-in-out infinite;
+}
+
+@keyframes recording-pulse {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.4);
+    }
+    50% {
+        box-shadow: 0 0 0 8px rgba(239, 68, 68, 0);
+    }
+}
+
+.status-dot {
+    width: 10px;
+    height: 10px;
+    background: currentColor;
+    border-radius: 50%;
+    box-shadow: 0 0 10px currentColor;
+}
+
+.recording .status-dot {
+    animation: dot-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes dot-pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.6; transform: scale(0.85); }
+}
+
+.settings-description {
+    font-size: 14px;
+    color: #94a3b8;
+    line-height: 1.6;
+    margin: 8px 0 0 0;
+}
+
+/* Quick Stats */
+.notetaker-quick-stats {
+    display: grid;
+    grid-template-columns: repeat(4, 1fr);
+    gap: 12px;
+    margin-bottom: 24px;
+    padding: 20px;
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.1), rgba(139, 92, 246, 0.1));
+    border: 1px solid rgba(99, 102, 241, 0.2);
+    border-radius: 16px;
+}
+
+.quick-stat {
+    text-align: center;
+    padding: 8px;
+    background: rgba(255, 255, 255, 0.03);
+    border-radius: 12px;
+    transition: all 0.2s ease;
+}
+
+.quick-stat:hover {
+    background: rgba(255, 255, 255, 0.06);
+    transform: translateY(-2px);
+}
+
+.quick-stat .stat-value {
+    font-size: 26px;
+    font-weight: 700;
+    background: linear-gradient(135deg, #60a5fa, #a78bfa);
+    -webkit-background-clip: text;
+    -webkit-text-fill-color: transparent;
+    background-clip: text;
+    margin-bottom: 4px;
+}
+
+.quick-stat .stat-label {
+    font-size: 11px;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.8px;
+    font-weight: 600;
+}
+
+/* Tabs */
+.notetaker-tabs {
+    display: flex;
+    gap: 8px;
+    margin-bottom: 20px;
+    padding: 6px;
+    background: rgba(15, 23, 42, 0.5);
+    border-radius: 12px;
+    overflow-x: auto;
+}
+
+.notetaker-tab {
+    flex: 1;
+    min-width: fit-content;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px 16px;
+    background: transparent;
+    border: 1px solid transparent;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    color: #94a3b8;
+    cursor: pointer;
+    transition: all 0.2s ease;
+    white-space: nowrap;
+}
+
+.notetaker-tab:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: #cbd5e1;
+}
+
+.notetaker-tab.active {
+    background: linear-gradient(135deg, rgba(99, 102, 241, 0.2), rgba(139, 92, 246, 0.2));
+    border-color: rgba(99, 102, 241, 0.4);
+    color: #c7d2fe;
+}
+
+.notetaker-tab svg {
+    width: 16px;
+    height: 16px;
+}
+
+/* Tab Content */
+.notetaker-tab-content {
+    margin-bottom: 20px;
+}
+
+.notetaker-tab-panel {
+    display: none;
+}
+
+.notetaker-tab-panel.active {
+    display: block;
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(-10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Form Groups */
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #e2e8f0;
+    margin-bottom: 10px;
+}
+
+.form-label svg {
+    width: 16px;
+    height: 16px;
+    color: #818cf8;
+}
+
+.settings-select,
+.settings-textarea,
+.settings-input {
+    width: 100%;
+    padding: 12px 16px;
+    background: rgba(15, 23, 42, 0.6);
+    border: 1.5px solid rgba(99, 102, 241, 0.2);
+    border-radius: 10px;
+    color: #f1f5f9;
+    font-size: 14px;
+    font-family: inherit;
+    transition: all 0.2s ease;
+}
+
+.settings-select:focus,
+.settings-textarea:focus,
+.settings-input:focus {
+    outline: none;
+    border-color: rgba(99, 102, 241, 0.6);
+    background: rgba(15, 23, 42, 0.8);
+    box-shadow: 0 0 0 3px rgba(99, 102, 241, 0.1);
+}
+
+.settings-textarea {
+    resize: vertical;
+    min-height: 80px;
+}
+
+.field-description {
+    font-size: 12px;
+    color: #64748b;
+    margin-top: 6px;
+    line-height: 1.5;
+}
+
+/* Realtime Transcript */
+.realtime-transcript {
+    min-height: 200px;
+    max-height: 400px;
+    overflow-y: auto;
+    padding: 16px;
+    background: rgba(15, 23, 42, 0.6);
+    border: 1.5px solid rgba(99, 102, 241, 0.2);
+    border-radius: 12px;
+    font-size: 14px;
+    line-height: 1.8;
+    color: #cbd5e1;
+}
+
+.transcript-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 200px;
+    color: #475569;
+    text-align: center;
+}
+
+.transcript-placeholder svg {
+    margin-bottom: 16px;
+    opacity: 0.3;
+}
+
+.transcript-placeholder p {
+    font-size: 14px;
+    font-weight: 500;
+}
+
+/* Transcript Entry */
+.transcript-entry {
+    margin-bottom: 16px;
+    padding: 12px;
+    background: rgba(255, 255, 255, 0.03);
+    border-left: 3px solid #6366f1;
+    border-radius: 8px;
+    animation: slideIn 0.3s ease;
+}
+
+@keyframes slideIn {
+    from { opacity: 0; transform: translateX(-20px); }
+    to { opacity: 1; transform: translateX(0); }
+}
+
+.transcript-entry-time {
+    font-size: 11px;
+    color: #64748b;
+    margin-bottom: 4px;
+    font-weight: 600;
+}
+
+.transcript-entry-text {
+    color: #e2e8f0;
+    line-height: 1.6;
+}
+
+/* Control Buttons */
+.notetaker-controls {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 16px;
+}
+
+.btn-primary,
+.btn-secondary {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 10px;
+    padding: 14px 20px;
+    border: none;
+    border-radius: 12px;
+    font-size: 15px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    font-family: inherit;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #6366f1, #8b5cf6);
+    color: white;
+    box-shadow: 0 4px 12px rgba(99, 102, 241, 0.3);
+}
+
+.btn-primary:hover {
+    background: linear-gradient(135deg, #7c3aed, #a855f7);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(99, 102, 241, 0.4);
+}
+
+.btn-primary:active {
+    transform: translateY(0);
+}
+
+.btn-primary.recording {
+    background: linear-gradient(135deg, #ef4444, #dc2626);
+    animation: recording-pulse 2s ease-in-out infinite;
+}
+
+.btn-secondary {
+    background: rgba(99, 102, 241, 0.15);
+    color: #c7d2fe;
+    border: 1.5px solid rgba(99, 102, 241, 0.3);
+}
+
+.btn-secondary:hover {
+    background: rgba(99, 102, 241, 0.25);
+    border-color: rgba(99, 102, 241, 0.5);
+    transform: translateY(-2px);
+}
+
+.notetaker-icon {
+    font-size: 20px;
+}
+
+/* Reopen Button */
+#reopenNotetakerBtn {
+    position: fixed;
+    bottom: 120px;
+    right: 24px;
+    width: 64px;
+    height: 64px;
+    border: none;
+    background: linear-gradient(135deg, #6366f1 0%, #8b5cf6 100%);
+    color: white;
+    border-radius: 50%;
+    font-size: 28px;
+    cursor: pointer;
+    display: none;
+    align-items: center;
+    justify-content: center;
+    box-shadow: 0 8px 24px rgba(99, 102, 241, 0.4);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    z-index: 9998;
+    animation: float 3s ease-in-out infinite;
+}
+
+@keyframes float {
+    0%, 100% { transform: translateY(0); }
+    50% { transform: translateY(-10px); }
+}
+
+#reopenNotetakerBtn:hover {
+    transform: scale(1.15) translateY(0) !important;
+    box-shadow: 0 12px 32px rgba(99, 102, 241, 0.6);
+    animation: none;
+}
+
+#reopenNotetakerBtn:active {
+    transform: scale(1.05) !important;
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+    .notetaker-floating-panel {
+        top: 60px;
+        right: 12px;
+        left: 12px;
+        width: auto;
+    }
+
+    .notetaker-settings-group {
+        padding: 20px;
+    }
+
+    .notetaker-quick-stats {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .notetaker-tabs {
+        overflow-x: auto;
+        scrollbar-width: thin;
+    }
+
+    .notetaker-controls {
+        flex-direction: column;
+    }
+
+    #reopenNotetakerBtn {
+        width: 56px;
+        height: 56px;
+        bottom: 100px;
+        right: 16px;
+        font-size: 24px;
+    }
+}
+
+/* Scrollbar Styling */
+.notetaker-floating-panel::-webkit-scrollbar,
+.realtime-transcript::-webkit-scrollbar {
+    width: 8px;
+}
+
+.notetaker-floating-panel::-webkit-scrollbar-track,
+.realtime-transcript::-webkit-scrollbar-track {
+    background: rgba(15, 23, 42, 0.5);
+    border-radius: 10px;
+}
+
+.notetaker-floating-panel::-webkit-scrollbar-thumb,
+.realtime-transcript::-webkit-scrollbar-thumb {
+    background: rgba(99, 102, 241, 0.3);
+    border-radius: 10px;
+}
+
+.notetaker-floating-panel::-webkit-scrollbar-thumb:hover,
+.realtime-transcript::-webkit-scrollbar-thumb:hover {
+    background: rgba(99, 102, 241, 0.5);
+}

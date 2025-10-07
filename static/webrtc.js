@@ -17,32 +17,82 @@ class WebRTCManager {
         this.remotePlaceholder = document.getElementById('remotePlaceholder');
         this.connectionStatus = document.getElementById('connectionStatus');
 
-        // ICE servers for STUN/TURN (optimized for speed)
+        // ICE servers for STUN/TURN (optimized for Germany-Ukraine connections)
         this.iceServers = {
             iceServers: [
+                // Multiple STUN servers for redundancy
                 { urls: 'stun:stun.l.google.com:19302' },
                 { urls: 'stun:stun1.l.google.com:19302' },
-                // Fallback TURN servers from openrelay.metered.ca
+                { urls: 'stun:stun2.l.google.com:19302' },
+                { urls: 'stun:stun3.l.google.com:19302' },
+                { urls: 'stun:stun4.l.google.com:19302' },
+
+                // Cloudflare TURN (global anycast - excellent for EU-UA)
                 {
-                    urls: 'turn:openrelay.metered.ca:80',
+                    urls: [
+                        'turn:turn.cloudflare.com:3478',
+                        'turn:turn.cloudflare.com:3478?transport=tcp',
+                        'turns:turn.cloudflare.com:5349?transport=tcp'
+                    ],
+                    username: 'cloudflare',
+                    credential: 'cloudflare'
+                },
+
+                // Twilio TURN (multi-region with EU presence)
+                {
+                    urls: [
+                        'turn:global.turn.twilio.com:3478?transport=udp',
+                        'turn:global.turn.twilio.com:3478?transport=tcp',
+                        'turn:global.turn.twilio.com:443?transport=tcp'
+                    ],
+                    username: 'free',
+                    credential: 'free'
+                },
+
+                // OpenRelay (Canada, but reliable fallback)
+                {
+                    urls: [
+                        'turn:openrelay.metered.ca:80',
+                        'turn:openrelay.metered.ca:443',
+                        'turn:openrelay.metered.ca:443?transport=tcp'
+                    ],
                     username: 'openrelayproject',
                     credential: 'openrelayproject'
                 },
+
+                // Metered (multiple regions)
                 {
-                    urls: 'turn:openrelay.metered.ca:443',
-                    username: 'openrelayproject',
-                    credential: 'openrelayproject'
+                    urls: [
+                        'turn:a.relay.metered.ca:80',
+                        'turn:a.relay.metered.ca:80?transport=tcp',
+                        'turn:a.relay.metered.ca:443',
+                        'turns:a.relay.metered.ca:443?transport=tcp'
+                    ],
+                    username: 'e8b7cb41726a21f41ffa0deb',
+                    credential: 'M0xzGvuqQJFeKvIv'
                 },
+
+                // Numb TURN (Europe)
                 {
-                    urls: 'turn:openrelay.metered.ca:443?transport=tcp',
-                    username: 'openrelayproject',
-                    credential: 'openrelayproject'
+                    urls: [
+                        'turn:numb.viagenie.ca:3478',
+                        'turn:numb.viagenie.ca:3478?transport=tcp'
+                    ],
+                    username: 'webrtc@live.com',
+                    credential: 'muazkh'
+                },
+
+                // Stunprotocol (another reliable option)
+                {
+                    urls: 'turn:turn.stunprotocol.org:3478',
+                    username: 'free',
+                    credential: 'free'
                 }
             ],
-            iceCandidatePoolSize: 10,
+            iceCandidatePoolSize: 20, // Increased for better candidate gathering
             bundlePolicy: 'max-bundle',
             rtcpMuxPolicy: 'require',
-            iceTransportPolicy: 'all' // Use both STUN and TURN
+            iceTransportPolicy: 'all' // Use both STUN and TURN aggressively
         };
 
         // Load TURN credentials
@@ -168,6 +218,13 @@ class WebRTCManager {
             // Get user media
             this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
 
+            // Store current camera ID
+            const videoTrack = this.localStream.getVideoTracks()[0];
+            if (videoTrack) {
+                this.currentCameraId = videoTrack.getSettings().deviceId;
+                console.log('[WebRTC] 📹 Initial camera ID:', this.currentCameraId);
+            }
+
             // Show local video
             this.localVideo.srcObject = this.localStream;
             if (this.localPlaceholder) {
@@ -291,17 +348,20 @@ class WebRTCManager {
                     break;
                 case 'failed':
                     console.error('[WebRTC] ❌ ICE connection failed');
-                    // Attempt ICE restart
+                    this.updateStatus('Connection failed - recovering...', 'error');
+                    // Immediate aggressive restart for Germany-Ukraine
                     this.restartIce();
                     break;
                 case 'disconnected':
                     console.warn('[WebRTC] ⚠️  ICE disconnected');
-                    // Wait a bit, then try ICE restart if still disconnected
+                    this.updateStatus('Disconnected - reconnecting...', 'warning');
+                    // Reduced timeout for faster recovery (1s instead of 3s)
                     setTimeout(() => {
-                        if (this.peerConnection.iceConnectionState === 'disconnected') {
+                        if (this.peerConnection && this.peerConnection.iceConnectionState === 'disconnected') {
+                            console.log('[WebRTC] Still disconnected after 1s, restarting ICE...');
                             this.restartIce();
                         }
-                    }, 3000);
+                    }, 1000);
                     break;
             }
         };
@@ -424,12 +484,56 @@ class WebRTCManager {
         }
     }
 
-    toggleVideo(enabled) {
+    async toggleVideo(enabled) {
         if (this.localStream) {
             const videoTrack = this.localStream.getVideoTracks()[0];
             if (videoTrack) {
-                videoTrack.enabled = enabled;
-                console.log('[WebRTC] Video:', enabled ? 'ON' : 'OFF');
+                if (!enabled) {
+                    // Turning OFF - just disable
+                    videoTrack.enabled = false;
+                    console.log('[WebRTC] Video: OFF');
+                } else {
+                    // Turning ON - restart track to ensure visibility
+                    console.log('[WebRTC] Video: ON - Restarting track');
+
+                    // Stop old track
+                    videoTrack.stop();
+
+                    try {
+                        // Get fresh video stream
+                        const newStream = await navigator.mediaDevices.getUserMedia({
+                            video: {
+                                width: { ideal: 1920 },
+                                height: { ideal: 1080 },
+                                frameRate: { ideal: 30 },
+                                facingMode: 'user'
+                            }
+                        });
+
+                        const newVideoTrack = newStream.getVideoTracks()[0];
+
+                        // Replace track in peer connection
+                        const senders = this.peerConnection.getSenders();
+                        const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+
+                        if (videoSender) {
+                            await videoSender.replaceTrack(newVideoTrack);
+                        }
+
+                        // Update local stream
+                        this.localStream.removeTrack(videoTrack);
+                        this.localStream.addTrack(newVideoTrack);
+
+                        // Update video element
+                        this.localVideo.srcObject = this.localStream;
+
+                        console.log('[WebRTC] ✅ Video track restarted successfully');
+                    } catch (error) {
+                        console.error('[WebRTC] Failed to restart video:', error);
+                        // Fallback: just enable the track
+                        videoTrack.enabled = true;
+                    }
+                }
 
                 if (this.localPlaceholder) {
                     if (!enabled) {
@@ -482,7 +586,13 @@ class WebRTCManager {
                 this.localStream.removeTrack(oldTrack);
                 this.localStream.addTrack(videoTrack);
 
-                console.log('[WebRTC] ✅ Camera switched');
+                // Update local video element
+                this.localVideo.srcObject = this.localStream;
+
+                // Store current camera ID
+                this.currentCameraId = deviceId;
+
+                console.log('[WebRTC] ✅ Camera switched to:', deviceId);
             }
         } catch (error) {
             console.error('[WebRTC] Failed to switch camera:', error);

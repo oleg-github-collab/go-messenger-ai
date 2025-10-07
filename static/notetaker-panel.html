@@ -1,0 +1,282 @@
+<!-- AI Notetaker Panel Component -->
+<!-- This can be included in both call.html and group-call.html -->
+
+<!-- AI Notetaker Settings Group -->
+<div class="notetaker-floating-panel" id="notetakerFloatingPanel" style="display: none;">
+<div class="settings-group notetaker-settings-group" id="notetakerGroup" style="display: none;">
+    <div class="notetaker-header">
+        <div class="notetaker-title-row">
+            <label class="settings-label notetaker-main-label">
+                <span class="notetaker-icon-large">🤖</span>
+                AI Meeting Assistant
+            </label>
+            <div class="notetaker-status-badge" id="notetakerStatusBadge">
+                <span class="status-dot"></span>
+                <span class="status-text">Ready</span>
+            </div>
+        </div>
+        <p class="settings-description">Real-time transcription with intelligent categorization and analysis</p>
+    </div>
+
+    <!-- Quick Stats -->
+    <div class="notetaker-quick-stats" id="notetakerQuickStats" style="display: none;">
+        <div class="quick-stat">
+            <div class="stat-value" id="transcriptWordCount">0</div>
+            <div class="stat-label">Words</div>
+        </div>
+        <div class="quick-stat">
+            <div class="stat-value" id="transcriptDuration">0:00</div>
+            <div class="stat-label">Duration</div>
+        </div>
+        <div class="quick-stat">
+            <div class="stat-value" id="transcriptEntries">0</div>
+            <div class="stat-label">Entries</div>
+        </div>
+        <div class="quick-stat">
+            <div class="stat-value" id="transcriptHighlights">0</div>
+            <div class="stat-label">Highlights</div>
+        </div>
+    </div>
+
+    <!-- Configuration Tabs -->
+    <div class="notetaker-tabs" id="notetakerTabs">
+        <button class="notetaker-tab active" data-tab="basic">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2L2 7l10 5 10-5-10-5zM2 17l10 5 10-5M2 12l10 5 10-5"></path>
+            </svg>
+            Basic
+        </button>
+        <button class="notetaker-tab" data-tab="categories">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M3 5h18v2H3V5zm0 6h18v2H3v-2zm0 6h18v2H3v-2z"></path>
+            </svg>
+            Categories
+        </button>
+        <button class="notetaker-tab" data-tab="presets">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm1 15h-2v-6h2v6zm0-8h-2V7h2v2z"></path>
+            </svg>
+            Presets
+        </button>
+        <button class="notetaker-tab" data-tab="advanced">
+            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                <path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"></path>
+            </svg>
+            Advanced
+        </button>
+    </div>
+
+    <!-- Tab Content -->
+    <div class="notetaker-tab-content">
+        <!-- Basic Tab -->
+        <div class="notetaker-tab-panel active" data-panel="basic">
+            <!-- Language Selection -->
+            <div class="form-group">
+                <label class="form-label">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-1 17.93c-3.95-.49-7-3.85-7-7.93 0-.62.08-1.21.21-1.79L9 15v1c0 1.1.9 2 2 2v1.93zm6.9-2.54c-.26-.81-1-1.39-1.9-1.39h-1v-3c0-.55-.45-1-1-1H8v-2h2c.55 0 1-.45 1-1V7h2c1.1 0 2-.9 2-2v-.41c2.93 1.19 5 4.06 5 7.41 0 2.08-.8 3.97-2.1 5.39z"/>
+                    </svg>
+                    Transcription Language
+                </label>
+                <select class="settings-select" id="notetakerLangSelect">
+                    <option value="uk-UA">🇺🇦 Українська</option>
+                    <option value="ru-RU">🇷🇺 Русский</option>
+                    <option value="en-US">🇬🇧 English (US)</option>
+                    <option value="en-GB">🇬🇧 English (UK)</option>
+                    <option value="de-DE">🇩🇪 Deutsch</option>
+                    <option value="es-ES">🇪🇸 Español</option>
+                    <option value="fr-FR">🇫🇷 Français</option>
+                    <option value="it-IT">🇮🇹 Italiano</option>
+                    <option value="pl-PL">🇵🇱 Polski</option>
+                </select>
+                <p class="field-description">Select the primary language for speech recognition</p>
+            </div>
+
+            <!-- Meeting Context -->
+            <div class="form-group">
+                <label class="form-label">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M14 2H6c-1.1 0-1.99.9-1.99 2L4 20c0 1.1.89 2 1.99 2H18c1.1 0 2-.9 2-2V8l-6-6zm2 16H8v-2h8v2zm0-4H8v-2h8v2zm-3-5V3.5L18.5 9H13z"/>
+                    </svg>
+                    Meeting Context
+                </label>
+                <textarea
+                    class="settings-textarea"
+                    id="meetingContextInput"
+                    placeholder="e.g., Business strategy meeting, Yoga class, Language lesson, Medical consultation..."
+                    rows="3"
+                    maxlength="500"
+                ></textarea>
+                <p class="field-description">Help AI understand the meeting type for better categorization</p>
+            </div>
+
+            <!-- Real-time Transcript Display -->
+            <div class="form-group">
+                <label class="form-label">
+                    <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M20 2H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h14l4 4V4c0-1.1-.9-2-2-2zm-2 12H6v-2h12v2zm0-3H6V9h12v2zm0-3H6V6h12v2z"/>
+                    </svg>
+                    Live Transcript
+                    <button class="btn-icon-small" id="clearTranscriptBtn" title="Clear transcript">
+                        <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                        </svg>
+                    </button>
+                </label>
+                <div class="realtime-transcript" id="realtimeTranscript">
+                    <div class="transcript-placeholder">
+                        <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor" opacity="0.3">
+                            <path d="M12 14c1.66 0 2.99-1.34 2.99-3L15 5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3zm5.3-3c0 3-2.54 5.1-5.3 5.1S6.7 14 6.7 11H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c3.28-.48 6-3.3 6-6.72h-1.7z"/>
+                        </svg>
+                        <p>Start recording to see live transcript</p>
+                    </div>
+                </div>
+            </div>
+        </div>
+
+        <!-- Categories Tab -->
+        <div class="notetaker-tab-panel" data-panel="categories">
+            <div class="categories-header">
+                <h3>Custom Categories</h3>
+                <button class="btn-secondary btn-small" id="addCategoryBtn">
+                    <svg width="14" height="14" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
+                    </svg>
+                    Add Category
+                </button>
+            </div>
+            <p class="field-description">Define custom categories to highlight specific topics during the meeting</p>
+
+            <div class="categories-list" id="categoriesList">
+                <!-- Categories will be dynamically added here -->
+            </div>
+
+            <!-- Example categories template (hidden) -->
+            <template id="categoryItemTemplate">
+                <div class="category-item">
+                    <div class="category-header">
+                        <input type="checkbox" class="category-toggle" checked>
+                        <input type="color" class="category-color" value="#3b82f6">
+                        <input type="text" class="category-name" placeholder="Category name" maxlength="50">
+                        <button class="btn-icon-danger btn-remove-category">
+                            <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                                <path d="M6 19c0 1.1.9 2 2 2h8c1.1 0 2-.9 2-2V7H6v12zM19 4h-3.5l-1-1h-5l-1 1H5v2h14V4z"/>
+                            </svg>
+                        </button>
+                    </div>
+                    <textarea class="category-description" placeholder="What should AI look for? (keywords, phrases, context...)" rows="2" maxlength="200"></textarea>
+                </div>
+            </template>
+        </div>
+
+        <!-- Presets Tab -->
+        <div class="notetaker-tab-panel" data-panel="presets">
+            <h3>Professional Presets</h3>
+            <p class="field-description">Quick-start templates for different meeting types</p>
+
+            <div class="presets-grid" id="presetsGrid">
+                <!-- Presets will be dynamically added here -->
+            </div>
+
+            <div class="preset-preview" id="presetPreview" style="display: none;">
+                <h4>Preview</h4>
+                <div class="preset-categories" id="presetCategories"></div>
+            </div>
+        </div>
+
+        <!-- Advanced Tab -->
+        <div class="notetaker-tab-panel" data-panel="advanced">
+            <h3>Advanced Settings</h3>
+
+            <!-- AI Analysis -->
+            <div class="form-group">
+                <label class="form-label">
+                    <input type="checkbox" id="enableAIAnalysis" checked>
+                    Real-time AI Analysis
+                </label>
+                <p class="field-description">Automatically categorize statements as they're transcribed</p>
+            </div>
+
+            <!-- Auto-save -->
+            <div class="form-group">
+                <label class="form-label">
+                    <input type="checkbox" id="enableAutoSave" checked>
+                    Auto-save (every 5 minutes)
+                </label>
+                <p class="field-description">Preserve transcript data during long calls</p>
+            </div>
+
+            <!-- Timestamps -->
+            <div class="form-group">
+                <label class="form-label">
+                    <input type="checkbox" id="includeTimestamps" checked>
+                    Include Timestamps
+                </label>
+                <p class="field-description">Add timestamps to each transcript entry</p>
+            </div>
+
+            <!-- Speaker Detection -->
+            <div class="form-group">
+                <label class="form-label">
+                    <input type="checkbox" id="detectSpeakers" checked>
+                    Speaker Detection
+                </label>
+                <p class="field-description">Attempt to identify different speakers</p>
+            </div>
+
+            <!-- Confidence Threshold -->
+            <div class="form-group">
+                <label class="form-label">
+                    AI Confidence Threshold
+                </label>
+                <div class="slider-container">
+                    <input type="range" id="confidenceThreshold" min="0" max="100" value="70" class="settings-slider">
+                    <span class="slider-value" id="confidenceValue">70%</span>
+                </div>
+                <p class="field-description">Minimum confidence to highlight a category match</p>
+            </div>
+
+            <!-- Data Management -->
+            <div class="form-group">
+                <label class="form-label">Data Management</label>
+                <div class="button-group-vertical">
+                    <button class="btn-secondary" id="exportSettingsBtn">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2z"/>
+                        </svg>
+                        Export Settings
+                    </button>
+                    <button class="btn-secondary" id="importSettingsBtn">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M9 16h6v-6h4l-7-7-7 7h4zm-4 2h14v2H5z"/>
+                        </svg>
+                        Import Settings
+                    </button>
+                    <button class="btn-danger" id="resetSettingsBtn">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 5V1L7 6l5 5V7c3.31 0 6 2.69 6 6s-2.69 6-6 6-6-2.69-6-6H4c0 4.42 3.58 8 8 8s8-3.58 8-8-3.58-8-8-8z"/>
+                        </svg>
+                        Reset to Defaults
+                    </button>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- Control Buttons -->
+    <div class="notetaker-controls">
+        <button class="btn-primary btn-large" id="notetakerToggleBtn">
+            <span class="notetaker-icon">🎙️</span>
+            <span class="notetaker-text">Start AI Assistant</span>
+        </button>
+        <button class="btn-secondary btn-large" id="viewFullTranscriptBtn">
+            <span class="notetaker-icon">📜</span>
+            <span class="notetaker-text">View Full Transcript</span>
+        </button>
+    </div>
+
+    <p class="settings-description notetaker-footer-desc" id="notetakerStatus">
+        Ready to start real-time transcription and analysis
+    </p>
+</div>
+</div>

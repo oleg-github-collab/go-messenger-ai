@@ -23,8 +23,8 @@ type BitrateController struct {
 func NewBitrateController(p *SFUParticipant) *BitrateController {
 	bc := &BitrateController{
 		participant:    p,
-		targetBitrate:  2000000, // 2 Mbps default
-		currentBitrate: 2000000,
+		targetBitrate:  1200000,
+		currentBitrate: 1200000,
 		stopChan:       make(chan struct{}),
 	}
 
@@ -35,7 +35,7 @@ func NewBitrateController(p *SFUParticipant) *BitrateController {
 
 // monitor monitors connection quality and adjusts bitrate
 func (bc *BitrateController) monitor() {
-	ticker := time.NewTicker(time.Second * 2)
+	ticker := time.NewTicker(time.Second)
 	defer ticker.Stop()
 
 	for {
@@ -140,11 +140,11 @@ func (sc *SimulcastController) SetQuality(quality QualityLevel) {
 	// For now, we adjust bitrate instead
 	switch quality {
 	case QualityLow:
-		sc.requestBitrate(500000) // 500 kbps
+		sc.requestBitrate(150000)
 	case QualityMedium:
-		sc.requestBitrate(1000000) // 1 Mbps
+		sc.requestBitrate(500000)
 	case QualityHigh:
-		sc.requestBitrate(2000000) // 2 Mbps
+		sc.requestBitrate(1200000)
 	}
 }
 

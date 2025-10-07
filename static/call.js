@@ -52,6 +52,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     let maxReconnectAttempts = 10;
     let reconnectTimeout = null;
     let adaptiveQuality = null;
+    let heartbeatInterval = null;
 
     // Get room ID from URL
     const pathParts = window.location.pathname.split('/');
@@ -104,6 +105,12 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     if (userLabel) {
         userLabel.textContent = isHostSession ? 'Host' : 'Guest';
+    }
+
+    // Initialize AI Notetaker (host only)
+    if (typeof AINotetaker !== 'undefined') {
+        notetaker = new AINotetaker(roomID, isHostSession);
+        console.log('[CALL] 🤖 AI Notetaker initialized');
     }
 
     // Initialize waiting room UI
@@ -208,6 +215,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             socket.onopen = async () => {
                 console.log('[CALL] ✅ WebSocket connected');
 
+                // Reset reconnect counter
+                reconnectAttempts = 0;
+
+                // Start heartbeat to keep connection alive
+                if (heartbeatInterval) clearInterval(heartbeatInterval);
+                heartbeatInterval = setInterval(() => {
+                    if (socket && socket.readyState === WebSocket.OPEN) {
+                        socket.send(JSON.stringify({ type: 'ping' }));
+                    }
+                }, 30000); // Ping every 30 seconds
+
                 // Initialize WebRTC for EVERYONE immediately
                 console.log('[CALL] Initializing WebRTC...');
                 webrtc = new WebRTCManager(socket, roomId);
@@ -215,9 +233,6 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 if (initialized) {
                     console.log('[CALL] ✅ WebRTC initialized successfully');
-
-                    // Reset reconnect counter
-                    reconnectAttempts = 0;
 
                     // Initialize adaptive quality
                     if (window.AdaptiveQuality) {
@@ -294,6 +309,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                         if (!chatPanel.classList.contains('active')) {
                             unreadMessages++;
                             updateChatBadge();
+
+                            // Show flying message notification
+                            const senderName = guestName || 'Your partner';
+                            const isGif = message.data.startsWith('[GIF]');
+                            const displayText = isGif ? message.data.substring(5) : message.data;
+                            showFlyingMessage(senderName, displayText, isGif);
                         }
                         break;
 
@@ -939,23 +960,172 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
     }
 
-    // PiP expand (swap videos)
-    const pipExpandBtn = document.getElementById('pipExpandBtn');
-    if (pipExpandBtn) {
-        pipExpandBtn.addEventListener('click', () => {
-            // Swap remote and local videos
-            const remoteContainer = document.querySelector('.call-container');
+    // Settings panel
+    const moreOptionsBtn = document.getElementById('moreOptionsBtn');
+    const settingsPanel = document.getElementById('settingsPanel');
+    const settingsBackdrop = document.getElementById('settingsBackdrop');
+    const settingsClose = document.getElementById('settingsClose');
+    const audioOutputSelect = document.getElementById('audioOutputSelect');
 
-            if (localVideo.parentElement === localPip) {
-                // Move local to main, remote to PiP
-                remoteContainer.insertBefore(localVideo, localPip);
-                localPip.appendChild(remoteVideo);
-            } else {
-                // Move remote to main, local to PiP
-                remoteContainer.insertBefore(remoteVideo, localPip);
-                localPip.appendChild(localVideo);
+    // Populate audio output devices
+    async function loadAudioOutputDevices() {
+        if (!audioOutputSelect) return;
+
+        try {
+            const devices = await navigator.mediaDevices.enumerateDevices();
+            const audioOutputs = devices.filter(device => device.kind === 'audiooutput');
+
+            audioOutputSelect.innerHTML = '<option value="">Default Device</option>';
+
+            audioOutputs.forEach(device => {
+                const option = document.createElement('option');
+                option.value = device.deviceId;
+                option.textContent = device.label || `Speaker ${audioOutputSelect.options.length}`;
+                audioOutputSelect.appendChild(option);
+            });
+
+            console.log('[CALL] 🔊 Loaded', audioOutputs.length, 'audio output devices');
+        } catch (err) {
+            console.error('[CALL] Error loading audio devices:', err);
+        }
+    }
+
+    // Handle audio output change
+    if (audioOutputSelect) {
+        audioOutputSelect.addEventListener('change', async () => {
+            const deviceId = audioOutputSelect.value;
+            if (remoteVideo && typeof remoteVideo.setSinkId === 'function') {
+                try {
+                    await remoteVideo.setSinkId(deviceId);
+                    console.log('[CALL] 🔊 Switched audio output to:', deviceId || 'default');
+                } catch (err) {
+                    console.error('[CALL] Error switching audio output:', err);
+                }
             }
         });
+    }
+
+    // Settings panel open/close
+    if (moreOptionsBtn) {
+        moreOptionsBtn.addEventListener('click', () => {
+            if (settingsPanel) settingsPanel.classList.add('active');
+            if (settingsBackdrop) settingsBackdrop.classList.add('active');
+            loadAudioOutputDevices(); // Refresh devices when opening
+        });
+    }
+
+    if (settingsClose) {
+        settingsClose.addEventListener('click', () => {
+            if (settingsPanel) settingsPanel.classList.remove('active');
+            if (settingsBackdrop) settingsBackdrop.classList.remove('active');
+        });
+    }
+
+    if (settingsBackdrop) {
+        settingsBackdrop.addEventListener('click', () => {
+            settingsPanel.classList.remove('active');
+            settingsBackdrop.classList.remove('active');
+        });
+    }
+
+    // Make local PiP draggable
+    if (localPip) {
+        let isDragging = false;
+        let currentX;
+        let currentY;
+        let initialX;
+        let initialY;
+        let xOffset = 0;
+        let yOffset = 0;
+
+        const dragStart = (e) => {
+            if (e.type === "touchstart") {
+                initialX = e.touches[0].clientX - xOffset;
+                initialY = e.touches[0].clientY - yOffset;
+            } else {
+                initialX = e.clientX - xOffset;
+                initialY = e.clientY - yOffset;
+            }
+
+            if (e.target === localPip || localPip.contains(e.target)) {
+                isDragging = true;
+                localPip.classList.add('dragging');
+            }
+        };
+
+        const dragEnd = () => {
+            isDragging = false;
+            localPip.classList.remove('dragging');
+
+            // Snap to edges
+            const container = callContainer.getBoundingClientRect();
+            const pip = localPip.getBoundingClientRect();
+
+            const snapThreshold = 50;
+            let finalX = currentX;
+            let finalY = currentY;
+
+            // Snap to left or right
+            if (pip.left < snapThreshold) {
+                finalX = 16;
+            } else if (container.width - pip.right < snapThreshold) {
+                finalX = container.width - pip.width - 16;
+            }
+
+            // Snap to top or bottom
+            if (pip.top < snapThreshold) {
+                finalY = 16;
+            } else if (container.height - pip.bottom < snapThreshold) {
+                finalY = container.height - pip.height - 16;
+            }
+
+            setTranslate(finalX, finalY, localPip);
+            xOffset = finalX;
+            yOffset = finalY;
+        };
+
+        const drag = (e) => {
+            if (isDragging) {
+                e.preventDefault();
+
+                if (e.type === "touchmove") {
+                    currentX = e.touches[0].clientX - initialX;
+                    currentY = e.touches[0].clientY - initialY;
+                } else {
+                    currentX = e.clientX - initialX;
+                    currentY = e.clientY - initialY;
+                }
+
+                xOffset = currentX;
+                yOffset = currentY;
+
+                setTranslate(currentX, currentY, localPip);
+            }
+        };
+
+        const setTranslate = (xPos, yPos, el) => {
+            // Get boundaries
+            const container = callContainer.getBoundingClientRect();
+            const pip = el.getBoundingClientRect();
+
+            // Constrain to container
+            xPos = Math.max(0, Math.min(xPos, container.width - pip.width));
+            yPos = Math.max(0, Math.min(yPos, container.height - pip.height));
+
+            el.style.left = xPos + "px";
+            el.style.top = yPos + "px";
+            el.style.right = "auto";
+        };
+
+        // Add event listeners
+        localPip.addEventListener("mousedown", dragStart, false);
+        localPip.addEventListener("touchstart", dragStart, false);
+
+        document.addEventListener("mouseup", dragEnd, false);
+        document.addEventListener("touchend", dragEnd, false);
+
+        document.addEventListener("mousemove", drag, false);
+        document.addEventListener("touchmove", drag, { passive: false });
     }
 
     // Share screen button
@@ -1012,6 +1182,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Auto-hide controls
     let controlsHideTimer = null;
     let controlsVisible = true;
+    let fullscreenHintShown = false;
     const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
 
     function showControls() {
@@ -1028,51 +1199,23 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (bottomControlBar) bottomControlBar.classList.remove('hidden');
         controlsVisible = true;
 
+        // Exit fullscreen when showing controls
+        if (document.fullscreenElement) {
+            document.exitFullscreen().catch(err => console.log('[CALL] Fullscreen exit error:', err));
+        }
+
+        // Hide hint if visible
+        const hint = document.getElementById('fullscreenHint');
+        if (hint) hint.remove();
+
         // Reset hide timer
         clearTimeout(controlsHideTimer);
         controlsHideTimer = setTimeout(() => {
-            if (backButton) backButton.classList.add('hidden');
-            if (userInfoBox) userInfoBox.classList.add('hidden');
-            if (callTimerBox) callTimerBox.classList.add('hidden');
-            if (rightSideControls) rightSideControls.classList.add('hidden');
-            if (bottomControlBar) bottomControlBar.classList.add('hidden');
-            controlsVisible = false;
+            hideControls();
         }, 5000);
     }
 
-    // Show controls on mouse move (PC) or tap (mobile)
-    if (isMobile) {
-        callContainer.addEventListener('touchstart', (e) => {
-            // Don't hide controls when tapping buttons
-            if (!e.target.closest('button')) {
-                if (controlsVisible) {
-                    // Hide if visible
-                    const backButton = document.querySelector('.back-button');
-                    const userInfoBox = document.querySelector('.user-info-box');
-                    const callTimerBox = document.querySelector('.call-timer-box');
-                    const rightSideControls = document.querySelector('.right-side-controls');
-                    const bottomControlBar = document.querySelector('.bottom-control-bar');
-
-                    if (backButton) backButton.classList.add('hidden');
-                    if (userInfoBox) userInfoBox.classList.add('hidden');
-                    if (callTimerBox) callTimerBox.classList.add('hidden');
-                    if (rightSideControls) rightSideControls.classList.add('hidden');
-                    if (bottomControlBar) bottomControlBar.classList.add('hidden');
-                    controlsVisible = false;
-                    clearTimeout(controlsHideTimer);
-                } else {
-                    // Show if hidden
-                    showControls();
-                }
-            }
-        });
-    } else {
-        // PC: show on mouse move
-        document.addEventListener('mousemove', showControls);
-    }
-
-    // Initial hide after 5 seconds
-    setTimeout(() => {
+    function hideControls() {
         const backButton = document.querySelector('.back-button');
         const userInfoBox = document.querySelector('.user-info-box');
         const callTimerBox = document.querySelector('.call-timer-box');
@@ -1085,11 +1228,106 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (rightSideControls) rightSideControls.classList.add('hidden');
         if (bottomControlBar) bottomControlBar.classList.add('hidden');
         controlsVisible = false;
+
+        // Enter fullscreen when hiding controls
+        if (!document.fullscreenElement && document.documentElement.requestFullscreen) {
+            document.documentElement.requestFullscreen().then(() => {
+                console.log('[CALL] Entered fullscreen');
+                showFullscreenHint();
+            }).catch(err => {
+                console.log('[CALL] Fullscreen request failed:', err);
+            });
+        }
+    }
+
+    function showFullscreenHint() {
+        // Only show hint once per session
+        if (fullscreenHintShown) return;
+        fullscreenHintShown = true;
+
+        const hint = document.createElement('div');
+        hint.id = 'fullscreenHint';
+        hint.style.cssText = `
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(0, 0, 0, 0.85);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 24px;
+            font-size: 14px;
+            z-index: 9999;
+            backdrop-filter: blur(10px);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            animation: slideDown 0.3s ease;
+        `;
+
+        const message = isMobile
+            ? '👆 Tap screen or press Back to exit fullscreen'
+            : '⌨️ Press ESC to exit fullscreen';
+
+        hint.textContent = message;
+        document.body.appendChild(hint);
+
+        // Auto-hide hint after 4 seconds
+        setTimeout(() => {
+            hint.style.animation = 'slideUp 0.3s ease';
+            setTimeout(() => hint.remove(), 300);
+        }, 4000);
+    }
+
+    // Add CSS animations for hint
+    const style = document.createElement('style');
+    style.textContent = `
+        @keyframes slideDown {
+            from { opacity: 0; transform: translate(-50%, -20px); }
+            to { opacity: 1; transform: translate(-50%, 0); }
+        }
+        @keyframes slideUp {
+            from { opacity: 1; transform: translate(-50%, 0); }
+            to { opacity: 0; transform: translate(-50%, -20px); }
+        }
+    `;
+    document.head.appendChild(style);
+
+    // Show controls on mouse move (PC) or tap (mobile)
+    if (isMobile) {
+        callContainer.addEventListener('touchstart', (e) => {
+            // Don't hide controls when tapping buttons
+            if (!e.target.closest('button')) {
+                if (controlsVisible) {
+                    // Hide if visible
+                    hideControls();
+                    clearTimeout(controlsHideTimer);
+                } else {
+                    // Show if hidden
+                    showControls();
+                }
+            }
+        });
+    } else {
+        // PC: show on mouse move
+        document.addEventListener('mousemove', showControls);
+    }
+
+    // Listen for ESC key to exit fullscreen
+    document.addEventListener('fullscreenchange', () => {
+        if (!document.fullscreenElement && !controlsVisible) {
+            // Exited fullscreen, show controls
+            showControls();
+        }
+    });
+
+    // Initial hide after 5 seconds
+    setTimeout(() => {
+        hideControls();
     }, 5000);
 
     function cleanupCall() {
         console.log('[CALL] Cleaning up call...');
 
+        if (heartbeatInterval) clearInterval(heartbeatInterval);
         if (socket) socket.close();
         if (timerInterval) clearInterval(timerInterval);
         if (reconnectTimeout) clearTimeout(reconnectTimeout);
@@ -1099,3 +1337,28 @@ document.addEventListener('DOMContentLoaded', async () => {
         clearTimeout(controlsHideTimer);
     }
 });
+
+// Flying messages for 1-on-1 calls
+function showFlyingMessage(sender, text, isGif = false) {
+    const container = document.getElementById('flyingMessagesContainer');
+    if (!container) return;
+
+    const messageEl = document.createElement('div');
+    messageEl.className = 'flying-message';
+
+    if (isGif) {
+        messageEl.innerHTML = `<span class="flying-message-sender">${sender}:</span><img src="${text}" alt="GIF">`;
+    } else {
+        messageEl.innerHTML = `<span class="flying-message-sender">${sender}:</span>${text}`;
+    }
+
+    container.appendChild(messageEl);
+
+    // Auto remove after 3 seconds
+    setTimeout(() => {
+        messageEl.remove();
+    }, 3000);
+}
+
+// Export for use in other parts
+window.showFlyingMessage = showFlyingMessage;

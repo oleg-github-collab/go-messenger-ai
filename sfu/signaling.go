@@ -28,12 +28,45 @@ func (p *SFUParticipant) HandleOffer(offerJSON string) error {
 
 	log.Printf("[SFU] 🔵 Participant %s sent offer (type: %s)", p.ID, offer.Type)
 
+	// CRITICAL: Log what's in the offer SDP
+	hasVideo := false
+	hasAudio := false
+	if offer.SDP != "" {
+		hasVideo = len(offer.SDP) > 0 && (offer.SDP[0:10] == "v=0\r\nm=vi" || offer.SDP[len(offer.SDP)-20:] != "")
+		hasAudio = len(offer.SDP) > 0 && (offer.SDP[0:10] == "v=0\r\nm=au" || offer.SDP[len(offer.SDP)-20:] != "")
+	}
+	log.Printf("[SFU] 📊 Offer SDP analysis: hasVideo=%v, hasAudio=%v, SDP length=%d", hasVideo, hasAudio, len(offer.SDP))
+
+	// Log current connection state
+	log.Printf("[SFU] 📊 Current peer connection state before setRemoteDescription: signaling=%s, connection=%s, ICE=%s",
+		p.PeerConnection.SignalingState(), p.PeerConnection.ConnectionState(), p.PeerConnection.ICEConnectionState())
+
 	// Set remote description
 	if err := p.PeerConnection.SetRemoteDescription(offer); err != nil {
 		log.Printf("[SFU] ❌ HandleOffer: Failed to set remote description for %s: %v", p.ID, err)
 		return err
 	}
 	log.Printf("[SFU] ✅ Set remote description for %s", p.ID)
+
+	// Log state after setRemoteDescription
+	log.Printf("[SFU] 📊 State after setRemoteDescription: signaling=%s, connection=%s, ICE=%s",
+		p.PeerConnection.SignalingState(), p.PeerConnection.ConnectionState(), p.PeerConnection.ICEConnectionState())
+
+	// CRITICAL: Log transceivers after setting remote description
+	transceivers := p.PeerConnection.GetTransceivers()
+	log.Printf("[SFU] 📊 Transceivers after setRemoteDescription: %d", len(transceivers))
+	for i, t := range transceivers {
+		mid := "nil"
+		if t.Mid() != "" {
+			mid = t.Mid()
+		}
+		direction := t.Direction().String()
+		kind := "unknown"
+		if t.Receiver() != nil && t.Receiver().Track() != nil {
+			kind = t.Receiver().Track().Kind().String()
+		}
+		log.Printf("[SFU] 📊 Transceiver %d: mid=%s, direction=%s, kind=%s", i, mid, direction, kind)
+	}
 
 	// Create answer
 	answer, err := p.PeerConnection.CreateAnswer(nil)
@@ -63,6 +96,9 @@ func (p *SFUParticipant) HandleOffer(offerJSON string) error {
 	}
 
 	log.Printf("[SFU] 📤 Sending answer to %s (size: %d bytes)", p.ID, len(answerJSON))
+	log.Printf("[SFU] 📊 Final state: signaling=%s, connection=%s, ICE=%s",
+		p.PeerConnection.SignalingState(), p.PeerConnection.ConnectionState(), p.PeerConnection.ICEConnectionState())
+
 	return p.SendMessage(message)
 }
 
@@ -235,22 +271,45 @@ func (p *SFUParticipant) CreateOffer() error {
 // Renegotiate triggers renegotiation (when new tracks added)
 func (p *SFUParticipant) Renegotiate() error {
 	currentState := p.PeerConnection.SignalingState()
-	log.Printf("[SFU] 🔄 Renegotiate called for %s, signaling state: %s", p.ID, currentState)
+	log.Printf("[SFU] 🔄 Renegotiate called for %s (%s), signaling state: %s",
+		p.ID, p.Name, currentState)
 
-	// Wait for stable state with retry
-	maxRetries := 10
+	// Check if closed
+	if p.closed {
+		log.Printf("[SFU] ⚠️ Cannot renegotiate - participant %s is closed", p.ID)
+		return fmt.Errorf("participant closed")
+	}
+
+	// Wait for stable state with retry - increased attempts and reduced delay
+	maxRetries := 30
+	retryDelay := 50 * time.Millisecond
+
 	for i := 0; i < maxRetries; i++ {
-		if p.PeerConnection.SignalingState() == webrtc.SignalingStateStable {
-			log.Printf("[SFU] ✅ Signaling state is stable, creating renegotiation offer for %s", p.ID)
+		state := p.PeerConnection.SignalingState()
+		connState := p.PeerConnection.ConnectionState()
+
+		if state == webrtc.SignalingStateStable {
+			log.Printf("[SFU] ✅ Signaling state STABLE for %s, creating renegotiation offer", p.ID)
+			log.Printf("[SFU] 📊 Connection state: %s, ICE state: %s",
+				connState, p.PeerConnection.ICEConnectionState())
 			return p.CreateOffer()
 		}
 
-		log.Printf("[SFU] ⏳ Waiting for stable state (attempt %d/%d), current: %s", i+1, maxRetries, p.PeerConnection.SignalingState())
-		time.Sleep(100 * time.Millisecond)
+		log.Printf("[SFU] ⏳ Waiting for stable state for %s (attempt %d/%d), current: %s, conn: %s",
+			p.ID, i+1, maxRetries, state, connState)
+
+		// If we're in "have-remote-offer" state, we should answer first
+		if state == webrtc.SignalingStateHaveRemoteOffer {
+			log.Printf("[SFU] ⚠️  Participant %s is in have-remote-offer state - cannot create offer", p.ID)
+			return fmt.Errorf("cannot create offer while in have-remote-offer state")
+		}
+
+		time.Sleep(retryDelay)
 	}
 
-	log.Printf("[SFU] ⚠️ Cannot renegotiate for %s after %d attempts, signaling state: %s", p.ID, maxRetries, p.PeerConnection.SignalingState())
-	return nil
+	log.Printf("[SFU] ❌ Cannot renegotiate for %s after %d attempts, signaling state: %s",
+		p.ID, maxRetries, p.PeerConnection.SignalingState())
+	return fmt.Errorf("renegotiation timeout - unstable signaling state")
 }
 
 // NotifyTrackPublished notifies participant about new track from another participant

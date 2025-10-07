@@ -484,6 +484,60 @@ body {
     opacity: 0.7;
 }
 
+/* Right side controls (Camera & Mic) */
+.right-side-controls {
+    position: absolute;
+    right: 16px;
+    top: 50%;
+    transform: translateY(-50%);
+    display: flex;
+    flex-direction: column;
+    gap: 16px;
+    z-index: 10;
+}
+
+.round-control-btn {
+    width: 56px;
+    height: 56px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255, 255, 255, 0.2);
+    color: white;
+    cursor: pointer;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    backdrop-filter: blur(10px);
+    transition: all 0.2s;
+}
+
+.round-control-btn:hover {
+    background: rgba(255, 255, 255, 0.3);
+    transform: scale(1.05);
+}
+
+.round-control-btn:active {
+    transform: scale(0.95);
+}
+
+.round-control-btn[data-active="false"] {
+    background: rgba(255, 59, 48, 0.9);
+}
+
+.round-control-btn[data-active="false"]:hover {
+    background: rgba(255, 59, 48, 1);
+}
+
+.round-control-btn[data-active="false"] .icon-camera-on,
+.round-control-btn[data-active="false"] .icon-mic-on {
+    display: none;
+}
+
+.round-control-btn[data-active="false"] .icon-camera-off,
+.round-control-btn[data-active="false"] .icon-mic-off {
+    display: block !important;
+}
+
 /* Bottom Controls */
 .bottom-controls {
     position: absolute;
@@ -498,6 +552,39 @@ body {
     background: linear-gradient(0deg, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0) 100%);
     z-index: 10;
     transition: transform 0.3s ease, opacity 0.3s ease;
+}
+
+.bottom-controls-inner {
+    width: 100%;
+    max-width: 960px;
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: 16px;
+}
+
+.controls-group {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.controls-group.left-controls {
+    justify-content: flex-start;
+}
+
+.controls-group.right-controls {
+    justify-content: flex-end;
+}
+
+.notetaker-floating-panel {
+    position: absolute;
+    right: 24px;
+    bottom: 140px;
+    max-width: 360px;
+    width: calc(100% - 48px);
+    z-index: 15;
+    pointer-events: auto;
 }
 
 .bottom-controls.hidden {
@@ -1014,15 +1101,69 @@ body {
         padding: 12px;
     }
 
+    /* Keep right side controls visible on mobile */
+    .right-side-controls {
+        right: 12px;
+        gap: 12px;
+    }
+
+    .round-control-btn {
+        width: 52px;
+        height: 52px;
+    }
+
+    /* Bottom controls simplified on mobile */
     .bottom-controls {
         padding: 20px 12px;
         padding-bottom: max(20px, env(safe-area-inset-bottom));
-        gap: 8px;
+        gap: 12px;
+    }
+
+    .bottom-controls-inner {
+        flex-direction: column;
+        align-items: stretch;
+        gap: 16px;
+    }
+
+    .controls-group {
+        justify-content: space-between;
+        gap: 10px;
+    }
+
+    .controls-group.left-controls,
+    .controls-group.right-controls {
+        flex-wrap: wrap;
+    }
+
+    .controls-group.left-controls .control-btn,
+    .controls-group.right-controls .control-btn {
+        flex: 1 1 calc(33% - 8px);
+        min-width: 0;
+    }
+
+    .notetaker-floating-panel {
+        position: fixed;
+        right: 16px;
+        left: 16px;
+        bottom: max(140px, env(safe-area-inset-bottom) + 110px);
+        width: auto;
+        max-width: none;
+    }
+
+    .bottom-controls .end-call-btn {
+        align-self: center;
     }
 
     .control-btn {
-        padding: 10px 12px;
-        min-width: 60px;
+        padding: 8px 10px;
+        min-width: 56px;
+        flex: 0 0 auto;
+    }
+
+    /* Hide labels on some buttons to save space */
+    .control-btn#reactionsBtn .btn-label,
+    .control-btn#raiseHandBtn .btn-label {
+        display: none;
     }
 
     .btn-label {
@@ -1070,6 +1211,16 @@ body {
 
 /* Extra small mobile devices */
 @media (max-width: 400px) {
+    .right-side-controls {
+        right: 8px;
+        gap: 10px;
+    }
+
+    .round-control-btn {
+        width: 48px;
+        height: 48px;
+    }
+
     .bottom-controls {
         gap: 6px;
         padding: 16px 8px;
@@ -1635,19 +1786,43 @@ body {
 }
 
 /* ============================================ */
-/* SPEAKING INDICATOR */
+/* SPEAKING INDICATOR - Enhanced & Beautiful */
 /* ============================================ */
 .participant-tile.speaking {
-    box-shadow: 0 0 0 3px #10b981;
-    animation: speakingPulse 1s ease-in-out infinite;
+    box-shadow: 0 0 0 4px #10b981, 0 0 20px rgba(16, 185, 129, 0.6);
+    animation: speakingPulse 1.2s ease-in-out infinite;
+    z-index: 5;
+    position: relative;
+}
+
+.participant-tile.speaking::before {
+    content: '';
+    position: absolute;
+    inset: -6px;
+    border-radius: 10px;
+    background: linear-gradient(135deg, #10b981, #059669);
+    opacity: 0.3;
+    animation: speakingGlow 1.2s ease-in-out infinite;
+    z-index: -1;
 }
 
 @keyframes speakingPulse {
     0%, 100% {
-        box-shadow: 0 0 0 3px #10b981;
+        box-shadow: 0 0 0 4px #10b981, 0 0 20px rgba(16, 185, 129, 0.6);
     }
     50% {
-        box-shadow: 0 0 0 6px rgba(16, 185, 129, 0.4);
+        box-shadow: 0 0 0 8px rgba(16, 185, 129, 0.8), 0 0 30px rgba(16, 185, 129, 0.8);
+    }
+}
+
+@keyframes speakingGlow {
+    0%, 100% {
+        opacity: 0.3;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.6;
+        transform: scale(1.02);
     }
 }
 
@@ -1655,40 +1830,62 @@ body {
     position: absolute;
     top: 8px;
     left: 8px;
-    background: #10b981;
+    background: linear-gradient(135deg, #10b981 0%, #059669 100%);
     color: white;
-    padding: 4px 8px;
-    border-radius: 8px;
-    font-size: 11px;
-    font-weight: 600;
+    padding: 6px 12px;
+    border-radius: 12px;
+    font-size: 12px;
+    font-weight: 700;
     display: none;
     align-items: center;
-    gap: 4px;
+    gap: 6px;
+    box-shadow: 0 4px 12px rgba(16, 185, 129, 0.5);
+    animation: speakingBadgePulse 1.2s ease-in-out infinite;
+    border: 2px solid rgba(255, 255, 255, 0.3);
+    z-index: 10;
 }
 
 .participant-tile.speaking .speaking-indicator {
     display: flex;
 }
 
+@keyframes speakingBadgePulse {
+    0%, 100% {
+        transform: scale(1);
+        box-shadow: 0 4px 12px rgba(16, 185, 129, 0.5);
+    }
+    50% {
+        transform: scale(1.05);
+        box-shadow: 0 6px 16px rgba(16, 185, 129, 0.7);
+    }
+}
+
 .speaking-wave {
     width: 3px;
     height: 12px;
     background: white;
-    border-radius: 2px;
-    animation: speakingWave 0.5s ease-in-out infinite;
+    border-radius: 3px;
+    animation: speakingWave 0.6s ease-in-out infinite;
+    box-shadow: 0 0 4px rgba(255, 255, 255, 0.5);
 }
 
 .speaking-wave:nth-child(2) {
-    animation-delay: 0.1s;
+    animation-delay: 0.15s;
 }
 
 .speaking-wave:nth-child(3) {
-    animation-delay: 0.2s;
+    animation-delay: 0.3s;
 }
 
 @keyframes speakingWave {
-    0%, 100% { height: 8px; }
-    50% { height: 16px; }
+    0%, 100% {
+        height: 8px;
+        opacity: 0.7;
+    }
+    50% {
+        height: 18px;
+        opacity: 1;
+    }
 }
 
 /* Mobile adjustments for new features */
@@ -1702,6 +1899,21 @@ body {
         font-size: 14px;
         padding: 10px 16px;
     }
+
+    /* Enhanced speaking indicator on mobile */
+    .participant-tile.speaking {
+        box-shadow: 0 0 0 3px #10b981, 0 0 15px rgba(16, 185, 129, 0.7);
+    }
+
+    .participant-tile .speaking-indicator {
+        font-size: 11px;
+        padding: 5px 10px;
+    }
+
+    .speaking-wave {
+        width: 2.5px;
+    }
+}
 
     .view-mode-menu {
         bottom: 80px;

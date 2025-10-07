@@ -6,19 +6,67 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"strings"
 	"sync"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
+	"github.com/pion/interceptor"
 	"github.com/pion/rtcp"
 	"github.com/pion/webrtc/v3"
 )
 
 const (
-	rtcpPLIInterval = time.Second * 3
+	rtcpPLIInterval = time.Second * 2
 	maxParticipants = 20
 )
+
+func qualityFromRID(rid string) QualityLevel {
+	switch rid {
+	case "l":
+		return QualityLow
+	case "m":
+		return QualityMedium
+	default:
+		return QualityHigh
+	}
+}
+
+func qualityLevelFromString(level string) (QualityLevel, error) {
+	switch strings.ToLower(strings.TrimSpace(level)) {
+	case "low":
+		return QualityLow, nil
+	case "medium":
+		return QualityMedium, nil
+	case "high", "default":
+		return QualityHigh, nil
+	default:
+		return QualityHigh, fmt.Errorf("unknown quality level: %s", level)
+	}
+}
+
+func shouldSubscribeToTrack(trackInfo *TrackInfo, preferred QualityLevel) bool {
+	if trackInfo.Kind != webrtc.RTPCodecTypeVideo.String() {
+		return true
+	}
+
+	if trackInfo.RID == "" {
+		return true
+	}
+
+	switch preferred {
+	case QualityLow:
+		return trackInfo.Quality == QualityLow
+	case QualityMedium:
+		if trackInfo.Quality == QualityMedium {
+			return true
+		}
+		return trackInfo.Quality == QualityLow
+	default:
+		return trackInfo.Quality == QualityHigh
+	}
+}
 
 // SFUServer manages multiple rooms
 type SFUServer struct {
@@ -103,22 +151,24 @@ func (r *SFURoom) AddParticipant(participantID, name string, conn *websocket.Con
 	// Set aggressive ICE settings
 	settingEngine := webrtc.SettingEngine{}
 	settingEngine.SetICETimeouts(
-		time.Second*5,  // Disconnect timeout (faster detection)
-		time.Second*15, // Failed timeout
-		time.Second*2,  // Keepalive interval
+		time.Second*3,
+		time.Second*10,
+		time.Second*1,
 	)
 	settingEngine.SetNetworkTypes([]webrtc.NetworkType{
 		webrtc.NetworkTypeUDP4,
 		webrtc.NetworkTypeUDP6,
-		webrtc.NetworkTypeTCP4,
-		webrtc.NetworkTypeTCP6,
 	})
 
 	// Add TURN server if credentials provided
 	if turnHost != "" && turnUser != "" && turnPass != "" {
 		// Use turnHost as-is (already cleaned in main.go)
 		config.ICEServers = append(config.ICEServers, webrtc.ICEServer{
-			URLs:       []string{fmt.Sprintf("turn:%s:3478", turnHost), fmt.Sprintf("turn:%s:3478?transport=tcp", turnHost)},
+			URLs: []string{
+				fmt.Sprintf("turn:%s:3478", turnHost),
+				fmt.Sprintf("turn:%s:3478?transport=udp", turnHost),
+				fmt.Sprintf("turn:%s:3478?transport=tcp", turnHost),
+			},
 			Username:   turnUser,
 			Credential: turnPass,
 		})
@@ -131,9 +181,15 @@ func (r *SFURoom) AddParticipant(participantID, name string, conn *websocket.Con
 		return nil, 0, fmt.Errorf("failed to register codecs: %v", err)
 	}
 
+	interceptorRegistry := &interceptor.Registry{}
+	if err := webrtc.RegisterDefaultInterceptors(mediaEngine, interceptorRegistry); err != nil {
+		return nil, 0, fmt.Errorf("failed to register interceptors: %v", err)
+	}
+
 	// Create API with optimized settings
 	api := webrtc.NewAPI(
 		webrtc.WithMediaEngine(mediaEngine),
+		webrtc.WithInterceptorRegistry(interceptorRegistry),
 		webrtc.WithSettingEngine(settingEngine),
 	)
 
@@ -144,17 +200,21 @@ func (r *SFURoom) AddParticipant(participantID, name string, conn *websocket.Con
 	}
 
 	participant := &SFUParticipant{
-		ID:             participantID,
-		Name:           name,
-		Room:           r,
-		Connection:     conn,
-		PeerConnection: peerConnection,
-		Tracks:         make(map[string]*TrackInfo),
-		subscribers:    make(map[string]*Subscription),
+		ID:               participantID,
+		Name:             name,
+		Room:             r,
+		Connection:       conn,
+		PeerConnection:   peerConnection,
+		Tracks:           make(map[string]*TrackInfo),
+		subscribers:      make(map[string]*Subscription),
+		preferredQuality: QualityHigh,
 	}
 
-	// Set up peer connection handlers
+	// CRITICAL: Set up peer connection handlers BEFORE any signaling
 	participant.setupPeerConnection()
+
+	// Log transceivers to debug track reception
+	log.Printf("[SFU] 📊 Initial transceivers count for %s: %d", participantID, len(peerConnection.GetTransceivers()))
 
 	r.participants[participantID] = participant
 
@@ -162,24 +222,13 @@ func (r *SFURoom) AddParticipant(participantID, name string, conn *websocket.Con
 	log.Printf("[SFU] Participant %s (%s) joined room %s (%d total)", participantID, name, r.ID, participantCount)
 
 	// Collect existing tracks BEFORE releasing lock
-	type existingTrack struct {
-		participantID string
-		trackID       string
-		trackLocal    *webrtc.TrackLocalStaticRTP
-		kind          string
-	}
-	var existingTracks []existingTrack
+	var existingTracks []*TrackInfo
 
 	for _, other := range r.participants {
 		if other.ID != participantID {
 			other.mu.RLock()
 			for _, trackInfo := range other.Tracks {
-				existingTracks = append(existingTracks, existingTrack{
-					participantID: other.ID,
-					trackID:       trackInfo.Track.ID(),
-					trackLocal:    trackInfo.TrackLocal,
-					kind:          trackInfo.Kind,
-				})
+				existingTracks = append(existingTracks, trackInfo)
 			}
 			other.mu.RUnlock()
 		}
@@ -192,8 +241,8 @@ func (r *SFURoom) AddParticipant(participantID, name string, conn *websocket.Con
 
 	// Now subscribe to existing tracks WITHOUT holding room lock
 	for _, track := range existingTracks {
-		log.Printf("[SFU] 📺 Subscribing new participant %s to existing track from %s (%s)", participantID, track.participantID, track.kind)
-		participant.SubscribeToTrack(track.participantID, track.trackID, track.trackLocal)
+		log.Printf("[SFU] 📺 Evaluating existing track %s (%s) for new participant %s", track.TrackID, track.Kind, participantID)
+		participant.HandlePublishedTrack(track)
 	}
 
 	r.mu.Lock() // Re-acquire for defer unlock
@@ -292,6 +341,22 @@ func (r *SFURoom) notifyParticipantLeft(participantID string) {
 	r.Broadcast(message, participantID)
 }
 
+func (r *SFURoom) UpdateParticipantQuality(participant *SFUParticipant, level QualityLevel) {
+	r.mu.RLock()
+	defer r.mu.RUnlock()
+	log.Printf("[SFU] 🎯 Updating subscriptions for %s to quality %d", participant.ID, level)
+	for _, publisher := range r.participants {
+		if publisher.ID == participant.ID {
+			continue
+		}
+		tracks := publisher.getPublishedTracksSnapshot()
+		for _, info := range tracks {
+			participant.HandlePublishedTrack(info)
+		}
+	}
+	participant.unsubscribeHigherThan(level)
+}
+
 // Close closes the room and all participants
 func (r *SFURoom) Close() {
 	r.mu.Lock()
@@ -329,14 +394,19 @@ type SFUParticipant struct {
 	pendingICECandidates []webrtc.ICECandidateInit
 	iceBatchTimer        *time.Timer
 	iceMu                sync.Mutex
+	preferredQuality     QualityLevel
 }
 
 // TrackInfo contains information about a media track
 type TrackInfo struct {
-	Track      *webrtc.TrackRemote
-	TrackLocal *webrtc.TrackLocalStaticRTP
-	Kind       string
-	SSRC       webrtc.SSRC
+	Track       *webrtc.TrackRemote
+	TrackLocal  *webrtc.TrackLocalStaticRTP
+	Kind        string
+	SSRC        webrtc.SSRC
+	PublisherID string
+	RID         string
+	Quality     QualityLevel
+	TrackID     string
 }
 
 // Subscription represents a subscription to another participant's track
@@ -344,45 +414,69 @@ type Subscription struct {
 	ParticipantID string
 	TrackID       string
 	Sender        *webrtc.RTPSender
+	Quality       QualityLevel
+	Kind          string
 }
 
 // setupPeerConnection sets up handlers for peer connection
 func (p *SFUParticipant) setupPeerConnection() {
 	// Handle incoming tracks
 	p.PeerConnection.OnTrack(func(track *webrtc.TrackRemote, receiver *webrtc.RTPReceiver) {
-		log.Printf("[SFU] Participant %s published %s track (SSRC: %d)", p.ID, track.Kind(), track.SSRC())
+		trackKind := track.Kind().String()
+		log.Printf("[SFU] 🎥 TRACK RECEIVED: Participant %s (%s) published %s track (SSRC: %d, ID: %s)",
+			p.ID, p.Name, trackKind, track.SSRC(), track.ID())
 
 		// Log simulcast info - check codec parameters
 		codec := track.Codec()
-		log.Printf("[SFU] Track codec: %s, PayloadType: %d", codec.MimeType, codec.PayloadType)
+		log.Printf("[SFU] 📹 Track codec: %s, PayloadType: %d, ClockRate: %d",
+			codec.MimeType, codec.PayloadType, codec.ClockRate)
 		if track.RID() != "" {
 			log.Printf("[SIMULCAST] 📹 Participant %s published simulcast layer: RID=%s", p.ID, track.RID())
 		}
 
-		// Create local track for forwarding
+		// Create local track for forwarding with stream ID that identifies the publisher
+		localTrackID := fmt.Sprintf("%s-%s", track.Kind(), uuid.NewString()[:8])
+		streamID := fmt.Sprintf("stream-%s", p.ID)
+
 		trackLocal, err := webrtc.NewTrackLocalStaticRTP(
 			track.Codec().RTPCodecCapability,
-			fmt.Sprintf("%s-%s", track.Kind(), uuid.NewString()[:8]),
-			fmt.Sprintf("stream-%s", p.ID),
+			localTrackID,
+			streamID,
 		)
 		if err != nil {
-			log.Printf("[SFU] Failed to create local track: %v", err)
+			log.Printf("[SFU] ❌ Failed to create local track for %s: %v", p.ID, err)
 			return
 		}
 
+		log.Printf("[SFU] ✅ Created local track: ID=%s, StreamID=%s", localTrackID, streamID)
+
 		// Store track info
+		quality := QualityHigh
+		rid := track.RID()
+		if track.Kind() == webrtc.RTPCodecTypeVideo {
+			quality = qualityFromRID(rid)
+		}
+
 		trackInfo := &TrackInfo{
-			Track:      track,
-			TrackLocal: trackLocal,
-			Kind:       track.Kind().String(),
-			SSRC:       track.SSRC(),
+			Track:       track,
+			TrackLocal:  trackLocal,
+			Kind:        trackKind,
+			SSRC:        track.SSRC(),
+			PublisherID: p.ID,
+			RID:         rid,
+			Quality:     quality,
+			TrackID:     track.ID(),
 		}
 
 		p.mu.Lock()
 		p.Tracks[track.ID()] = trackInfo
+		trackCount := len(p.Tracks)
 		p.mu.Unlock()
 
-		// Forward track to all other participants
+		log.Printf("[SFU] 📊 Participant %s now has %d track(s) published", p.ID, trackCount)
+
+		// Forward track to all other participants - THIS IS CRITICAL
+		log.Printf("[SFU] 🚀 Starting track forwarding goroutine for %s's %s track", p.ID, trackKind)
 		go p.forwardTrack(trackInfo)
 
 		// Request PLI periodically for video
@@ -446,85 +540,155 @@ func (p *SFUParticipant) forwardTrack(trackInfo *TrackInfo) {
 	track := trackInfo.Track
 	trackLocal := trackInfo.TrackLocal
 
-	// Subscribe all other participants to this track
-	for _, other := range p.Room.GetAllParticipants() {
-		if other.ID != p.ID {
-			other.SubscribeToTrack(p.ID, track.ID(), trackLocal)
+	log.Printf("[SFU] 🔄 forwardTrack: Starting forwarding for %s track from %s (id: %s)",
+		track.Kind(), p.ID, track.ID())
+
+	// Get snapshot of participants to subscribe
+	participants := p.Room.GetAllParticipants()
+	log.Printf("[SFU] 🔄 forwardTrack: Found %d total participants in room", len(participants))
+
+	subscribedCount := 0
+	for _, other := range participants {
+		if other.ID == p.ID {
+			continue
+		}
+		if other.HandlePublishedTrack(trackInfo) {
+			subscribedCount++
 		}
 	}
 
+	log.Printf("[SFU] ✅ forwardTrack: Subscribed %d participants to %s's %s track",
+		subscribedCount, p.ID, track.Kind())
+
 	// Read and forward RTP packets
 	rtpBuf := make([]byte, 1500)
+	const batchSize = 15
+	packetBatch := make([][]byte, 0, batchSize)
+	lastFlush := time.Now()
+
+	flushBatch := func() bool {
+		if len(packetBatch) == 0 {
+			return true
+		}
+		for _, pkt := range packetBatch {
+			if _, err := trackLocal.Write(pkt); err != nil && err != io.ErrClosedPipe {
+				log.Printf("[SFU] ❌ forwardTrack: Error writing to local track %s: %v", track.ID(), err)
+				return false
+			}
+		}
+		packetBatch = packetBatch[:0]
+		lastFlush = time.Now()
+		return true
+	}
+
+	packetsForwarded := 0
 	for {
 		i, _, err := track.Read(rtpBuf)
 		if err != nil {
 			if err == io.EOF {
+				if !flushBatch() {
+					return
+				}
+				log.Printf("[SFU] 🔚 forwardTrack: EOF for %s's %s track (forwarded %d packets)",
+					p.ID, track.Kind(), packetsForwarded)
 				return
 			}
-			log.Printf("[SFU] Error reading track %s: %v", track.ID(), err)
+			log.Printf("[SFU] ❌ forwardTrack: Error reading track %s from %s: %v",
+				track.ID(), p.ID, err)
 			return
 		}
 
-		// Write to local track (which forwards to all subscribers)
-		if _, err = trackLocal.Write(rtpBuf[:i]); err != nil && err != io.ErrClosedPipe {
-			log.Printf("[SFU] Error writing to local track: %v", err)
-			return
+		packet := make([]byte, i)
+		copy(packet, rtpBuf[:i])
+		packetBatch = append(packetBatch, packet)
+
+		if len(packetBatch) >= batchSize || time.Since(lastFlush) >= 5*time.Millisecond {
+			if !flushBatch() {
+				return
+			}
+		}
+
+		packetsForwarded++
+		// Log every 1000 packets to show activity
+		if packetsForwarded%1000 == 0 {
+			log.Printf("[SFU] 📊 forwardTrack: %s's %s track forwarded %d packets",
+				p.ID, track.Kind(), packetsForwarded)
 		}
 	}
 }
 
-// SubscribeToTrack subscribes this participant to another participant's track
-func (p *SFUParticipant) SubscribeToTrack(participantID, trackID string, trackLocal *webrtc.TrackLocalStaticRTP) {
-	p.mu.Lock()
+func subscriptionKey(participantID, trackID string) string {
+	return fmt.Sprintf("%s-%s", participantID, trackID)
+}
 
-	// Check if already subscribed
-	subKey := fmt.Sprintf("%s-%s", participantID, trackID)
-	if _, exists := p.subscribers[subKey]; exists {
-		p.mu.Unlock()
-		return
-	}
+func (p *SFUParticipant) getPreferredQuality() QualityLevel {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	return p.preferredQuality
+}
 
-	// Add track to peer connection
-	sender, err := p.PeerConnection.AddTrack(trackLocal)
-	if err != nil {
-		p.mu.Unlock()
-		log.Printf("[SFU] Failed to add track for %s: %v", p.ID, err)
-		return
-	}
-
-	// Store subscription
-	p.subscribers[subKey] = &Subscription{
-		ParticipantID: participantID,
-		TrackID:       trackID,
-		Sender:        sender,
-	}
-
-	log.Printf("[SFU] Participant %s subscribed to %s's track", p.ID, participantID)
-
-	// Schedule debounced renegotiation
+func (p *SFUParticipant) scheduleRenegotiationLocked() {
 	if p.renegotiateTimer != nil {
 		p.renegotiateTimer.Stop()
 	}
-
 	p.pendingRenegotiate = true
-	p.renegotiateTimer = time.AfterFunc(100*time.Millisecond, func() {
+	p.renegotiateTimer = time.AfterFunc(20*time.Millisecond, func() {
 		p.mu.Lock()
 		if p.pendingRenegotiate && !p.closed {
 			p.pendingRenegotiate = false
 			p.mu.Unlock()
 
-			log.Printf("[SFU] 🔄 Debounced renegotiation for %s", p.ID)
+			log.Printf("[SFU] 🔄 RENEGOTIATION: Triggering for %s", p.ID)
 			if err := p.Renegotiate(); err != nil {
-				log.Printf("[SFU] Failed to renegotiate for %s: %v", p.ID, err)
+				log.Printf("[SFU] ❌ RENEGOTIATION FAILED for %s: %v", p.ID, err)
+			} else {
+				log.Printf("[SFU] ✅ RENEGOTIATION SUCCESS for %s", p.ID)
 			}
 		} else {
 			p.mu.Unlock()
 		}
 	})
+}
 
+func (p *SFUParticipant) subscribeToTrack(trackInfo *TrackInfo) bool {
+	key := subscriptionKey(trackInfo.PublisherID, trackInfo.TrackID)
+	trackKind := trackInfo.TrackLocal.Kind().String()
+
+	p.mu.Lock()
+	if _, exists := p.subscribers[key]; exists {
+		p.mu.Unlock()
+		return false
+	}
+
+	sender, err := p.PeerConnection.AddTrack(trackInfo.TrackLocal)
+	if err != nil {
+		p.mu.Unlock()
+		log.Printf("[SFU] ❌ Failed to add track for %s: %v", p.ID, err)
+		return false
+	}
+
+	p.subscribers[key] = &Subscription{
+		ParticipantID: trackInfo.PublisherID,
+		TrackID:       trackInfo.TrackID,
+		Sender:        sender,
+		Quality:       trackInfo.Quality,
+		Kind:          trackKind,
+	}
+
+	log.Printf("[SFU] ✅ Participant %s subscribed to %s's %s track (quality=%d)", p.ID, trackInfo.PublisherID, trackKind, trackInfo.Quality)
+
+	removedOthers := false
+	if trackKind == webrtc.RTPCodecTypeVideo.String() {
+		removedOthers = p.unsubscribeOtherVideoLayersLocked(trackInfo.PublisherID, trackInfo.Quality)
+	}
+
+	p.scheduleRenegotiationLocked()
 	p.mu.Unlock()
 
-	// Handle RTCP packets
+	if removedOthers {
+		log.Printf("[SFU] ♻️ Participant %s cleaned up other layers from %s", p.ID, trackInfo.PublisherID)
+	}
+
 	go func() {
 		rtcpBuf := make([]byte, 1500)
 		for {
@@ -533,6 +697,117 @@ func (p *SFUParticipant) SubscribeToTrack(participantID, trackID string, trackLo
 			}
 		}
 	}()
+
+	return true
+}
+
+func (p *SFUParticipant) unsubscribeTrack(participantID, trackID string) {
+	key := subscriptionKey(participantID, trackID)
+
+	p.mu.Lock()
+	sub, exists := p.subscribers[key]
+	if !exists {
+		p.mu.Unlock()
+		return
+	}
+
+	if err := p.PeerConnection.RemoveTrack(sub.Sender); err != nil {
+		log.Printf("[SFU] ⚠️  Failed to remove track for %s: %v", p.ID, err)
+	} else {
+		_ = sub.Sender.Stop()
+	}
+	delete(p.subscribers, key)
+	p.scheduleRenegotiationLocked()
+	p.mu.Unlock()
+
+	log.Printf("[SFU] 🧹 Participant %s unsubscribed from %s track %s", p.ID, participantID, trackID)
+}
+
+func (p *SFUParticipant) unsubscribeOtherVideoLayersLocked(publisherID string, keep QualityLevel) bool {
+	removed := false
+	for key, sub := range p.subscribers {
+		if sub.ParticipantID == publisherID && sub.Kind == webrtc.RTPCodecTypeVideo.String() && sub.Quality != keep {
+			if err := p.PeerConnection.RemoveTrack(sub.Sender); err != nil {
+				log.Printf("[SFU] ⚠️  Failed to remove competing layer for %s: %v", p.ID, err)
+			} else {
+				_ = sub.Sender.Stop()
+			}
+			delete(p.subscribers, key)
+			removed = true
+			log.Printf("[SFU] 🔻 Participant %s removed layer %s for publisher %s", p.ID, key, publisherID)
+		}
+	}
+	return removed
+}
+
+func (p *SFUParticipant) unsubscribeHigherThan(level QualityLevel) {
+	p.mu.Lock()
+	removed := false
+	for key, sub := range p.subscribers {
+		if sub.Kind == webrtc.RTPCodecTypeVideo.String() && sub.Quality > level {
+			if err := p.PeerConnection.RemoveTrack(sub.Sender); err != nil {
+				log.Printf("[SFU] ⚠️  Failed to remove high-quality track for %s: %v", p.ID, err)
+			} else {
+				_ = sub.Sender.Stop()
+			}
+			delete(p.subscribers, key)
+			removed = true
+			log.Printf("[SFU] 🔻 Participant %s removed subscription %s due to quality downgrade", p.ID, key)
+		}
+	}
+	if removed {
+		p.scheduleRenegotiationLocked()
+	}
+	p.mu.Unlock()
+}
+
+func (p *SFUParticipant) HandlePublishedTrack(trackInfo *TrackInfo) bool {
+	if trackInfo.PublisherID == p.ID {
+		return false
+	}
+
+	if trackInfo.Kind != webrtc.RTPCodecTypeVideo.String() {
+		return p.subscribeToTrack(trackInfo)
+	}
+
+	preferred := p.getPreferredQuality()
+	if shouldSubscribeToTrack(trackInfo, preferred) {
+		return p.subscribeToTrack(trackInfo)
+	}
+
+	p.unsubscribeTrack(trackInfo.PublisherID, trackInfo.TrackID)
+	return false
+}
+
+func (p *SFUParticipant) getPublishedTracksSnapshot() []*TrackInfo {
+	p.mu.RLock()
+	defer p.mu.RUnlock()
+	tracks := make([]*TrackInfo, 0, len(p.Tracks))
+	for _, info := range p.Tracks {
+		tracks = append(tracks, info)
+	}
+	return tracks
+}
+
+func (p *SFUParticipant) SetPreferredQuality(level QualityLevel) {
+	p.mu.Lock()
+	if p.preferredQuality == level {
+		p.mu.Unlock()
+		return
+	}
+	p.preferredQuality = level
+	p.mu.Unlock()
+	log.Printf("[SFU] 🎚️ Participant %s set preferred quality to %d", p.ID, level)
+	p.Room.UpdateParticipantQuality(p, level)
+}
+
+func (p *SFUParticipant) SetPreferredQualityString(level string) error {
+	quality, err := qualityLevelFromString(level)
+	if err != nil {
+		return err
+	}
+	p.SetPreferredQuality(quality)
+	return nil
 }
 
 // sendPLI sends Picture Loss Indication periodically

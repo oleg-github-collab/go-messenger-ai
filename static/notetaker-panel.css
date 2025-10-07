@@ -1,0 +1,636 @@
+/* Enhanced AI Notetaker Panel Styles */
+
+.notetaker-settings-group {
+    background: linear-gradient(135deg, rgba(59, 130, 246, 0.05) 0%, rgba(139, 92, 246, 0.05) 100%);
+    border: 2px solid rgba(59, 130, 246, 0.2);
+    border-radius: 16px;
+    padding: 24px;
+    margin-bottom: 24px;
+}
+
+/* Header */
+.notetaker-header {
+    margin-bottom: 20px;
+}
+
+.notetaker-title-row {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 8px;
+}
+
+.notetaker-main-label {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+    font-size: 18px;
+    font-weight: 700;
+    margin: 0;
+}
+
+.notetaker-icon-large {
+    font-size: 28px;
+}
+
+/* Status Badge */
+.notetaker-status-badge {
+    display: flex;
+    align-items: center;
+    gap: 6px;
+    padding: 6px 12px;
+    background: rgba(16, 185, 129, 0.1);
+    border: 1px solid rgba(16, 185, 129, 0.3);
+    border-radius: 20px;
+    font-size: 12px;
+    font-weight: 600;
+    color: #10b981;
+}
+
+.notetaker-status-badge.recording {
+    background: rgba(239, 68, 68, 0.1);
+    border-color: rgba(239, 68, 68, 0.3);
+    color: #ef4444;
+}
+
+.notetaker-status-badge.recording .status-dot {
+    animation: pulse 1.5s ease-in-out infinite;
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    background: currentColor;
+    border-radius: 50%;
+}
+
+@keyframes pulse {
+    0%, 100% { opacity: 1; transform: scale(1); }
+    50% { opacity: 0.5; transform: scale(0.8); }
+}
+
+/* Quick Stats */
+.notetaker-quick-stats {
+    display: grid;
+    grid-template-columns: repeat(auto-fit, minmax(100px, 1fr));
+    gap: 12px;
+    margin-bottom: 20px;
+    padding: 16px;
+    background: rgba(255, 255, 255, 0.05);
+    border-radius: 12px;
+}
+
+.quick-stat {
+    text-align: center;
+}
+
+.quick-stat .stat-value {
+    font-size: 24px;
+    font-weight: 700;
+    color: #60a5fa;
+    margin-bottom: 4px;
+}
+
+.quick-stat .stat-label {
+    font-size: 11px;
+    color: #94a3b8;
+    text-transform: uppercase;
+    letter-spacing: 0.5px;
+}
+
+/* Tabs */
+.notetaker-tabs {
+    display: flex;
+    gap: 4px;
+    margin-bottom: 16px;
+    background: rgba(51, 65, 85, 0.3);
+    padding: 4px;
+    border-radius: 10px;
+    overflow-x: auto;
+}
+
+.notetaker-tab {
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 6px;
+    padding: 10px 16px;
+    background: transparent;
+    border: none;
+    border-radius: 8px;
+    color: #94a3b8;
+    font-size: 13px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    white-space: nowrap;
+}
+
+.notetaker-tab:hover {
+    background: rgba(255, 255, 255, 0.05);
+    color: #e2e8f0;
+}
+
+.notetaker-tab.active {
+    background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+    color: white;
+    box-shadow: 0 2px 8px rgba(59, 130, 246, 0.3);
+}
+
+.notetaker-tab svg {
+    width: 16px;
+    height: 16px;
+}
+
+/* Tab Content */
+.notetaker-tab-content {
+    margin-bottom: 20px;
+}
+
+.notetaker-tab-panel {
+    display: none;
+}
+
+.notetaker-tab-panel.active {
+    display: block;
+    animation: fadeIn 0.3s ease;
+}
+
+@keyframes fadeIn {
+    from { opacity: 0; transform: translateY(10px); }
+    to { opacity: 1; transform: translateY(0); }
+}
+
+/* Form Elements */
+.form-group {
+    margin-bottom: 20px;
+}
+
+.form-label {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    font-weight: 600;
+    color: #e2e8f0;
+    margin-bottom: 8px;
+}
+
+.form-label svg {
+    opacity: 0.7;
+}
+
+.form-label input[type="checkbox"] {
+    margin-right: 4px;
+}
+
+.field-description {
+    font-size: 12px;
+    color: #94a3b8;
+    margin-top: 6px;
+    line-height: 1.4;
+}
+
+.settings-textarea {
+    width: 100%;
+    padding: 12px;
+    background: rgba(51, 65, 85, 0.5);
+    border: 2px solid rgba(59, 130, 246, 0.2);
+    border-radius: 8px;
+    color: white;
+    font-size: 14px;
+    font-family: inherit;
+    resize: vertical;
+    transition: all 0.2s;
+}
+
+.settings-textarea:focus {
+    outline: none;
+    border-color: #3b82f6;
+    background: rgba(51, 65, 85, 0.8);
+}
+
+/* Real-time Transcript */
+.realtime-transcript {
+    max-height: 300px;
+    overflow-y: auto;
+    background: rgba(15, 23, 42, 0.8);
+    border: 2px solid rgba(59, 130, 246, 0.2);
+    border-radius: 8px;
+    padding: 16px;
+    min-height: 150px;
+}
+
+.transcript-placeholder {
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: center;
+    height: 100%;
+    min-height: 120px;
+    color: #64748b;
+    text-align: center;
+}
+
+.transcript-placeholder p {
+    margin-top: 12px;
+    font-size: 13px;
+}
+
+/* Real-time Transcript Entry */
+.rt-transcript-entry {
+    margin-bottom: 16px;
+    padding: 12px;
+    background: rgba(51, 65, 85, 0.5);
+    border-left: 3px solid #64748b;
+    border-radius: 6px;
+    transition: all 0.2s;
+}
+
+.rt-transcript-entry:hover {
+    background: rgba(51, 65, 85, 0.8);
+    transform: translateX(2px);
+}
+
+.rt-transcript-entry.highlighted {
+    border-left-width: 4px;
+    box-shadow: 0 0 0 1px rgba(59, 130, 246, 0.3);
+}
+
+.rt-entry-header {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    margin-bottom: 6px;
+}
+
+.rt-speaker {
+    font-weight: 600;
+    color: #60a5fa;
+    font-size: 13px;
+}
+
+.rt-timestamp {
+    font-size: 11px;
+    color: #64748b;
+}
+
+.rt-category-badge {
+    padding: 2px 8px;
+    border-radius: 4px;
+    font-size: 10px;
+    font-weight: 600;
+    color: white;
+    margin-left: auto;
+}
+
+.rt-text {
+    color: #e2e8f0;
+    font-size: 14px;
+    line-height: 1.6;
+}
+
+/* Categories Management */
+.categories-header {
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    margin-bottom: 16px;
+}
+
+.categories-header h3 {
+    margin: 0;
+    font-size: 16px;
+    color: #e2e8f0;
+}
+
+.categories-list {
+    max-height: 400px;
+    overflow-y: auto;
+}
+
+.category-item {
+    background: rgba(51, 65, 85, 0.5);
+    border: 2px solid rgba(100, 116, 139, 0.3);
+    border-radius: 10px;
+    padding: 16px;
+    margin-bottom: 12px;
+    transition: all 0.2s;
+}
+
+.category-item:hover {
+    border-color: rgba(59, 130, 246, 0.5);
+    background: rgba(51, 65, 85, 0.7);
+}
+
+.category-header {
+    display: flex;
+    align-items: center;
+    gap: 10px;
+    margin-bottom: 10px;
+}
+
+.category-toggle {
+    width: 20px;
+    height: 20px;
+    cursor: pointer;
+}
+
+.category-color {
+    width: 40px;
+    height: 32px;
+    border: 2px solid rgba(255, 255, 255, 0.2);
+    border-radius: 6px;
+    cursor: pointer;
+}
+
+.category-name {
+    flex: 1;
+    padding: 8px 12px;
+    background: rgba(15, 23, 42, 0.5);
+    border: 2px solid rgba(100, 116, 139, 0.3);
+    border-radius: 6px;
+    color: white;
+    font-size: 14px;
+    font-weight: 600;
+}
+
+.category-name:focus {
+    outline: none;
+    border-color: #3b82f6;
+}
+
+.category-description {
+    width: 100%;
+    padding: 10px;
+    background: rgba(15, 23, 42, 0.5);
+    border: 2px solid rgba(100, 116, 139, 0.3);
+    border-radius: 6px;
+    color: #94a3b8;
+    font-size: 13px;
+    resize: vertical;
+    min-height: 60px;
+}
+
+.category-description:focus {
+    outline: none;
+    border-color: #3b82f6;
+    color: white;
+}
+
+/* Buttons */
+.btn-primary, .btn-secondary, .btn-danger {
+    padding: 12px 20px;
+    border: none;
+    border-radius: 10px;
+    font-size: 14px;
+    font-weight: 600;
+    cursor: pointer;
+    transition: all 0.2s;
+    display: inline-flex;
+    align-items: center;
+    justify-content: center;
+    gap: 8px;
+}
+
+.btn-primary {
+    background: linear-gradient(135deg, #3b82f6 0%, #8b5cf6 100%);
+    color: white;
+    box-shadow: 0 4px 12px rgba(59, 130, 246, 0.3);
+}
+
+.btn-primary:hover {
+    transform: translateY(-2px);
+    box-shadow: 0 6px 20px rgba(59, 130, 246, 0.4);
+}
+
+.btn-secondary {
+    background: rgba(51, 65, 85, 0.8);
+    color: #e2e8f0;
+    border: 2px solid rgba(100, 116, 139, 0.5);
+}
+
+.btn-secondary:hover {
+    background: rgba(51, 65, 85, 1);
+    border-color: rgba(59, 130, 246, 0.5);
+}
+
+.btn-danger {
+    background: rgba(239, 68, 68, 0.2);
+    color: #f87171;
+    border: 2px solid rgba(239, 68, 68, 0.5);
+}
+
+.btn-danger:hover {
+    background: rgba(239, 68, 68, 0.3);
+    border-color: rgba(239, 68, 68, 0.7);
+}
+
+.btn-large {
+    padding: 16px 24px;
+    font-size: 15px;
+}
+
+.btn-small {
+    padding: 8px 12px;
+    font-size: 12px;
+}
+
+.btn-icon-small {
+    padding: 6px;
+    background: transparent;
+    border: none;
+    color: #64748b;
+    cursor: pointer;
+    border-radius: 4px;
+    transition: all 0.2s;
+}
+
+.btn-icon-small:hover {
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+}
+
+.btn-icon-danger {
+    padding: 8px;
+    background: transparent;
+    border: none;
+    color: #64748b;
+    cursor: pointer;
+    border-radius: 6px;
+    transition: all 0.2s;
+}
+
+.btn-icon-danger:hover {
+    background: rgba(239, 68, 68, 0.2);
+    color: #ef4444;
+}
+
+.btn-remove-category {
+    margin-left: auto;
+}
+
+.button-group-vertical {
+    display: flex;
+    flex-direction: column;
+    gap: 8px;
+}
+
+/* Controls */
+.notetaker-controls {
+    display: flex;
+    gap: 12px;
+    margin-bottom: 12px;
+}
+
+.notetaker-controls button {
+    flex: 1;
+}
+
+.notetaker-icon {
+    font-size: 18px;
+}
+
+/* Presets Grid */
+.presets-grid {
+    display: grid;
+    grid-template-columns: repeat(auto-fill, minmax(200px, 1fr));
+    gap: 12px;
+    margin-bottom: 20px;
+}
+
+.preset-card {
+    padding: 16px;
+    background: rgba(51, 65, 85, 0.5);
+    border: 2px solid rgba(100, 116, 139, 0.3);
+    border-radius: 10px;
+    cursor: pointer;
+    transition: all 0.2s;
+}
+
+.preset-card:hover {
+    border-color: rgba(59, 130, 246, 0.5);
+    background: rgba(51, 65, 85, 0.7);
+    transform: translateY(-2px);
+}
+
+.preset-card.selected {
+    border-color: #3b82f6;
+    background: rgba(59, 130, 246, 0.1);
+}
+
+.preset-icon {
+    font-size: 32px;
+    margin-bottom: 8px;
+}
+
+.preset-name {
+    font-weight: 600;
+    color: #e2e8f0;
+    margin-bottom: 4px;
+}
+
+.preset-description {
+    font-size: 12px;
+    color: #94a3b8;
+}
+
+/* Slider */
+.slider-container {
+    display: flex;
+    align-items: center;
+    gap: 12px;
+}
+
+.settings-slider {
+    flex: 1;
+    height: 6px;
+    background: rgba(51, 65, 85, 0.8);
+    border-radius: 3px;
+    outline: none;
+    appearance: none;
+}
+
+.settings-slider::-webkit-slider-thumb {
+    appearance: none;
+    width: 18px;
+    height: 18px;
+    background: #3b82f6;
+    border-radius: 50%;
+    cursor: pointer;
+    box-shadow: 0 2px 6px rgba(59, 130, 246, 0.4);
+}
+
+.settings-slider::-moz-range-thumb {
+    width: 18px;
+    height: 18px;
+    background: #3b82f6;
+    border-radius: 50%;
+    cursor: pointer;
+    border: none;
+    box-shadow: 0 2px 6px rgba(59, 130, 246, 0.4);
+}
+
+.slider-value {
+    min-width: 45px;
+    text-align: right;
+    font-weight: 600;
+    color: #60a5fa;
+}
+
+/* Footer Description */
+.notetaker-footer-desc {
+    text-align: center;
+    margin: 0;
+    padding-top: 12px;
+    border-top: 1px solid rgba(100, 116, 139, 0.2);
+}
+
+/* Scrollbar */
+.realtime-transcript::-webkit-scrollbar,
+.categories-list::-webkit-scrollbar {
+    width: 8px;
+}
+
+.realtime-transcript::-webkit-scrollbar-track,
+.categories-list::-webkit-scrollbar-track {
+    background: rgba(15, 23, 42, 0.5);
+    border-radius: 4px;
+}
+
+.realtime-transcript::-webkit-scrollbar-thumb,
+.categories-list::-webkit-scrollbar-thumb {
+    background: rgba(59, 130, 246, 0.5);
+    border-radius: 4px;
+}
+
+.realtime-transcript::-webkit-scrollbar-thumb:hover,
+.categories-list::-webkit-scrollbar-thumb:hover {
+    background: rgba(59, 130, 246, 0.7);
+}
+
+/* Responsive */
+@media (max-width: 768px) {
+    .notetaker-tabs {
+        overflow-x: scroll;
+        -webkit-overflow-scrolling: touch;
+    }
+
+    .notetaker-tab {
+        font-size: 12px;
+        padding: 8px 12px;
+    }
+
+    .notetaker-controls {
+        flex-direction: column;
+    }
+
+    .presets-grid {
+        grid-template-columns: 1fr;
+    }
+
+    .notetaker-quick-stats {
+        grid-template-columns: repeat(2, 1fr);
+    }
+}

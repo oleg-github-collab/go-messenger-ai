@@ -38,6 +38,47 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
+    let notetakerUIReadyPromise = null;
+    async function ensureNotetakerUI() {
+        if (notetakerUIReadyPromise) {
+            return notetakerUIReadyPromise;
+        }
+
+        notetakerUIReadyPromise = (async () => {
+            if (!groupCallContainer) {
+                console.warn('[GROUP-CALL] ⚠️ Cannot inject notetaker UI: container missing');
+                return;
+            }
+
+            try {
+                const [panelResp, modalsResp] = await Promise.all([
+                    fetch('/static/notetaker-panel.html'),
+                    fetch('/static/notetaker-modals.html')
+                ]);
+
+                if (!panelResp.ok || !modalsResp.ok) {
+                    console.warn('[GROUP-CALL] ⚠️ Failed to load notetaker partials', panelResp.status, modalsResp.status);
+                    return;
+                }
+
+                const parser = new DOMParser();
+                const panelDoc = parser.parseFromString(await panelResp.text(), 'text/html');
+                const modalsDoc = parser.parseFromString(await modalsResp.text(), 'text/html');
+
+                const fragment = document.createDocumentFragment();
+                Array.from(panelDoc.body.children).forEach(node => fragment.appendChild(node.cloneNode(true)));
+                Array.from(modalsDoc.body.children).forEach(node => fragment.appendChild(node.cloneNode(true)));
+
+                document.body.appendChild(fragment);
+                console.log('[GROUP-CALL] ✅ Notetaker UI injected');
+            } catch (err) {
+                console.error('[GROUP-CALL] ❌ Failed to inject notetaker UI:', err);
+            }
+        })();
+
+        return notetakerUIReadyPromise;
+    }
+
     // State
     let socket = null;
     let localStream = null;
@@ -63,10 +104,53 @@ document.addEventListener('DOMContentLoaded', async () => {
     let qualityScoreHistory = [];
     let adaptiveBitrateEnabled = true;
     let currentBitrateLevel = 'high'; // low, medium, high
+    let lastMeasuredRTT = 0;
+    let lastMeasuredPacketLoss = 0;
+    let lastMeasuredJitter = 0;
+    let heartbeatInterval = null;
+    let lastSentQualityLevel = null;
+    let pendingQualityLevel = null;
 
     // Dynacast - track visibility optimization
     let visibilityCheckInterval = null;
     let participantVisibility = new Map(); // participantId -> boolean
+
+    function buildAudioConstraints(extra = {}) {
+        return {
+            channelCount: 1,
+            sampleRate: 32000,
+            sampleSize: 16,
+            echoCancellation: true,
+            noiseSuppression: true,
+            autoGainControl: true,
+            ...extra,
+        };
+    }
+
+    function notifyQualityChange(level) {
+        if (!socket || socket.readyState !== WebSocket.OPEN) {
+            pendingQualityLevel = level;
+            return;
+        }
+
+        if (lastSentQualityLevel === level) {
+            pendingQualityLevel = null;
+            return;
+        }
+
+        try {
+            socket.send(JSON.stringify({
+                type: 'quality-update',
+                data: JSON.stringify({ level })
+            }));
+            lastSentQualityLevel = level;
+            pendingQualityLevel = null;
+            console.log('[QUALITY] 📤 Notified SFU about quality level:', level);
+        } catch (err) {
+            console.warn('[QUALITY] ⚠️ Failed to notify quality change:', err);
+            pendingQualityLevel = level;
+        }
+    }
 
     // Get room ID from URL
     const pathParts = window.location.pathname.split('/');
@@ -78,6 +162,17 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
+    const hostStorageKey = `isHost_${roomID}`;
+    const storedHostFlag = sessionStorage.getItem(hostStorageKey);
+    if (storedHostFlag === 'true') {
+        sessionStorage.setItem('isHost', 'true');
+    } else if (storedHostFlag === 'false' || storedHostFlag === null) {
+        sessionStorage.setItem('isHost', 'false');
+    }
+
+    const isCurrentUserHost = () =>
+        sessionStorage.getItem('isHost') === 'true' || sessionStorage.getItem(hostStorageKey) === 'true';
+
     // Set default name from sessionStorage
     const savedName = sessionStorage.getItem('guestName') || sessionStorage.getItem('userName') || '';
     if (savedName) {
@@ -86,18 +181,32 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
     console.log('[GROUP-CALL] 👤 Default name:', myName);
 
-    // WebRTC configuration - optimized for speed and reliability
+    // WebRTC configuration - optimized for speed and reliability (with TURN for Germany-Ukraine)
     const config = {
         iceServers: [
-            // STUN servers for NAT traversal
-            { urls: 'stun:stun.l.google.com:19302' },
-            { urls: 'stun:stun1.l.google.com:19302' }
+            { urls: ['stun:stun.l.google.com:19302', 'stun:stun1.l.google.com:19302'] },
+            {
+                urls: [
+                    'turn:turn.cloudflare.com:3478',
+                    'turn:turn.cloudflare.com:3478?transport=udp',
+                    'turns:turn.cloudflare.com:5349?transport=tcp'
+                ],
+                username: 'cloudflare',
+                credential: 'cloudflare'
+            }
         ],
-        iceCandidatePoolSize: 20, // Increased for faster connection
-        bundlePolicy: 'max-bundle', // Fastest connection
+        iceCandidatePoolSize: 10,
+        bundlePolicy: 'max-bundle',
         rtcpMuxPolicy: 'require',
-        iceTransportPolicy: 'all' // Use all available candidates
+        iceTransportPolicy: 'all',
+        sdpSemantics: 'unified-plan'
     };
+
+    let hasPrimaryTurn = false;
+    let forcedRelayMode = false;
+    let relayRecoveryTimer = null;
+
+    console.log('[GROUP-CALL] 🌍 Configured with', config.iceServers.length, 'ICE servers for global connectivity');
 
     // Fetch TURN credentials
     try {
@@ -121,7 +230,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             console.log('[GROUP-CALL] 🔧 TURN server URLs:', turnServer.urls);
 
-            config.iceServers.push(turnServer);
+            config.iceServers = [turnServer, ...config.iceServers];
+            hasPrimaryTurn = true;
             console.log('[GROUP-CALL] ✅ Primary TURN server configured:', host);
         } else {
             console.warn('[GROUP-CALL] ⚠️  TURN credentials incomplete:', creds);
@@ -130,38 +240,24 @@ document.addEventListener('DOMContentLoaded', async () => {
         console.error('[GROUP-CALL] ❌ Failed to fetch TURN credentials:', err);
     }
 
-    // Add fallback TURN servers (free, public) for better reliability
-    config.iceServers.push(
-        // Metered TURN servers (Europe)
-        {
-            urls: 'turn:openrelay.metered.ca:80',
-            username: 'openrelayproject',
-            credential: 'openrelayproject'
-        },
-        {
-            urls: 'turn:openrelay.metered.ca:443',
-            username: 'openrelayproject',
-            credential: 'openrelayproject'
-        },
-        {
-            urls: 'turn:openrelay.metered.ca:443?transport=tcp',
-            username: 'openrelayproject',
-            credential: 'openrelayproject'
-        }
-    );
-
     console.log('[GROUP-CALL] 🔧 Total ICE servers configured:', config.iceServers.length);
-    console.log('[GROUP-CALL] 📡 Fallback TURN servers added for reliability');
 
 
     // Initialize WebRTC peer connection
-    function initPeerConnection() {
+    async function initPeerConnection() {
         console.log('[GROUP-CALL] 🔧 Initializing peer connection...');
         console.log('[GROUP-CALL] 🔧 localStream exists:', !!localStream);
 
         if (localStream) {
             const tracks = localStream.getTracks();
             console.log('[GROUP-CALL] 🔧 localStream has', tracks.length, 'tracks:', tracks.map(t => t.kind));
+        }
+
+        if (forcedRelayMode && config.iceTransportPolicy !== 'relay') {
+            config.iceTransportPolicy = 'relay';
+        }
+        if (forcedRelayMode) {
+            console.log('[GROUP-CALL] 🚦 Relay-only mode active for ICE transport');
         }
 
         peerConnection = new RTCPeerConnection(config);
@@ -176,8 +272,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                     const params = receiver.getParameters();
                     if (params) {
                         // Target 50ms jitter buffer (lower = less latency, but needs stable connection)
-                        receiver.jitterBufferTarget = 50;
-                        console.log('[JITTER] ✅ Set jitter buffer target to 50ms for video');
+                        const target = computeJitterTarget(lastMeasuredRTT);
+                        receiver.jitterBufferTarget = target;
+                        console.log(`[JITTER] ✅ Set jitter buffer target to ${target}ms for video`);
                     }
                 } catch (err) {
                     console.warn('[JITTER] ⚠️  Could not set jitter buffer:', err);
@@ -185,74 +282,100 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
         });
 
-        // Add local tracks
+        // CRITICAL: Add transceivers explicitly for sendrecv to ensure SFU receives tracks
         if (localStream) {
-            const tracks = localStream.getTracks();
-            console.log('[GROUP-CALL] 📹 Adding', tracks.length, 'local tracks to peer connection');
+            const audioTrack = localStream.getAudioTracks()[0];
+            const videoTrack = localStream.getVideoTracks()[0];
 
-            if (tracks.length === 0) {
-                console.error('[GROUP-CALL] ⚠️  localStream exists but has NO tracks!');
+            if (audioTrack) {
+                console.log('[GROUP-CALL] 🎤 Adding audio transceiver (sendrecv)');
+                peerConnection.addTransceiver(audioTrack, {
+                    direction: 'sendrecv',
+                    streams: [localStream]
+                });
+            } else {
+                console.log('[GROUP-CALL] 🎤 Adding audio-only receive transceiver');
+                peerConnection.addTransceiver('audio', { direction: 'recvonly' });
             }
 
-            tracks.forEach(async track => {
+            if (videoTrack) {
+                console.log('[GROUP-CALL] 📹 Adding video transceiver (sendrecv)');
+                const videoSender = peerConnection.addTransceiver(videoTrack, {
+                    direction: 'sendrecv',
+                    streams: [localStream]
+                });
+
+                // Enable simulcast for video
                 try {
-                    const sender = peerConnection.addTrack(track, localStream);
-                    console.log('[GROUP-CALL] ✅ Added local track:', track.kind, 'enabled:', track.enabled, 'readyState:', track.readyState, 'muted:', track.muted);
-
-                    // Enable simulcast for video tracks
-                    if (sender && track.kind === 'video') {
-                        try {
-                            const params = sender.getParameters();
-
-                            if (!params.encodings || params.encodings.length === 0) {
-                                params.encodings = [
-                                    {
-                                        rid: 'h',
-                                        maxBitrate: 1500000,  // 1.5 Mbps - High quality
-                                        scaleResolutionDownBy: 1
-                                    },
-                                    {
-                                        rid: 'm',
-                                        maxBitrate: 600000,   // 600 Kbps - Medium quality
-                                        scaleResolutionDownBy: 2
-                                    },
-                                    {
-                                        rid: 'l',
-                                        maxBitrate: 200000,   // 200 Kbps - Low quality
-                                        scaleResolutionDownBy: 4
-                                    }
-                                ];
-
-                                await sender.setParameters(params);
-                                console.log('[SIMULCAST] ✅ Enabled 3-layer simulcast for video (h/m/l)');
+                    const params = videoSender.sender.getParameters();
+                    params.degradationPreference = 'maintain-framerate';
+                    if (!params.encodings || params.encodings.length === 0) {
+                        params.encodings = [
+                            { rid: 'h', maxBitrate: 1200000, scaleResolutionDownBy: 1 },
+                            { rid: 'm', maxBitrate: 500000, scaleResolutionDownBy: 2 },
+                            { rid: 'l', maxBitrate: 150000, scaleResolutionDownBy: 4 }
+                        ];
+                        await videoSender.sender.setParameters(params);
+                        console.log('[SIMULCAST] ✅ Enabled 3-layer simulcast');
+                    } else {
+                        params.encodings.forEach(encoding => {
+                            if (encoding.rid === 'h') {
+                                encoding.maxBitrate = 1200000;
+                                encoding.scaleResolutionDownBy = 1;
+                            } else if (encoding.rid === 'm') {
+                                encoding.maxBitrate = 500000;
+                                encoding.scaleResolutionDownBy = 2;
+                            } else if (encoding.rid === 'l') {
+                                encoding.maxBitrate = 150000;
+                                encoding.scaleResolutionDownBy = 4;
                             }
-                        } catch (err) {
-                            console.warn('[SIMULCAST] ⚠️  Could not enable simulcast:', err);
-                            console.warn('[SIMULCAST] Falling back to single-stream mode');
-                        }
-                    }
-
-                    // Verify sender
-                    if (sender) {
-                        console.log('[GROUP-CALL] ✅ Sender created successfully for', track.kind);
+                        });
+                        await videoSender.sender.setParameters(params);
+                        console.log('[SIMULCAST] 🔄 Updated sender parameters with maintain-framerate preference');
                     }
                 } catch (err) {
-                    console.error('[GROUP-CALL] ❌ Failed to add track:', track.kind, err);
+                    console.warn('[SIMULCAST] ⚠️  Simulcast failed:', err);
                 }
-            });
+            } else {
+                console.log('[GROUP-CALL] 📹 Adding video-only receive transceiver');
+                peerConnection.addTransceiver('video', { direction: 'recvonly' });
+            }
+
+            console.log('[GROUP-CALL] ✅ Transceivers configured with local tracks');
         } else {
-            console.error('[GROUP-CALL] ❌ localStream is NULL - no tracks will be added!');
+            // No local stream yet - add receive-only transceivers
+            console.log('[GROUP-CALL] ⚠️  No localStream - adding receive-only transceivers');
+            peerConnection.addTransceiver('audio', { direction: 'recvonly' });
+            peerConnection.addTransceiver('video', { direction: 'recvonly' });
         }
 
         // Handle incoming tracks
         peerConnection.ontrack = (event) => {
-            console.log('[GROUP-CALL] 🎥 Received remote track:', event.track.kind, 'streams:', event.streams.length);
+            console.log('[GROUP-CALL] 🎥 ========== INCOMING TRACK ==========');
+            console.log('[GROUP-CALL] 🎥 Track kind:', event.track.kind);
+            console.log('[GROUP-CALL] 🎥 Track ID:', event.track.id);
+            console.log('[GROUP-CALL] 🎥 Track enabled:', event.track.enabled);
+            console.log('[GROUP-CALL] 🎥 Track readyState:', event.track.readyState);
+            console.log('[GROUP-CALL] 🎥 Track muted:', event.track.muted);
+            console.log('[GROUP-CALL] 🎥 Streams count:', event.streams?.length || 0);
+            console.log('[GROUP-CALL] 🎥 Transceiver direction:', event.transceiver?.direction);
+            console.log('[GROUP-CALL] 🎥 Receiver:', !!event.receiver);
+
+            if (event.receiver && typeof event.receiver.playoutDelayHint === 'number') {
+                try {
+                    event.receiver.playoutDelayHint = 0.12;
+                    console.log('[GROUP-CALL] 🎯 Reduced playout delay hint to 120ms for low latency');
+                } catch (err) {
+                    console.warn('[GROUP-CALL] ⚠️ Could not set playout delay hint:', err);
+                }
+            }
 
             // Optimize jitter buffer for this receiver
             if (event.receiver && event.track.kind === 'video') {
                 try {
-                    event.receiver.jitterBufferTarget = 50;
-                    console.log('[JITTER] ✅ Set jitter buffer target for incoming track');
+                    const target = computeJitterTarget(lastMeasuredRTT);
+                    event.receiver.jitterBufferTarget = target;
+                    console.log(`[JITTER] ✅ Set jitter buffer target (${target}ms) for incoming track`);
                 } catch (err) {
                     console.warn('[JITTER] ⚠️  Could not set jitter buffer for receiver:', err);
                 }
@@ -263,8 +386,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 const streamId = stream.id;
 
                 console.log('[GROUP-CALL] 📺 Stream ID:', streamId);
-                console.log('[GROUP-CALL] 📺 Track:', event.track.kind, 'id:', event.track.id, 'enabled:', event.track.enabled, 'muted:', event.track.muted);
-                console.log('[GROUP-CALL] 📺 Stream tracks:', stream.getTracks().map(t => t.kind).join(', '));
+                console.log('[GROUP-CALL] 📺 Stream active:', stream.active);
+                console.log('[GROUP-CALL] 📺 Stream tracks:', stream.getTracks().map(t => `${t.kind}(${t.readyState})`).join(', '));
+                console.log('[GROUP-CALL] 📺 All participants:', Array.from(participants.keys()).join(', '));
 
                 // Try to find participant by stream ID pattern (stream-{participantId})
                 const match = streamId.match(/stream-(.+)/);
@@ -368,6 +492,17 @@ document.addEventListener('DOMContentLoaded', async () => {
                     break;
                 case 'connected':
                     console.log('[GROUP-CALL] ✅ Peer connection established');
+                    if (forcedRelayMode) {
+                        console.log('[GROUP-CALL] 🛡️ Connection stabilized while using relay-only transport');
+                        if (!relayRecoveryTimer) {
+                            relayRecoveryTimer = setTimeout(() => {
+                                config.iceTransportPolicy = 'all';
+                                forcedRelayMode = false;
+                                relayRecoveryTimer = null;
+                                console.log('[GROUP-CALL] ♻️ Restored ICE transport policy to allow direct routes');
+                            }, 45000);
+                        }
+                    }
                     reconnectAttempts = 0;
                     if (reconnectTimer) {
                         clearTimeout(reconnectTimer);
@@ -376,6 +511,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                     break;
                 case 'disconnected':
                     console.warn('[GROUP-CALL] ⚠️  Connection disconnected, attempting reconnect...');
+                    if (relayRecoveryTimer) {
+                        clearTimeout(relayRecoveryTimer);
+                        relayRecoveryTimer = null;
+                    }
                     if (!reconnectTimer) {
                         reconnectTimer = setTimeout(() => {
                             if (peerConnection && peerConnection.connectionState === 'disconnected') {
@@ -390,6 +529,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                     break;
                 case 'failed':
                     console.error('[GROUP-CALL] ❌ Connection failed, immediate reconnect...');
+                    if (relayRecoveryTimer) {
+                        clearTimeout(relayRecoveryTimer);
+                        relayRecoveryTimer = null;
+                    }
                     attemptReconnection();
                     break;
             }
@@ -441,6 +584,87 @@ document.addEventListener('DOMContentLoaded', async () => {
     // ============================================
 
     // Calculate connection quality score (0-1)
+    const MIN_JITTER_TARGET = 20;
+    const MAX_JITTER_TARGET = 30;
+
+    function computeJitterTarget(rttMs) {
+        if (rttMs > 200) return MAX_JITTER_TARGET;
+        if (rttMs > 140) return 28;
+        if (rttMs > 90) return 25;
+        return MIN_JITTER_TARGET;
+    }
+
+    function applyAdaptiveJitter(rttMs) {
+        if (!peerConnection) {
+            return;
+        }
+
+        const target = computeJitterTarget(rttMs);
+        peerConnection.getReceivers().forEach(receiver => {
+            if (!receiver || typeof receiver.jitterBufferTarget === 'undefined') return;
+            try {
+                receiver.jitterBufferTarget = target;
+            } catch (err) {
+                console.warn('[JITTER] ⚠️  Unable to set adaptive jitter buffer:', err);
+            }
+        });
+    }
+
+    function enhanceOpusSdp(sdp) {
+        if (!sdp) return sdp;
+
+        const opusMatch = sdp.match(/a=rtpmap:(\d+)\s+opus/i);
+        if (!opusMatch) {
+            return sdp;
+        }
+
+        const payloadType = opusMatch[1];
+        const fmtpRegex = new RegExp(`a=fmtp:${payloadType} ([^\\r\\n]*)`);
+        if (fmtpRegex.test(sdp)) {
+            sdp = sdp.replace(fmtpRegex, (_line, params) => {
+                const parts = params.split(';').map(part => part.trim()).filter(Boolean);
+                const opts = new Set(parts);
+                opts.add('useinbandfec=1');
+                opts.add('stereo=0');
+                opts.add('maxplaybackrate=32000');
+                opts.add('sprop-maxcapturerate=32000');
+                opts.add('ptime=20');
+                return `a=fmtp:${payloadType} ${Array.from(opts).join(';')}`;
+            });
+        } else {
+            sdp = sdp.replace(
+                new RegExp(`a=rtpmap:${payloadType}\\s+opus/\\d+`, 'i'),
+                match => `${match}\na=fmtp:${payloadType} useinbandfec=1;stereo=0;maxplaybackrate=32000;sprop-maxcapturerate=32000;ptime=20`,
+            );
+        }
+
+        sdp = sdp.replace(/a=ptime:\d+/g, 'a=ptime:20');
+        return sdp;
+    }
+
+    function enableOpusOptions(description) {
+        if (!description) {
+            return description;
+        }
+
+        const enhanced = {
+            type: description.type,
+            sdp: enhanceOpusSdp(description.sdp),
+        };
+
+        return enhanced;
+    }
+
+    async function createEnhancedOffer(options) {
+        if (!peerConnection) {
+            throw new Error('peerConnection not ready');
+        }
+        const offer = await peerConnection.createOffer(options);
+        const enhancedOffer = enableOpusOptions(offer);
+        await peerConnection.setLocalDescription(enhancedOffer);
+        return peerConnection.localDescription;
+    }
+
     async function calculateConnectionQuality() {
         if (!peerConnection) return 1;
 
@@ -477,6 +701,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 totalPacketsLost / (totalPacketsReceived + totalPacketsLost) : 0;
             const rtt = rttCount > 0 ? (avgRTT / rttCount) * 1000 : 0; // Convert to ms
             const jitter = jitterCount > 0 ? (avgJitter / jitterCount) * 1000 : 0;
+
+            lastMeasuredRTT = rtt;
+            lastMeasuredPacketLoss = packetLossRate;
+            lastMeasuredJitter = jitter;
 
             // Calculate quality score (0-1)
             let qualityScore = 1.0;
@@ -520,16 +748,16 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         const bitrateSettings = {
             low: {
-                video: { h: 400000, m: 200000, l: 100000 },  // Simulcast layers
+                video: { h: 600000, m: 300000, l: 150000 },
                 audio: 32000
             },
             medium: {
-                video: { h: 1000000, m: 400000, l: 150000 },
-                audio: 64000
+                video: { h: 900000, m: 500000, l: 200000 },
+                audio: 48000
             },
             high: {
-                video: { h: 1500000, m: 600000, l: 200000 },
-                audio: 96000
+                video: { h: 1200000, m: 600000, l: 250000 },
+                audio: 64000
             }
         };
 
@@ -594,11 +822,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                 await sender.setParameters(params);
             }
 
-            console.log(`[BITRATE] ✅ Bitrate adjusted to ${level}`);
-        } catch (err) {
-            console.error('[BITRATE] Failed to adjust bitrate:', err);
-        }
+        console.log(`[BITRATE] ✅ Bitrate adjusted to ${level}`);
+        notifyQualityChange(level);
+    } catch (err) {
+        console.error('[BITRATE] Failed to adjust bitrate:', err);
     }
+}
 
     // Monitor connection quality and adjust bitrate
     let qualityMonitorInterval = null;
@@ -614,6 +843,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         qualityMonitorInterval = setInterval(async () => {
             const quality = await calculateConnectionQuality();
+            applyAdaptiveJitter(quality.rtt);
 
             qualityScoreHistory.push(quality.score);
             if (qualityScoreHistory.length > 10) {
@@ -629,17 +859,18 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             // Adaptive bitrate adjustment
             if (adaptiveBitrateEnabled) {
-                if (quality.score < 0.4) {
+                if (quality.packetLoss > 0.05 || quality.score < 0.4) {
                     consecutiveBadQuality++;
                     consecutiveGoodQuality = 0;
 
-                    if (consecutiveBadQuality >= 2) {
+                    if (consecutiveBadQuality >= 1) {
                         if (currentBitrateLevel !== 'low') {
                             await adjustBitrate('low');
                             showSubtitle('Connection', 'Reducing quality due to poor connection', false);
                         }
+                        consecutiveBadQuality = 0;
                     }
-                } else if (quality.score < 0.7) {
+                } else if (quality.packetLoss > 0.02 || quality.score < 0.7) {
                     consecutiveBadQuality = 0;
 
                     if (currentBitrateLevel === 'high') {
@@ -649,7 +880,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     consecutiveBadQuality = 0;
                     consecutiveGoodQuality++;
 
-                    if (consecutiveGoodQuality >= 5 && currentBitrateLevel !== 'high') {
+                    if (consecutiveGoodQuality >= 3 && currentBitrateLevel !== 'high') {
                         await adjustBitrate('high');
                         showSubtitle('Connection', 'Connection improved, restoring quality', false);
                     }
@@ -664,7 +895,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 console.warn('[QUALITY] ⚠️  Connection quality is CRITICAL!');
             }
 
-        }, 2000); // Check every 2 seconds
+        }, 1000); // Check every second
     }
 
     function stopQualityMonitoring() {
@@ -713,14 +944,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             const now = Date.now();
 
             // Track consecutive critical quality
-            if (quality.score < 0.3) {
+            if (quality.score < 0.3 || quality.packetLoss > 0.05) {
                 consecutiveCriticalQuality++;
             } else {
                 consecutiveCriticalQuality = 0;
             }
 
-            // AGGRESSIVE: Trigger ICE restart if quality < 0.3 for 3 checks (6 seconds)
-            if (quality.score < 0.3 && consecutiveCriticalQuality >= 3) {
+            // AGGRESSIVE: Trigger ICE restart when quality remains critical twice in a row
+            if ((quality.score < 0.3 || quality.packetLoss > 0.05) && consecutiveCriticalQuality >= 2) {
                 const timeSinceLastRestart = now - lastIceRestartTime;
 
                 // Don't restart too frequently (minimum 10s between restarts)
@@ -755,14 +986,13 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             // CRITICAL: If quality is extremely bad (< 0.2) and getting worse
-            if (quality.score < 0.2 && consecutiveBadQuality >= 4) {
+            if ((quality.score < 0.2 || quality.packetLoss > 0.08) && consecutiveCriticalQuality >= 2) {
                 console.error('[RECONNECT] 🚨 CRITICAL QUALITY - Immediate full reconnection!');
                 attemptReconnection();
-                consecutiveBadQuality = 0;
                 consecutiveCriticalQuality = 0;
             }
 
-        }, 2000); // Check every 2 seconds
+        }, 1000); // Check every second
     }
 
     function stopPreemptiveReconnection() {
@@ -869,8 +1099,20 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
+        if (relayRecoveryTimer) {
+            clearTimeout(relayRecoveryTimer);
+            relayRecoveryTimer = null;
+        }
+
         reconnectAttempts++;
-        const delay = Math.min(1000 * Math.pow(1.5, reconnectAttempts - 1), 5000);
+        if (reconnectAttempts === 3 && !forcedRelayMode) {
+            forcedRelayMode = true;
+            config.iceTransportPolicy = 'relay';
+            console.warn('[GROUP-CALL] 🚨 Switching ICE transport policy to relay-only for stability');
+        }
+
+        const baseDelay = forcedRelayMode ? 700 : 900;
+        const delay = Math.min(baseDelay * Math.pow(1.35, reconnectAttempts - 1), 4000);
         console.log(`[GROUP-CALL] 🔄 Reconnecting in ${delay}ms (attempt ${reconnectAttempts}/${maxReconnectAttempts})`);
 
         await new Promise(resolve => setTimeout(resolve, delay));
@@ -882,15 +1124,14 @@ document.addEventListener('DOMContentLoaded', async () => {
             }
 
             // Recreate peer connection
-            initPeerConnection();
+            await initPeerConnection();
 
             // Create new offer
-            const offer = await peerConnection.createOffer({
+            const offer = await createEnhancedOffer({
                 offerToReceiveAudio: true,
                 offerToReceiveVideo: true,
                 iceRestart: true
             });
-            await peerConnection.setLocalDescription(offer);
 
             if (socket && socket.readyState === WebSocket.OPEN) {
                 socket.send(JSON.stringify({
@@ -910,34 +1151,115 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     // Connect to SFU via WebSocket
+    function clearHeartbeat() {
+        if (heartbeatInterval) {
+            clearInterval(heartbeatInterval);
+            heartbeatInterval = null;
+        }
+    }
+
     function connectToSFU() {
         const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-        const isHostSession = sessionStorage.getItem('isHost') === 'true';
+        const isHostSession = isCurrentUserHost();
         const wsUrl = `${protocol}//${window.location.host}/ws-sfu?room=${roomID}&name=${encodeURIComponent(myName)}&isHost=${isHostSession}`;
 
-        console.log('[GROUP-CALL] Connecting as:', isHostSession ? 'HOST' : 'PARTICIPANT', 'Name:', myName);
+        console.log('[GROUP-CALL] ========== CONNECTING TO SFU ==========');
+        console.log('[GROUP-CALL] Protocol:', protocol);
+        console.log('[GROUP-CALL] Host:', window.location.host);
+        console.log('[GROUP-CALL] RoomID:', roomID);
+        console.log('[GROUP-CALL] Name:', myName);
+        console.log('[GROUP-CALL] IsHost:', isHostSession);
+        console.log('[GROUP-CALL] Full WS URL:', wsUrl);
+        console.log('[GROUP-CALL] Creating WebSocket...');
 
-        socket = new WebSocket(wsUrl);
+        clearHeartbeat();
+
+        try {
+            socket = new WebSocket(wsUrl);
+            console.log('[GROUP-CALL] ✅ WebSocket object created, waiting for connection...');
+        } catch (err) {
+            console.error('[GROUP-CALL] ❌ Failed to create WebSocket:', err);
+            alert('Failed to connect to server. Please refresh.');
+            return;
+        }
 
         socket.onopen = async () => {
             console.log('[GROUP-CALL] ✅ WebSocket connected');
 
+            heartbeatInterval = setInterval(() => {
+                if (socket && socket.readyState === WebSocket.OPEN) {
+                    socket.send(JSON.stringify({ type: 'ping', data: Date.now() }));
+                }
+            }, 15000);
+
+            notifyQualityChange(pendingQualityLevel || currentBitrateLevel);
+
+            // CRITICAL: Ensure localStream exists with tracks before proceeding
+            if (!localStream || localStream.getTracks().length === 0) {
+                console.error('[GROUP-CALL] ❌ CRITICAL: localStream not available or has no tracks!');
+                console.error('[GROUP-CALL] This should not happen - preview should have set localStream');
+
+                // Try to recover by getting media again
+                try {
+                    console.log('[GROUP-CALL] 🔄 Attempting emergency media recovery...');
+                    localStream = await navigator.mediaDevices.getUserMedia({
+                        video: isCameraOn,
+                        audio: isMicOn ? buildAudioConstraints() : false
+                    });
+                    console.log('[GROUP-CALL] ✅ Emergency recovery successful, got', localStream.getTracks().length, 'tracks');
+                } catch (recoveryErr) {
+                    console.error('[GROUP-CALL] ❌ Emergency recovery failed:', recoveryErr);
+                    alert('Failed to access camera/microphone. Please refresh and try again.');
+                    return;
+                }
+            }
+
+            console.log('[GROUP-CALL] 📊 LocalStream status:', {
+                exists: !!localStream,
+                tracks: localStream ? localStream.getTracks().length : 0,
+                trackDetails: localStream ? localStream.getTracks().map(t => ({
+                    kind: t.kind,
+                    enabled: t.enabled,
+                    readyState: t.readyState,
+                    muted: t.muted
+                })) : []
+            });
+
             // Initialize peer connection WITH local tracks
-            initPeerConnection();
+            await initPeerConnection();
+
+            // Wait a bit for all event handlers to be set up
+            await new Promise(resolve => setTimeout(resolve, 100));
 
             // CLIENT creates offer with tracks, SFU will answer
             console.log('[GROUP-CALL] 🔄 Creating offer with local tracks...');
+            const sendersBeforeOffer = peerConnection.getSenders();
+            console.log('[GROUP-CALL] 📊 Senders before offer:', sendersBeforeOffer.length, sendersBeforeOffer.map(s => s.track ? s.track.kind : 'no-track'));
+
+            // CRITICAL: Log transceivers to see their direction
+            const transceivers = peerConnection.getTransceivers();
+            console.log('[GROUP-CALL] 📊 Transceivers before offer:', transceivers.length);
+            transceivers.forEach((t, i) => {
+                console.log(`[GROUP-CALL] 📊 Transceiver ${i}: kind=${t.sender.track?.kind || 'none'}, direction=${t.direction}, currentDirection=${t.currentDirection}`);
+            });
+
             try {
-                const offer = await peerConnection.createOffer({
-                    offerToReceiveAudio: true,
-                    offerToReceiveVideo: true
-                });
-                await peerConnection.setLocalDescription(offer);
+                const offer = await createEnhancedOffer();
+
+                console.log('[GROUP-CALL] 📄 Offer created, SDP length:', offer.sdp.length);
+                console.log('[GROUP-CALL] 📊 Offer contains video:', offer.sdp.includes('m=video'));
+                console.log('[GROUP-CALL] 📊 Offer contains audio:', offer.sdp.includes('m=audio'));
+
+                const sdpLines = offer.sdp.split('\n');
+                const mediaLines = sdpLines.filter(line => line.startsWith('m=') || line.startsWith('a=sendrecv') || line.startsWith('a=sendonly') || line.startsWith('a=recvonly'));
+                console.log('[GROUP-CALL] 📊 Offer SDP media lines:', mediaLines);
+
+                const localDescription = peerConnection.localDescription || offer;
 
                 console.log('[GROUP-CALL] 📤 Sending offer to SFU with', peerConnection.getSenders().length, 'tracks');
                 socket.send(JSON.stringify({
                     type: 'offer',
-                    data: JSON.stringify(offer)
+                    data: JSON.stringify(localDescription)
                 }));
 
                 // Start quality monitoring, preemptive reconnection, and dynacast
@@ -949,6 +1271,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             } catch (err) {
                 console.error('[GROUP-CALL] ❌ Failed to create/send offer:', err);
+                console.error('[GROUP-CALL] ❌ Error details:', {
+                    name: err.name,
+                    message: err.message,
+                    stack: err.stack
+                });
             }
         };
 
@@ -963,11 +1290,23 @@ document.addEventListener('DOMContentLoaded', async () => {
         };
 
         socket.onerror = (error) => {
-            console.error('[GROUP-CALL] WebSocket error:', error);
+            clearHeartbeat();
+            console.error('[GROUP-CALL] ❌❌❌ WebSocket ERROR ❌❌❌');
+            console.error('[GROUP-CALL] Error object:', error);
+            console.error('[GROUP-CALL] Error type:', error.type);
+            console.error('[GROUP-CALL] Socket readyState:', socket.readyState);
+            alert('WebSocket connection failed! Check console for details.');
         };
 
         socket.onclose = (event) => {
-            console.log('[GROUP-CALL] WebSocket closed', event.code, event.reason);
+            clearHeartbeat();
+            console.log('[GROUP-CALL] ❌ WebSocket CLOSED');
+            console.log('[GROUP-CALL] Close code:', event.code);
+            console.log('[GROUP-CALL] Close reason:', event.reason);
+            console.log('[GROUP-CALL] Was clean:', event.wasClean);
+
+            pendingQualityLevel = currentBitrateLevel;
+            lastSentQualityLevel = null;
 
             // Attempt to reconnect
             if (reconnectAttempts < maxReconnectAttempts) {
@@ -1056,6 +1395,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                 updateParticipantCount(participants.size + 1);
                 break;
 
+            case 'pong':
+                // Keep-alive acknowledgement
+                break;
+
             case 'offer':
                 // SFU sent us an offer (initial or renegotiation)
                 const offer = typeof message.data === 'string' ? JSON.parse(message.data) : message.data;
@@ -1081,11 +1424,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }
 
                     const answer = await peerConnection.createAnswer();
-                    await peerConnection.setLocalDescription(answer);
+                    const enhancedAnswer = enableOpusOptions(answer);
+                    await peerConnection.setLocalDescription(enhancedAnswer);
 
                     socket.send(JSON.stringify({
                         type: 'answer',
-                        data: JSON.stringify(answer)
+                        data: JSON.stringify(peerConnection.localDescription || enhancedAnswer)
                     }));
                     console.log('[GROUP-CALL] ✅ Sent answer to SFU');
                 } catch (err) {
@@ -1166,8 +1510,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     if (audioTrack && audioTrack.enabled) {
                         audioTrack.enabled = false;
                         micBtn.dataset.active = 'false';
-                        micBtn.querySelector('.icon-on').style.display = 'none';
-                        micBtn.querySelector('.icon-off').style.display = 'block';
+                        micBtn.querySelector('.icon-mic-on').style.display = 'none';
+                        micBtn.querySelector('.icon-mic-off').style.display = 'block';
                         localMicIndicator.classList.remove('active');
                         console.log('[GROUP-CALL] Microphone muted by host');
 
@@ -1179,8 +1523,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     if (videoTrack && videoTrack.enabled) {
                         videoTrack.enabled = false;
                         cameraBtn.dataset.active = 'false';
-                        cameraBtn.querySelector('.icon-on').style.display = 'none';
-                        cameraBtn.querySelector('.icon-off').style.display = 'block';
+                        cameraBtn.querySelector('.icon-camera-on').style.display = 'none';
+                        cameraBtn.querySelector('.icon-camera-off').style.display = 'block';
                         console.log('[GROUP-CALL] Camera disabled by host');
 
                         // Show notification
@@ -1631,7 +1975,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         status.appendChild(micIndicator);
 
         // Add host controls if current user is host
-        const isHost = sessionStorage.getItem('isHost') === 'true';
+        const isHost = isCurrentUserHost();
         if (isHost) {
             const hostControls = document.createElement('div');
             hostControls.className = 'host-controls';
@@ -1787,8 +2131,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                     // Create new offer with video track
                     try {
-                        const offer = await peerConnection.createOffer();
-                        await peerConnection.setLocalDescription(offer);
+                        const offer = await createEnhancedOffer();
 
                         socket.send(JSON.stringify({
                             type: 'offer',
@@ -1809,8 +2152,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 isCameraOn = true;
                 cameraBtn.dataset.active = 'true';
-                cameraBtn.querySelector('.icon-on').style.display = 'block';
-                cameraBtn.querySelector('.icon-off').style.display = 'none';
+                cameraBtn.querySelector('.icon-camera-on').style.display = 'block';
+                cameraBtn.querySelector('.icon-camera-off').style.display = 'none';
                 console.log('[GROUP-CALL] ✅ Camera turned ON');
             } catch (err) {
                 console.error('[GROUP-CALL] ❌ Failed to turn on camera:', err);
@@ -1823,8 +2166,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 videoTrack.enabled = !videoTrack.enabled;
                 isCameraOn = videoTrack.enabled;
                 cameraBtn.dataset.active = isCameraOn.toString();
-                cameraBtn.querySelector('.icon-on').style.display = isCameraOn ? 'block' : 'none';
-                cameraBtn.querySelector('.icon-off').style.display = isCameraOn ? 'none' : 'block';
+                cameraBtn.querySelector('.icon-camera-on').style.display = isCameraOn ? 'block' : 'none';
+                cameraBtn.querySelector('.icon-camera-off').style.display = isCameraOn ? 'none' : 'block';
             }
         }
     }
@@ -1835,13 +2178,11 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Mic is off - need to request it
             try {
                 const microphoneId = sessionStorage.getItem('microphoneId');
+                const audioConstraints = microphoneId
+                    ? buildAudioConstraints({ deviceId: { exact: microphoneId } })
+                    : buildAudioConstraints();
                 const audioStream = await navigator.mediaDevices.getUserMedia({
-                    audio: {
-                        deviceId: microphoneId ? { exact: microphoneId } : undefined,
-                        echoCancellation: true,
-                        noiseSuppression: true,
-                        autoGainControl: true
-                    }
+                    audio: audioConstraints
                 });
 
                 const audioTrack = audioStream.getAudioTracks()[0];
@@ -1853,9 +2194,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                     // Create new offer with audio track
                     try {
-                        const offer = await peerConnection.createOffer();
-                        await peerConnection.setLocalDescription(offer);
-
+                        const offer = await createEnhancedOffer();
                         socket.send(JSON.stringify({
                             type: 'offer',
                             data: JSON.stringify(offer)
@@ -1875,8 +2214,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                 isMicOn = true;
                 micBtn.dataset.active = 'true';
-                micBtn.querySelector('.icon-on').style.display = 'block';
-                micBtn.querySelector('.icon-off').style.display = 'none';
+                micBtn.querySelector('.icon-mic-on').style.display = 'block';
+                micBtn.querySelector('.icon-mic-off').style.display = 'none';
                 console.log('[GROUP-CALL] ✅ Microphone turned ON');
             } catch (err) {
                 console.error('[GROUP-CALL] ❌ Failed to turn on microphone:', err);
@@ -1889,8 +2228,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 audioTrack.enabled = !audioTrack.enabled;
                 isMicOn = audioTrack.enabled;
                 micBtn.dataset.active = isMicOn.toString();
-                micBtn.querySelector('.icon-on').style.display = isMicOn ? 'block' : 'none';
-                micBtn.querySelector('.icon-off').style.display = isMicOn ? 'none' : 'block';
+                micBtn.querySelector('.icon-mic-on').style.display = isMicOn ? 'block' : 'none';
+                micBtn.querySelector('.icon-mic-off').style.display = isMicOn ? 'none' : 'block';
             }
         }
     }
@@ -1927,6 +2266,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Close WebSocket
         if (socket) {
+            clearHeartbeat();
             socket.close();
             socket = null;
             console.log('[GROUP-CALL] 🛑 Closed WebSocket');
@@ -2203,6 +2543,88 @@ document.addEventListener('DOMContentLoaded', async () => {
     micBtn.addEventListener('click', toggleMic);
     endCallBtn.addEventListener('click', endCall);
 
+    // AI Notetaker initialization
+    if (isCurrentUserHost()) {
+        await ensureNotetakerUI();
+    }
+    const notetakerBtn = document.getElementById('notetakerBtn');
+    if (notetakerBtn) {
+        console.log('[GROUP-CALL] 🤖 Initializing AI Notetaker...');
+
+        // Check if host
+        const isHost = isCurrentUserHost();
+
+        if (isHost) {
+            notetakerBtn.style.display = 'flex';
+            const notetakerUIRoot = document.getElementById('notetakerGroup');
+            if (!notetakerUIRoot) {
+                console.error('[GROUP-CALL] ❌ Notetaker UI root missing after injection');
+                notetakerBtn.style.display = 'none';
+                console.warn('[GROUP-CALL] ⚠️ Hiding notetaker button because UI failed to load');
+                return;
+            }
+
+            // Initialize notetaker for host - ONLY if classes are available
+            if (typeof AINotetaker !== 'undefined' && typeof ConfigModalManager !== 'undefined') {
+                console.log('[GROUP-CALL] ✅ AINotetaker and ConfigModalManager classes available');
+
+                // Initialize after joining call
+                notetakerBtn.addEventListener('click', () => {
+                    console.log('[GROUP-CALL] 🎤 Notetaker button clicked');
+
+                    if (!window.groupNotetaker) {
+                        console.log('[GROUP-CALL] 📝 Creating new AINotetaker instance for group call...');
+                        if (!document.getElementById('notetakerToggleBtn')) {
+                            console.error('[GROUP-CALL] ❌ Notetaker controls missing');
+                            alert('AI Notetaker UI not ready. Please reload the page.');
+                            return;
+                        }
+                        try {
+                            window.groupNotetaker = new AINotetaker(roomID, true);
+                            console.log('[GROUP-CALL] ✅ AINotetaker instance created');
+
+                            // Wait for modal manager to be initialized in AINotetaker constructor
+                            setTimeout(() => {
+                                if (window.configModalManager) {
+                                    console.log('[GROUP-CALL] 🎨 Opening config modal');
+                                    window.configModalManager.open();
+                                } else {
+                                    console.warn('[GROUP-CALL] ⚠️ Config modal manager not initialized yet');
+                                    alert('AI Notetaker initialized! Click the button again to configure.');
+                                }
+                            }, 100);
+                        } catch (err) {
+                            console.error('[GROUP-CALL] ❌ Failed to create AINotetaker:', err);
+                            alert('Failed to initialize AI Notetaker: ' + err.message);
+                        }
+                    } else {
+                        console.log('[GROUP-CALL] 🎨 Opening existing config modal');
+                        // Notetaker already exists, open config modal
+                        if (window.configModalManager) {
+                            window.configModalManager.open();
+                        } else {
+                            console.error('[GROUP-CALL] ❌ Config modal manager not found');
+                            alert('Config modal not available. Please reload the page.');
+                        }
+                    }
+                });
+                console.log('[GROUP-CALL] ✅ Notetaker button configured for host');
+            } else {
+                console.warn('[GROUP-CALL] ⚠️ Required classes not found:', {
+                    AINotetaker: typeof AINotetaker !== 'undefined',
+                    ConfigModalManager: typeof ConfigModalManager !== 'undefined'
+                });
+                if (notetakerBtn) notetakerBtn.style.display = 'none';
+            }
+        } else {
+            // Hide for guests
+            if (notetakerBtn) notetakerBtn.style.display = 'none';
+            console.log('[GROUP-CALL] Notetaker hidden for guest');
+        }
+    } else {
+        console.warn('[GROUP-CALL] ⚠️ Notetaker button not found in DOM');
+    }
+
     // Picture-in-Picture
     const pipBtn = document.getElementById('pipBtn');
     if (pipBtn) {
@@ -2477,11 +2899,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     width: { ideal: 1280 },
                     height: { ideal: 720 }
                 }) : false,
-                audio: isMicOn ? {
-                    echoCancellation: true,
-                    noiseSuppression: true,
-                    autoGainControl: true
-                } : false
+                audio: isMicOn ? buildAudioConstraints() : false
             };
 
             console.log('[GROUP-CALL] 📱 Device:', isMobile ? 'Mobile' : 'Desktop', 'Requesting media...');
@@ -2502,7 +2920,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             // Try fallback with basic constraints
             try {
                 console.log('[GROUP-CALL] 🔄 Trying fallback (basic constraints)...');
-                const fallbackConstraints = { video: isCameraOn, audio: isMicOn };
+                const fallbackConstraints = { video: isCameraOn, audio: isMicOn ? buildAudioConstraints() : false };
                 localStream = await navigator.mediaDevices.getUserMedia(fallbackConstraints);
                 previewVideo.srcObject = localStream;
                 previewStatus.textContent = 'Using basic quality';
@@ -2556,7 +2974,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (isMicOn) {
                 try {
                     const newStream = await navigator.mediaDevices.getUserMedia({
-                        audio: { echoCancellation: true, noiseSuppression: true, autoGainControl: true }
+                        audio: buildAudioConstraints()
                     });
                     const newAudioTrack = newStream.getAudioTracks()[0];
                     localStream.addTrack(newAudioTrack);
@@ -2598,26 +3016,43 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
-        console.log('[GROUP-CALL] 🚀 Joining call as:', myName);
+        console.log('[GROUP-CALL] 🚀🚀🚀 JOIN BUTTON - Joining call as:', myName);
 
         // Hide settings, show call
         settingsScreen.style.display = 'none';
         groupCallContainer.style.display = 'flex';
+        console.log('[GROUP-CALL] ✅ UI switched to call screen');
 
         // Copy stream to local video
         localVideo.srcObject = localStream;
+        console.log('[GROUP-CALL] ✅ Local video set');
 
-        // Update button states
-        cameraBtn.dataset.active = isCameraOn;
-        cameraBtn.querySelector('.icon-on').style.display = isCameraOn ? 'block' : 'none';
-        cameraBtn.querySelector('.icon-off').style.display = isCameraOn ? 'none' : 'block';
+        // Update button states - SAFE with null checks
+        try {
+            cameraBtn.dataset.active = isCameraOn;
+            const camOn = cameraBtn.querySelector('.icon-camera-on');
+            const camOff = cameraBtn.querySelector('.icon-camera-off');
+            if (camOn && camOff) {
+                camOn.style.display = isCameraOn ? 'block' : 'none';
+                camOff.style.display = isCameraOn ? 'none' : 'block';
+            }
 
-        micBtn.dataset.active = isMicOn;
-        micBtn.querySelector('.icon-on').style.display = isMicOn ? 'block' : 'none';
-        micBtn.querySelector('.icon-off').style.display = isMicOn ? 'none' : 'block';
+            micBtn.dataset.active = isMicOn;
+            const micOn = micBtn.querySelector('.icon-mic-on');
+            const micOff = micBtn.querySelector('.icon-mic-off');
+            if (micOn && micOff) {
+                micOn.style.display = isMicOn ? 'block' : 'none';
+                micOff.style.display = isMicOn ? 'none' : 'block';
+            }
+            console.log('[GROUP-CALL] ✅ Buttons updated');
+        } catch (err) {
+            console.error('[GROUP-CALL] ❌ Button update failed:', err);
+        }
 
         // Connect to SFU
+        console.log('[GROUP-CALL] 🔥🔥🔥 CALLING connectToSFU()...');
         connectToSFU();
+        console.log('[GROUP-CALL] ✅ connectToSFU() called');
         startTimer();
         updateGridLayout();
 

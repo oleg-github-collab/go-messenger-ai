@@ -86,7 +86,28 @@ function initEmojiPicker() {
     const gifCategories = document.getElementById('gifCategories');
     let gifSearchTimeout;
 
-    // GIF category buttons
+    // Use Enhanced GIF Picker if available
+    if (window.enhancedGIFPicker) {
+        const gifTab = document.querySelector('[data-tab="gif"]');
+        if (gifTab) {
+            gifTab.addEventListener('click', (e) => {
+                e.preventDefault();
+                e.stopPropagation();
+                emojiPicker.classList.remove('active');
+
+                // Open enhanced GIF picker
+                window.enhancedGIFPicker.show((gifUrl) => {
+                    console.log('[CALL-FEATURES] GIF selected:', gifUrl);
+                    // Send GIF through chat
+                    if (window.sendChatMessage) {
+                        window.sendChatMessage('[GIF]' + gifUrl);
+                    }
+                });
+            });
+        }
+    }
+
+    // GIF category buttons (fallback)
     const gifCategoryButtons = [
         { emoji: '😊', label: 'Happy', query: 'happy excited' },
         { emoji: '😂', label: 'Funny', query: 'funny laugh' },
