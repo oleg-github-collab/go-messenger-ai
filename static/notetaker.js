@@ -201,14 +201,8 @@ class AINotetaker {
                 console.log('[NOTETAKER] 🎨 Config modal manager initialized and exposed globally');
             }
 
-            // Initialize role presets manager
-            if (typeof RolePresetsManager !== 'undefined') {
-                rolePresetsManager = new RolePresetsManager();
-                console.log('[NOTETAKER] 👔 Role presets manager initialized');
-
-                // Populate role preset dropdown if available
-                this.populateRolePresets();
-            }
+            // Populate role preset dropdown if available
+            this.populateRolePresets();
 
             // Initialize transcript editor
             if (typeof TranscriptEditor !== 'undefined') {
@@ -676,12 +670,8 @@ class AINotetaker {
 
     async requestServerAnalysis(participants, duration) {
         try {
-            // Get current role preset for customized analysis
-            let rolePreset = null;
-            if (typeof rolePresetsManager !== 'undefined' && rolePresetsManager) {
-                const currentRole = rolePresetsManager.getCurrentRole();
-                rolePreset = currentRole ? currentRole.id : null;
-            }
+            // Get current role preset from localStorage
+            const rolePreset = localStorage.getItem('notetaker_role_preset') || null;
 
             console.log('[NOTETAKER] 🎯 Analyzing with role preset:', rolePreset);
 
@@ -2111,7 +2101,7 @@ Provide specific recommendations on how to respond.`
 
     // NEW: Populate role preset dropdown with visual indication
     populateRolePresets() {
-        if (!this.rolePresetSelect || !rolePresetsManager) return;
+        if (!this.rolePresetSelect) return;
 
         const presets = [
             { id: '', name: '🎯 General Meeting', icon: '🎯' },
@@ -2133,20 +2123,16 @@ Provide specific recommendations on how to respond.`
             this.rolePresetSelect.appendChild(option);
         });
 
-        // Set initial value from rolePresetsManager
-        const currentRole = rolePresetsManager.getCurrentRole();
-        if (currentRole) {
-            this.rolePresetSelect.value = currentRole.id;
+        // Set initial value from localStorage
+        const savedRole = localStorage.getItem('notetaker_role_preset') || '';
+        if (savedRole) {
+            this.rolePresetSelect.value = savedRole;
         }
 
-        // Add change listener to sync with rolePresetsManager
+        // Add change listener to save to localStorage
         this.rolePresetSelect.addEventListener('change', (e) => {
             const selectedId = e.target.value;
-            if (selectedId) {
-                rolePresetsManager.selectRole(selectedId);
-            } else {
-                rolePresetsManager.clearSelection();
-            }
+            localStorage.setItem('notetaker_role_preset', selectedId);
             console.log('[NOTETAKER] 🎭 Role preset changed to:', selectedId || 'general');
 
             // Visual feedback

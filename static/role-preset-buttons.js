@@ -57,14 +57,8 @@
                     selectedNameElement.textContent = roleName;
                 }
 
-                // Sync with rolePresetsManager if available
-                if (typeof rolePresetsManager !== 'undefined') {
-                    if (roleId) {
-                        rolePresetsManager.selectRole(roleId);
-                    } else {
-                        rolePresetsManager.clearSelection();
-                    }
-                }
+                // Save to localStorage for persistence
+                localStorage.setItem('notetaker_role_preset', roleId);
 
                 // Visual feedback
                 this.style.transform = 'scale(0.95)';
