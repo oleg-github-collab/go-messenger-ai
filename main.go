@@ -1892,6 +1892,9 @@ func main() {
 	// Meeting ended page
 	http.HandleFunc("/meeting-ended", serveFile("meeting-ended.html"))
 
+	// Modular call page (for testing new structure)
+	http.HandleFunc("/room-modular/", serveFile("call-modular.html"))
+
 	// Create meeting (host only)
 	http.HandleFunc("/create", authMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		userID := r.Header.Get("X-User-ID")

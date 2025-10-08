@@ -1,0 +1,415 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+    <meta name="theme-color" content="#000000">
+    <title>Video Call (Modular) - Kaminskyi Messenger</title>
+
+    <!-- Modular CSS -->
+    <link rel="stylesheet" href="/static/css/main.css">
+    <link rel="stylesheet" href="/static/call.css">
+    <link rel="stylesheet" href="/static/css/notetaker-modular.css">
+
+    <style>
+        /* Temporary status overlay for debugging */
+        #debugStatus {
+            position: fixed;
+            top: 10px;
+            left: 10px;
+            background: rgba(0, 0, 0, 0.8);
+            color: #0f0;
+            padding: 10px;
+            border-radius: 8px;
+            font-family: monospace;
+            font-size: 12px;
+            z-index: 10000;
+            max-width: 300px;
+        }
+        #debugStatus .log-entry {
+            margin: 2px 0;
+            opacity: 0.9;
+        }
+        #debugStatus .log-error {
+            color: #f00;
+        }
+        #debugStatus .log-success {
+            color: #0f0;
+        }
+        #debugStatus .log-warn {
+            color: #ff0;
+        }
+    </style>
+</head>
+<body>
+    <!-- Debug Status -->
+    <div id="debugStatus">
+        <div id="debugLog"></div>
+    </div>
+
+    <div class="call-container" id="callContainer">
+        <!-- Remote video (full screen) -->
+        <video id="remoteVideo" class="remote-video" autoplay playsinline></video>
+
+        <!-- Remote placeholder -->
+        <div id="remotePlaceholder" class="remote-placeholder">
+            <div class="avatar-large">?</div>
+            <div class="placeholder-name" id="remoteUserName">Connecting...</div>
+        </div>
+
+        <!-- Local video (PiP window top-right) -->
+        <div class="local-pip" id="localPip">
+            <video id="localVideo" autoplay muted playsinline></video>
+            <div id="localPlaceholder" class="local-placeholder" style="display: none;">
+                <div class="avatar-small">You</div>
+            </div>
+        </div>
+
+        <!-- Back button (top-left) -->
+        <button class="back-button" id="backButton">
+            <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                <path d="M15 18L9 12L15 6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+        </button>
+
+        <!-- Call timer (top-center) -->
+        <div class="call-timer-box" id="callTimerBox">
+            <span class="recording-indicator"></span>
+            <span class="timer-text" id="timerText">00:00</span>
+        </div>
+
+        <!-- Connection status -->
+        <div id="connectionStatus" style="position: fixed; top: 60px; right: 20px; background: rgba(0,0,0,0.8); padding: 8px 16px; border-radius: 8px; color: #fff; font-size: 14px;">
+            Initializing...
+        </div>
+
+        <!-- Bottom bar (dark rounded) -->
+        <div class="bottom-control-bar">
+            <!-- End call button (center, large, red) -->
+            <button class="end-call-button" id="endCallButton">
+                <svg width="32" height="32" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08c-.18-.17-.29-.42-.29-.7 0-.28.11-.53.29-.71C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28-.79-.74-1.69-1.36-2.67-1.85-.33-.16-.56-.5-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/>
+                </svg>
+                End Call
+            </button>
+
+            <!-- Camera toggle -->
+            <button class="round-control-btn" id="cameraBtn" data-active="true">
+                <svg class="icon-camera-on" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/>
+                </svg>
+                <svg class="icon-camera-off" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="display: none;">
+                    <path d="M21 6.5l-4 4V7c0-.55-.45-1-1-1H9.82L21 17.18V6.5zM3.27 2L2 3.27 4.73 6H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.21 0 .39-.08.54-.18L19.73 21 21 19.73 3.27 2z"/>
+                </svg>
+            </button>
+
+            <!-- Microphone toggle -->
+            <button class="round-control-btn" id="microphoneBtn" data-active="true">
+                <svg class="icon-mic-on" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
+                    <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
+                </svg>
+                <svg class="icon-mic-off" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="display: none;">
+                    <path d="M19 11h-1.7c0 .74-.16 1.43-.43 2.05l1.23 1.23c.56-.98.9-2.09.9-3.28zm-4.02.17c0-.06.02-.11.02-.17V5c0-1.66-1.34-3-3-3S9 3.34 9 5v.18l5.98 5.99zM4.27 3L3 4.27l6.01 6.01V11c0 1.66 1.33 3 2.99 3 .22 0 .44-.03.65-.08l1.66 1.66c-.71.33-1.5.52-2.31.52-2.76 0-5.3-2.1-5.3-5.1H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c.91-.13 1.77-.45 2.54-.9L19.73 21 21 19.73 4.27 3z"/>
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <!-- Socket.IO -->
+    <script src="/socket.io/socket.io.js"></script>
+
+    <!-- Modular Application - ES6 Modules -->
+    <script type="module">
+        import { WebRTCManager } from '/static/js/webrtc/index.js';
+        import { VideoControls } from '/static/js/ui/video-controls.js';
+        import { ConnectionStatus } from '/static/js/ui/connection-status.js';
+        import { loggers } from '/static/js/core/logger.js';
+        import { globalEvents } from '/static/js/core/events.js';
+        import { sessionStore } from '/static/js/core/storage.js';
+
+        const logger = loggers.call;
+
+        // Debug logger to UI
+        const debugLog = document.getElementById('debugLog');
+        function addDebugLog(message, type = 'log') {
+            const entry = document.createElement('div');
+            entry.className = `log-entry log-${type}`;
+            entry.textContent = `[${new Date().toLocaleTimeString()}] ${message}`;
+            debugLog.insertBefore(entry, debugLog.firstChild);
+
+            // Keep only last 10 entries
+            while (debugLog.children.length > 10) {
+                debugLog.removeChild(debugLog.lastChild);
+            }
+        }
+
+        // Global error handler
+        window.addEventListener('error', (e) => {
+            addDebugLog(`ERROR: ${e.message}`, 'error');
+            logger.error('Global error:', e.error);
+        });
+
+        // Application state
+        let webrtc = null;
+        let videoControls = null;
+        let connectionStatus = null;
+        let socket = null;
+        let roomID = null;
+        let callTimer = null;
+        let callStartTime = null;
+
+        // Get room ID from URL
+        function getRoomIDFromURL() {
+            const path = window.location.pathname;
+            const match = path.match(/\/room\/([^\/]+)/);
+            return match ? match[1] : null;
+        }
+
+        // Initialize Socket.IO
+        function initializeSocket() {
+            addDebugLog('Initializing Socket.IO...', 'log');
+
+            socket = io({
+                transports: ['websocket', 'polling'],
+                reconnection: true,
+                reconnectionDelay: 1000,
+                reconnectionDelayMax: 5000,
+                reconnectionAttempts: 10
+            });
+
+            socket.on('connect', () => {
+                addDebugLog('Socket connected', 'success');
+                logger.success('Socket.IO connected');
+                connectionStatus.showConnecting('Joining room...');
+            });
+
+            socket.on('disconnect', (reason) => {
+                addDebugLog(`Socket disconnected: ${reason}`, 'warn');
+                logger.warn('Socket.IO disconnected:', reason);
+                connectionStatus.showDisconnected();
+            });
+
+            socket.on('connect_error', (error) => {
+                addDebugLog(`Socket error: ${error.message}`, 'error');
+                logger.error('Socket.IO error:', error);
+                connectionStatus.showFailed('Connection error');
+            });
+
+            return socket;
+        }
+
+        // Initialize call timer
+        function startCallTimer() {
+            callStartTime = Date.now();
+            const timerText = document.getElementById('timerText');
+
+            callTimer = setInterval(() => {
+                const elapsed = Date.now() - callStartTime;
+                const seconds = Math.floor(elapsed / 1000);
+                const minutes = Math.floor(seconds / 60);
+                const remainingSeconds = seconds % 60;
+
+                timerText.textContent = `${String(minutes).padStart(2, '0')}:${String(remainingSeconds).padStart(2, '0')}`;
+            }, 1000);
+        }
+
+        function stopCallTimer() {
+            if (callTimer) {
+                clearInterval(callTimer);
+                callTimer = null;
+            }
+        }
+
+        // Initialize application
+        async function initialize() {
+            try {
+                addDebugLog('Starting initialization...', 'log');
+                logger.log('=== MODULAR CALL PAGE INITIALIZATION ===');
+
+                // Get room ID
+                roomID = getRoomIDFromURL();
+                if (!roomID) {
+                    throw new Error('No room ID found in URL');
+                }
+                addDebugLog(`Room ID: ${roomID}`, 'success');
+                logger.log('Room ID:', roomID);
+
+                // Initialize UI components
+                videoControls = new VideoControls();
+                videoControls.init({
+                    localVideo: '#localVideo',
+                    remoteVideo: '#remoteVideo',
+                    localPlaceholder: '#localPlaceholder',
+                    remotePlaceholder: '#remotePlaceholder'
+                });
+                addDebugLog('Video controls initialized', 'success');
+
+                connectionStatus = new ConnectionStatus('connectionStatus');
+                connectionStatus.showConnecting('Initializing...');
+                addDebugLog('Connection status initialized', 'success');
+
+                // Initialize Socket.IO
+                socket = initializeSocket();
+
+                // Wait for socket to connect
+                await new Promise((resolve) => {
+                    if (socket.connected) {
+                        resolve();
+                    } else {
+                        socket.once('connect', resolve);
+                    }
+                });
+
+                addDebugLog('Socket ready, initializing WebRTC...', 'log');
+
+                // Initialize WebRTC
+                webrtc = new WebRTCManager(socket, roomID);
+                window.webrtc = webrtc; // For debugging
+
+                addDebugLog('Requesting media...', 'log');
+
+                // Initialize WebRTC with media
+                const { localStream } = await webrtc.initialize();
+
+                addDebugLog('Media acquired', 'success');
+                logger.success('Local stream acquired');
+
+                // Attach local stream to video
+                videoControls.attachLocalStream(localStream);
+
+                // Setup event listeners
+                setupEventListeners();
+
+                connectionStatus.showConnecting('Waiting for peer...');
+                addDebugLog('Waiting for peer connection...', 'log');
+
+                logger.success('=== INITIALIZATION COMPLETE ===');
+
+            } catch (error) {
+                addDebugLog(`INIT ERROR: ${error.message}`, 'error');
+                logger.error('Initialization failed:', error);
+                connectionStatus.showFailed(error.message);
+                alert(`Failed to initialize call: ${error.message}`);
+            }
+        }
+
+        // Setup event listeners
+        function setupEventListeners() {
+            // Remote stream ready
+            globalEvents.on('remote-stream-ready', (stream) => {
+                addDebugLog('Remote stream ready', 'success');
+                logger.log('Remote stream received');
+                videoControls.attachRemoteStream(stream);
+                connectionStatus.showConnected();
+                startCallTimer();
+            });
+
+            // Connection state changes
+            globalEvents.on('webrtc-connection-state', (state) => {
+                addDebugLog(`Connection state: ${state}`, 'log');
+                logger.log('Connection state:', state);
+
+                switch (state) {
+                    case 'connecting':
+                        connectionStatus.showConnecting();
+                        break;
+                    case 'connected':
+                        connectionStatus.showConnected();
+                        if (!callTimer) startCallTimer();
+                        break;
+                    case 'disconnected':
+                        connectionStatus.showDisconnected();
+                        stopCallTimer();
+                        break;
+                    case 'failed':
+                        connectionStatus.showFailed();
+                        stopCallTimer();
+                        break;
+                }
+            });
+
+            // Camera toggle
+            document.getElementById('cameraBtn').addEventListener('click', () => {
+                const btn = document.getElementById('cameraBtn');
+                const isActive = btn.dataset.active === 'true';
+                const newState = !isActive;
+
+                webrtc.toggleVideo(newState);
+                btn.dataset.active = newState;
+
+                btn.querySelector('.icon-camera-on').style.display = newState ? 'block' : 'none';
+                btn.querySelector('.icon-camera-off').style.display = newState ? 'none' : 'block';
+
+                addDebugLog(`Camera ${newState ? 'enabled' : 'disabled'}`, 'log');
+            });
+
+            // Microphone toggle
+            document.getElementById('microphoneBtn').addEventListener('click', () => {
+                const btn = document.getElementById('microphoneBtn');
+                const isActive = btn.dataset.active === 'true';
+                const newState = !isActive;
+
+                webrtc.toggleAudio(newState);
+                btn.dataset.active = newState;
+
+                btn.querySelector('.icon-mic-on').style.display = newState ? 'block' : 'none';
+                btn.querySelector('.icon-mic-off').style.display = newState ? 'none' : 'block';
+
+                addDebugLog(`Microphone ${newState ? 'enabled' : 'disabled'}`, 'log');
+            });
+
+            // End call
+            document.getElementById('endCallButton').addEventListener('click', () => {
+                addDebugLog('Ending call...', 'log');
+                endCall();
+            });
+
+            // Back button
+            document.getElementById('backButton').addEventListener('click', () => {
+                addDebugLog('Going back...', 'log');
+                endCall();
+            });
+        }
+
+        // End call and cleanup
+        function endCall() {
+            logger.log('Ending call...');
+
+            stopCallTimer();
+
+            if (webrtc) {
+                webrtc.cleanup();
+            }
+
+            if (socket) {
+                socket.disconnect();
+            }
+
+            videoControls.clearStreams();
+            connectionStatus.showDisconnected('Call ended');
+
+            // Redirect after short delay
+            setTimeout(() => {
+                window.location.href = '/';
+            }, 1000);
+        }
+
+        // Start initialization when DOM is ready
+        if (document.readyState === 'loading') {
+            document.addEventListener('DOMContentLoaded', initialize);
+        } else {
+            initialize();
+        }
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (webrtc) {
+                webrtc.cleanup();
+            }
+        });
+    </script>
+</body>
+</html>
