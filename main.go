@@ -1893,7 +1893,48 @@ func main() {
 	http.HandleFunc("/meeting-ended", serveFile("meeting-ended.html"))
 
 	// Modular call page (for testing new structure)
-	http.HandleFunc("/room-modular/", serveFile("call-modular.html"))
+	http.HandleFunc("/room-modular/", func(w http.ResponseWriter, r *http.Request) {
+		// Extract room ID from URL
+		pathParts := strings.Split(r.URL.Path, "/")
+		roomID := ""
+		if len(pathParts) >= 3 {
+			roomID = pathParts[2]
+		}
+
+		log.Printf("[ROOM-MODULAR] 📱 Request for room: %s", roomID)
+
+		// Check meeting mode
+		if roomID != "" {
+			meetingData, err := getMeeting(roomID)
+			if err == nil {
+				// Check if meeting is active
+				isActive := true
+				if active, ok := meetingData["active"].(bool); ok {
+					isActive = active
+				}
+
+				if !isActive {
+					log.Printf("[ROOM-MODULAR] 🔒 Meeting has ended")
+					http.Redirect(w, r, "/meeting-ended?reason=ended", http.StatusFound)
+					return
+				}
+
+				log.Printf("[ROOM-MODULAR] ✅ Meeting found and active")
+			} else {
+				log.Printf("[ROOM-MODULAR] ⚠️  Meeting not found in Redis: %v", err)
+				http.Redirect(w, r, "/meeting-ended?reason=expired", http.StatusFound)
+				return
+			}
+		} else {
+			log.Printf("[ROOM-MODULAR] ❌ No room ID provided")
+			http.Redirect(w, r, "/", http.StatusFound)
+			return
+		}
+
+		// Serve modular call page
+		log.Printf("[ROOM-MODULAR] 🚀 Serving call-modular.html")
+		serveFile("call-modular.html")(w, r)
+	})
 
 	// Create meeting (host only)
 	http.HandleFunc("/create", authMiddleware(func(w http.ResponseWriter, r *http.Request) {
