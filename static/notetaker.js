@@ -131,6 +131,9 @@ class AINotetaker {
         this.wordCount = 0;
         this.durationTimer = null;
 
+        this.analysisMeta = null;
+        this.loadingDefaultHTML = '';
+
         // Participants & speaker mapping
         this.participants = new Map();
         this.speakerAssignments = new Map();
@@ -629,52 +632,177 @@ class AINotetaker {
         this.loading.style.display = 'block';
         this.results.style.display = 'none';
 
+        if (!this.loadingDefaultHTML) {
+            this.loadingDefaultHTML = this.loading.innerHTML;
+        } else {
+            this.loading.innerHTML = this.loadingDefaultHTML;
+        }
+
+        let analysis;
+        let analysisMeta = { isFallback: false, error: null };
+
         try {
-            // Get participant names (you can enhance this)
             const participants = [sessionStorage.getItem('guestName') || 'Host'];
-
-            // Call analysis API
-            const response = await fetch('/api/notetaker/analyze', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({
-                    transcript: this.transcript,
-                    participants: participants,
-                    duration: duration
-                })
-            });
-
-            if (!response.ok) {
-                throw new Error('Failed to analyze transcript');
-            }
-
-            const analysis = await response.json();
-
-            // Display results
-            this.displayAnalysis(analysis);
-
-            // Store for export
-            this.currentAnalysis = analysis;
-
+            analysis = await this.requestServerAnalysis(participants, duration);
         } catch (error) {
             console.error('[NOTETAKER] ❌ Analysis failed:', error);
-            this.loading.innerHTML = `
-                <p style="color: #ef4444;">❌ Analysis failed. Please try again.</p>
-                <button onclick="notetaker.closeModal()" style="margin-top: 20px; padding: 10px 20px; background: #3b82f6; border: none; color: white; border-radius: 8px; cursor: pointer;">Close</button>
-            `;
-        } finally {
+            analysisMeta = {
+                isFallback: true,
+                error: error?.message || 'Unknown analysis error'
+            };
+            analysis = this.generateLocalAnalysis(duration);
+        }
+
+        this.currentAnalysis = analysis;
+        this.displayAnalysis(analysis, analysisMeta);
+
+        if (analysisMeta.isFallback) {
+            this.statusText.textContent = 'Local summary ready (server unavailable)';
+            this.statusText.style.color = '#facc15';
+        } else {
             this.statusText.textContent = 'Record and analyze meeting with AI';
             this.statusText.style.color = '#94a3b8';
         }
     }
 
-    displayAnalysis(analysis) {
-        // Hide loading, show results
+    async requestServerAnalysis(participants, duration) {
+        try {
+            const response = await fetch('/api/notetaker/analyze', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    transcript: this.transcript,
+                    participants,
+                    duration
+                })
+            });
+
+            if (!response.ok) {
+                let errorDetail = '';
+                try {
+                    const data = await response.json();
+                    errorDetail = data?.error || data?.message || '';
+                } catch (parseErr) {
+                    // Ignore parse error, fallback to status text
+                }
+
+                const message = errorDetail
+                    ? `Server error (${response.status}): ${errorDetail}`
+                    : `Failed to analyze transcript (status ${response.status})`;
+
+                const error = new Error(message);
+                error.status = response.status;
+                throw error;
+            }
+
+            const analysis = await response.json();
+            if (!analysis || typeof analysis !== 'object') {
+                throw new Error('Server returned an empty analysis payload');
+            }
+
+            analysis.source = 'server';
+            return analysis;
+        } catch (error) {
+            if (error.name === 'AbortError') {
+                throw new Error('Analysis request was aborted. Please try again.');
+            }
+            throw error;
+        }
+    }
+
+    generateLocalAnalysis(duration) {
+        const transcriptText = (this.transcript || '').trim();
+        const entries = Array.isArray(this.conversationHistory) ? [...this.conversationHistory] : [];
+
+        if (!entries.length && transcriptText) {
+            entries.push({
+                speakerName: 'Participant',
+                text: transcriptText
+            });
+        }
+
+        const speakers = Array.from(new Set(entries.map(entry => entry.speakerName || entry.speaker || '').filter(Boolean)));
+        const categories = new Map();
+        const uniqueSentences = [];
+        const actionItems = [];
+
+        const actionRegex = /(action|todo|follow up|deadline|assign|next step|deliver|should|need to)/i;
+
+        entries.forEach(entry => {
+            const text = (entry.text || '').trim();
+            if (!text) return;
+
+            if (!uniqueSentences.includes(text)) {
+                uniqueSentences.push(text);
+            }
+
+            if (actionRegex.test(text) && !actionItems.includes(text)) {
+                actionItems.push(text);
+            }
+
+            if (Array.isArray(entry.categories)) {
+                entry.categories.forEach(cat => {
+                    const id = cat.id || cat.name || cat;
+                    if (!id) return;
+                    const name = cat.name || cat.id || id;
+                    categories.set(id, name);
+                });
+            }
+        });
+
+        const keyPoints = uniqueSentences.slice(0, 5);
+        const summaryParts = [];
+
+        if (speakers.length > 0) {
+            summaryParts.push(`Participants: ${speakers.join(', ')}.`);
+        }
+
+        if (duration) {
+            summaryParts.push(`Meeting duration: ${duration}.`);
+        }
+
+        if (categories.size > 0) {
+            summaryParts.push(`Focus areas captured: ${Array.from(categories.values()).slice(0, 6).join(', ')}.`);
+        }
+
+        if (uniqueSentences.length > 0) {
+            summaryParts.push('Top highlights are listed below for quick review.');
+        }
+
+        const fallbackSummary = summaryParts.join(' ');
+
+        return {
+            summary: fallbackSummary || 'Meeting transcript captured. Review the highlights and transcript below.',
+            key_points: keyPoints.length ? keyPoints : ['No distinct highlights detected automatically.'],
+            action_items: actionItems.length ? actionItems.slice(0, 5) : ['No explicit action items detected.'],
+            decisions: [],
+            transcript: transcriptText || entries.map(entry => `${entry.speakerName || entry.speaker || 'Speaker'}: ${entry.text}`).join('\n'),
+            source: 'local-fallback'
+        };
+    }
+
+    displayAnalysis(analysis, meta = {}) {
+        this.analysisMeta = meta;
         this.loading.style.display = 'none';
         this.results.style.display = 'block';
 
-        // Summary
-        document.getElementById('analysisSummary').textContent = analysis.summary || 'No summary available';
+        const banner = document.getElementById('analysisStatusBanner');
+        if (banner) {
+            if (meta.isFallback) {
+                banner.style.display = 'flex';
+                banner.classList.remove('info', 'success', 'warning', 'error');
+                banner.classList.add('warning');
+
+                const message = meta.error ? `Server analysis unavailable. Generated a local summary instead. (${meta.error})` : 'Server analysis unavailable. Generated a local summary instead.';
+                banner.textContent = message;
+            } else {
+                banner.style.display = 'none';
+            }
+        }
+
+        // Hide loading, show results
+        const summaryText = analysis.summary || 'No summary available';
+        document.getElementById('analysisSummary').textContent = summaryText;
 
         // Key Points
         const keyPointsList = document.getElementById('analysisKeyPoints');
@@ -833,6 +961,24 @@ class AINotetaker {
     }
 
     generateHTMLReport(analysis) {
+        const meta = this.analysisMeta || {};
+
+        const escapeHtml = (str) => {
+            if (!str) return '';
+            return String(str)
+                .replace(/&/g, '&amp;')
+                .replace(/</g, '&lt;')
+                .replace(/>/g, '&gt;')
+                .replace(/"/g, '&quot;')
+                .replace(/'/g, '&#39;');
+        };
+
+        const fallbackNotice = meta.isFallback
+            ? `<div class="fallback-notice" style="background:#fff4ce;border:1px solid #facc15;padding:12px 16px;border-radius:8px;margin-bottom:24px;color:#92400e;font-size:14px;">
+                <strong>Note:</strong> This summary was generated locally because the analysis service was unavailable.${meta.error ? ` Error: ${escapeHtml(meta.error)}.` : ''}
+              </div>`
+            : '';
+
         return `
 <!DOCTYPE html>
 <html>
@@ -852,21 +998,23 @@ class AINotetaker {
     <h1>📝 Meeting Analysis</h1>
     <p class="date">Generated on ${new Date().toLocaleString()}</p>
 
+    ${fallbackNotice}
+
     <h2>📋 Executive Summary</h2>
-    <p>${analysis.summary}</p>
+    <p>${escapeHtml(analysis.summary)}</p>
 
     <h2>💡 Key Discussion Points</h2>
     <ul>
-        ${analysis.key_points ? analysis.key_points.map(p => `<li>${p}</li>`).join('') : '<li>None</li>'}
+        ${analysis.key_points ? analysis.key_points.map(p => `<li>${escapeHtml(p)}</li>`).join('') : '<li>None</li>'}
     </ul>
 
     <h2>✅ Action Items & Decisions</h2>
     <ul>
-        ${analysis.action_items ? analysis.action_items.map(i => `<li>${i}</li>`).join('') : '<li>None</li>'}
+        ${analysis.action_items ? analysis.action_items.map(i => `<li>${escapeHtml(i)}</li>`).join('') : '<li>None</li>'}
     </ul>
 
     <h2>📄 Full Transcript</h2>
-    <div class="transcript">${analysis.transcript}</div>
+    <div class="transcript">${escapeHtml(analysis.transcript)}</div>
 </body>
 </html>
         `;

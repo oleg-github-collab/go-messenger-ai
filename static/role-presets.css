@@ -4,23 +4,41 @@
 
 /* Role Presets Header */
 .role-presets-header {
-    margin-bottom: 32px;
+    margin-bottom: 40px;
     text-align: center;
+    padding: 24px;
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.08) 0%, rgba(99, 102, 241, 0.04) 100%);
+    border-radius: 16px;
+    border: 2px solid rgba(139, 92, 246, 0.15);
 }
 
 .role-presets-header h3 {
-    font-size: 24px;
-    font-weight: 600;
+    font-size: 28px;
+    font-weight: 700;
     color: #f8fafc;
-    margin-bottom: 12px;
+    margin-bottom: 16px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 12px;
+}
+
+.role-presets-header h3::before {
+    content: '🎭';
+    font-size: 32px;
 }
 
 .role-presets-header p {
-    font-size: 15px;
-    color: #94a3b8;
-    line-height: 1.6;
-    max-width: 800px;
+    font-size: 16px;
+    color: #cbd5e1;
+    line-height: 1.7;
+    max-width: 900px;
     margin: 0 auto;
+}
+
+.role-presets-header p strong {
+    color: #a78bfa;
+    font-weight: 600;
 }
 
 /* Role Presets Grid */
@@ -34,13 +52,14 @@
 /* Role Preset Card */
 .role-preset-card {
     background: linear-gradient(135deg, rgba(139, 92, 246, 0.1) 0%, rgba(99, 102, 241, 0.05) 100%);
-    border: 2px solid rgba(139, 92, 246, 0.3);
+    border: 3px solid rgba(139, 92, 246, 0.3);
     border-radius: 16px;
-    padding: 24px;
+    padding: 28px;
     cursor: pointer;
-    transition: all 0.3s ease;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
     position: relative;
     overflow: hidden;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
 }
 
 .role-preset-card::before {
@@ -49,21 +68,59 @@
     top: 0;
     left: 0;
     right: 0;
-    height: 4px;
-    background: linear-gradient(90deg, #8b5cf6 0%, #6366f1 100%);
+    height: 5px;
+    background: linear-gradient(90deg, #8b5cf6 0%, #6366f1 50%, #8b5cf6 100%);
     opacity: 0;
     transition: opacity 0.3s ease;
+    box-shadow: 0 2px 8px rgba(139, 92, 246, 0.4);
+}
+
+.role-preset-card::after {
+    content: '👆 Click to select this role preset';
+    position: absolute;
+    bottom: -40px;
+    left: 0;
+    right: 0;
+    padding: 8px;
+    background: rgba(139, 92, 246, 0.95);
+    color: white;
+    text-align: center;
+    font-size: 13px;
+    font-weight: 600;
+    transition: bottom 0.3s ease;
 }
 
 .role-preset-card:hover {
-    border-color: rgba(139, 92, 246, 0.6);
-    background: linear-gradient(135deg, rgba(139, 92, 246, 0.15) 0%, rgba(99, 102, 241, 0.1) 100%);
-    transform: translateY(-2px);
-    box-shadow: 0 8px 24px rgba(139, 92, 246, 0.2);
+    border-color: rgba(139, 92, 246, 0.8);
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.2) 0%, rgba(99, 102, 241, 0.15) 100%);
+    transform: translateY(-4px) scale(1.02);
+    box-shadow: 0 12px 32px rgba(139, 92, 246, 0.35);
 }
 
 .role-preset-card:hover::before {
     opacity: 1;
+}
+
+.role-preset-card:hover::after {
+    bottom: 0;
+}
+
+.role-preset-card.selected {
+    border-color: #10b981;
+    border-width: 4px;
+    background: linear-gradient(135deg, rgba(16, 185, 129, 0.15) 0%, rgba(6, 182, 212, 0.1) 100%);
+    box-shadow: 0 8px 24px rgba(16, 185, 129, 0.3);
+}
+
+.role-preset-card.selected::before {
+    background: linear-gradient(90deg, #10b981 0%, #06b6d4 50%, #10b981 100%);
+    opacity: 1;
+}
+
+.role-preset-card.selected::after {
+    content: '✓ Currently selected';
+    background: rgba(16, 185, 129, 0.95);
+    bottom: 0;
 }
 
 .role-preset-icon {

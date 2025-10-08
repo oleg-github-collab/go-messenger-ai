@@ -1422,6 +1422,19 @@ func analyzeTranscriptHandler(w http.ResponseWriter, r *http.Request) {
 }
 
 func generateMeetingAnalysis(transcript string, participants []string, duration string) (*MeetingAnalysis, error) {
+	// Check if OpenAI API key is configured
+	if openAIAPIKey == "" {
+		log.Printf("[NOTETAKER] ⚠️  OpenAI API key not configured")
+		return &MeetingAnalysis{
+			Summary:      "AI analysis unavailable - OpenAI API key not configured. Please set OPENAI_API_KEY environment variable.",
+			KeyPoints:    []string{"Manual review required - AI analysis is disabled"},
+			ActionItems:  []string{},
+			Participants: participants,
+			Duration:     duration,
+			Transcript:   transcript,
+		}, nil
+	}
+
 	// Prepare GPT-4 prompt
 	prompt := fmt.Sprintf(`You are an expert meeting analyst. Analyze this meeting transcript and provide:
 
