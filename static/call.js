@@ -29,6 +29,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     const chatEmpty = document.getElementById('chatEmpty');
     const messageInput = document.getElementById('messageInput');
     const sendMessageBtn = document.getElementById('sendMessageBtn');
+    const recipientSelect = document.getElementById('recipientSelect');
 
     // Timer
     const timerText = document.getElementById('timerText');
@@ -53,6 +54,8 @@ document.addEventListener('DOMContentLoaded', async () => {
     let reconnectTimeout = null;
     let adaptiveQuality = null;
     let heartbeatInterval = null;
+    let localParticipantId = null;
+    const participantDirectory = new Map();
 
     // Get room ID from URL
     const pathParts = window.location.pathname.split('/');
@@ -107,10 +110,35 @@ document.addEventListener('DOMContentLoaded', async () => {
         userLabel.textContent = isHostSession ? 'Host' : 'Guest';
     }
 
+    participantDirectory.set('self', guestName);
+    emitNotetakerParticipants();
+
     // Initialize AI Notetaker (host only)
     if (typeof AINotetaker !== 'undefined') {
         notetaker = new AINotetaker(roomID, isHostSession);
         console.log('[CALL] 🤖 AI Notetaker initialized');
+    }
+
+    function emitNotetakerParticipants() {
+        if (!notetaker) return;
+        const roster = [];
+        participantDirectory.forEach((name, id) => {
+            roster.push({ id, name, isLocal: id === localParticipantId });
+        });
+        window.dispatchEvent(new CustomEvent('notetaker-participants', {
+            detail: { roomID, participants: roster }
+        }));
+    }
+
+    function emitNotetakerMessage(payload) {
+        if (!notetaker) return;
+        window.dispatchEvent(new CustomEvent('notetaker-message', {
+            detail: {
+                roomID,
+                ...payload,
+                timestamp: payload.timestamp || Date.now()
+            }
+        }));
     }
 
     // Initialize waiting room UI
@@ -267,10 +295,31 @@ document.addEventListener('DOMContentLoaded', async () => {
                 switch (message.type) {
                     case 'joined':
                         console.log('[CALL] ✅ Joined room successfully');
+                        try {
+                            const joinInfo = typeof message.data === 'string' ? JSON.parse(message.data) : message.data;
+                            if (joinInfo && joinInfo.id) {
+                                localParticipantId = joinInfo.id;
+                                participantDirectory.set(localParticipantId, joinInfo.name || guestName);
+                                participantDirectory.delete('self');
+                                emitNotetakerParticipants();
+                            }
+                        } catch (err) {
+                            console.warn('[CALL] ⚠️ Failed to parse join payload', err);
+                        }
                         break;
 
                     case 'join':
                         console.log('[CALL] 🎯 Partner joined! isInitiator:', isInitiator, 'isHostSession:', isHostSession);
+
+                        try {
+                            const joinInfo = typeof message.data === 'string' ? JSON.parse(message.data) : message.data;
+                            if (joinInfo && joinInfo.id) {
+                                participantDirectory.set(joinInfo.id, joinInfo.name || 'Partner');
+                                emitNotetakerParticipants();
+                            }
+                        } catch (err) {
+                            console.warn('[CALL] ⚠️ Failed to parse partner join payload', err);
+                        }
 
                         // Host should always create offer when guest joins
                         // Use isHostSession as reliable indicator
@@ -305,15 +354,15 @@ document.addEventListener('DOMContentLoaded', async () => {
                         break;
 
                     case 'chat':
-                        appendMessage(message.data, 'received');
+                        const appended = appendMessage(message.data, 'received');
                         if (!chatPanel.classList.contains('active')) {
                             unreadMessages++;
                             updateChatBadge();
 
-                            // Show flying message notification
-                            const senderName = guestName || 'Your partner';
-                            const isGif = message.data.startsWith('[GIF]');
-                            const displayText = isGif ? message.data.substring(5) : message.data;
+                            const senderName = appended?.fromName || 'Partner';
+                            const text = appended?.text || '';
+                            const isGif = text.startsWith('[GIF]');
+                            const displayText = isGif ? text.substring(5) : text;
                             showFlyingMessage(senderName, displayText, isGif);
                         }
                         break;
@@ -321,6 +370,10 @@ document.addEventListener('DOMContentLoaded', async () => {
                     case 'leave':
                         console.log('[CALL] Partner left');
                         remotePlaceholder.style.display = 'flex';
+                        if (message.user) {
+                            participantDirectory.delete(message.user);
+                            emitNotetakerParticipants();
+                        }
                         break;
                 }
             };
@@ -755,58 +808,121 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Make openMiniBrowser globally accessible
     window.openMiniBrowserFromChat = openMiniBrowser;
 
-    function appendMessage(text, type) {
+    function normalizeChatPayload(raw, direction = 'received') {
+        let payload = raw;
+        if (typeof raw === 'string') {
+            try {
+                payload = JSON.parse(raw);
+            } catch (err) {
+                payload = { text: raw };
+            }
+        }
+
+        if (!payload || typeof payload !== 'object') {
+            return {
+                text: typeof raw === 'string' ? raw : '',
+                fromId: direction === 'sent' ? localParticipantId || 'self' : 'remote',
+                fromName: direction === 'sent' ? guestName : 'Partner',
+                isPrivate: false,
+                raw,
+            };
+        }
+
+        const text = payload.text || '';
+        const fromId = payload.from || (direction === 'sent' ? localParticipantId || 'self' : payload.user || 'remote');
+        let fromName = payload.fromName || payload.userName || null;
+        if (!fromName && fromId && participantDirectory.has(fromId)) {
+            fromName = participantDirectory.get(fromId);
+        }
+        if (!fromName) {
+            fromName = direction === 'sent' ? guestName : 'Partner';
+        }
+
+        return {
+            text,
+            fromId,
+            fromName,
+            to: payload.to,
+            isPrivate: payload.to && payload.to !== 'everyone',
+            raw: payload,
+        };
+    }
+
+    function appendMessage(rawPayload, type) {
+        const payload = normalizeChatPayload(rawPayload, type);
+        const { text, fromName, fromId, isPrivate } = payload;
+
+        if (!text) {
+            console.warn('[CALL] ⚠️ Skipping empty chat payload', payload);
+            return null;
+        }
+
         if (chatEmpty) {
             chatEmpty.style.display = 'none';
         }
 
-        const div = document.createElement('div');
-        div.classList.add('message', type);
+        const wrapper = document.createElement('div');
+        wrapper.classList.add('message', type);
+        wrapper.dataset.fromId = fromId || '';
+        wrapper.dataset.fromName = fromName;
 
-        // Check if message is a GIF
-        if (text.startsWith('[GIF]')) {
-            const gifUrl = text.substring(5); // Remove [GIF] prefix
-            const img = document.createElement('img');
-            img.src = gifUrl;
-            img.style.maxWidth = '200px';
-            img.style.maxHeight = '200px';
-            img.style.borderRadius = '8px';
-            img.style.marginTop = '4px';
-            img.alt = 'GIF';
-            div.appendChild(img);
-        } else {
-            // Check if message contains URLs
-            const urlRegex = /(https?:\/\/[^\s]+)/g;
-            const hasUrl = urlRegex.test(text);
+        const header = document.createElement('div');
+        header.className = 'message-header';
+        const senderSpan = document.createElement('span');
+        senderSpan.className = 'message-sender';
+        senderSpan.textContent = fromName;
+        header.appendChild(senderSpan);
 
-            if (hasUrl && type === 'received') {
-                // Add invitation text for received messages with links
-                const senderName = guestName || 'Your partner';
-                const inviteText = document.createElement('div');
-                inviteText.style.cssText = `
-                    font-size: 13px;
-                    opacity: 0.8;
-                    margin-bottom: 8px;
-                    font-style: italic;
-                `;
-                inviteText.textContent = `${senderName} invites you to visit:`;
-                div.appendChild(inviteText);
-            }
-
-            // Linkify URLs
-            const processedText = detectAndLinkifyURLs(text);
-            if (processedText !== text) {
-                // Contains URLs
-                const contentDiv = document.createElement('div');
-                contentDiv.innerHTML = processedText;
-                div.appendChild(contentDiv);
-            } else {
-                div.textContent = text;
-            }
+        if (isPrivate) {
+            const badge = document.createElement('span');
+            badge.className = 'message-private-badge';
+            badge.textContent = 'Private';
+            header.appendChild(badge);
         }
 
-        chatMessages.appendChild(div);
+        const timeSpan = document.createElement('span');
+        timeSpan.className = 'message-time';
+        timeSpan.textContent = new Date().toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        header.appendChild(timeSpan);
+        wrapper.appendChild(header);
+
+        const content = document.createElement('div');
+        content.className = 'message-bubble';
+
+        if (text.startsWith('[GIF]')) {
+            const gifUrl = text.substring(5);
+            const img = document.createElement('img');
+            img.src = gifUrl;
+            img.alt = 'GIF';
+            img.loading = 'lazy';
+            img.style.maxWidth = '220px';
+            img.style.borderRadius = '12px';
+            content.appendChild(img);
+        } else {
+            const processed = detectAndLinkifyURLs(text);
+            const textDiv = document.createElement('div');
+            textDiv.className = 'message-content';
+            if (processed !== text) {
+                textDiv.innerHTML = processed;
+            } else {
+                textDiv.textContent = text;
+            }
+            content.appendChild(textDiv);
+        }
+
+        wrapper.appendChild(content);
+        chatMessages.appendChild(wrapper);
         chatMessages.scrollTop = chatMessages.scrollHeight;
+
+        emitNotetakerMessage({
+            fromId: fromId || (type === 'sent' ? localParticipantId || 'self' : 'remote'),
+            fromName,
+            text,
+            direction: type,
+            kind: 'chat',
+        });
+
+        return { fromId, fromName, text };
     }
 
     function updateChatBadge() {
@@ -822,12 +938,19 @@ document.addEventListener('DOMContentLoaded', async () => {
         const text = messageInput.value.trim();
         if (!text || !socket || socket.readyState !== WebSocket.OPEN) return;
 
+        const payload = {
+            text,
+            from: localParticipantId || 'self',
+            fromName: guestName,
+            to: recipientSelect && recipientSelect.value !== 'everyone' ? recipientSelect.value : undefined,
+        };
+
         socket.send(JSON.stringify({
             type: 'chat',
-            data: text
+            data: payload
         }));
 
-        appendMessage(text, 'sent');
+        appendMessage(payload, 'sent');
         messageInput.value = '';
     }
 
@@ -839,12 +962,18 @@ document.addEventListener('DOMContentLoaded', async () => {
             return;
         }
 
+        const payload = {
+            text,
+            from: localParticipantId || 'self',
+            fromName: guestName,
+        };
+
         socket.send(JSON.stringify({
             type: 'chat',
-            data: text
+            data: payload
         }));
 
-        appendMessage(text, 'sent');
+        appendMessage(payload, 'sent');
         if (messageInput) {
             messageInput.value = '';
         }

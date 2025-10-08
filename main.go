@@ -93,6 +93,7 @@ type Message struct {
 	Data json.RawMessage `json:"data"`
 	Room string          `json:"room"`
 	User string          `json:"user"`
+	UserName string      `json:"userName,omitempty"`
 }
 
 // NotetakerSession stores active recording session
@@ -626,6 +627,7 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 		}
 
 		message.User = participantID
+		message.UserName = participant.Name
 		message.Room = roomID
 
 		log.Printf("[WS] 📨 %s: %s → broadcast", participantID, message.Type)
@@ -1735,12 +1737,23 @@ func main() {
 
 		roomID := createRoom(userID, hostName, mode)
 
-		scheme := "http"
-		if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
-			scheme = "https"
+		// Use PUBLIC_DOMAIN env var if set (for proxy/cloud deployments)
+		// Otherwise use r.Host (for local/direct access)
+		host := os.Getenv("PUBLIC_DOMAIN")
+		if host == "" {
+			host = r.Host
 		}
 
-		url := fmt.Sprintf("%s://%s/join/%s", scheme, r.Host, roomID)
+		scheme := "https" // Always HTTPS for public domain
+		if os.Getenv("PUBLIC_DOMAIN") == "" {
+			// Only use HTTP for local development
+			scheme = "http"
+			if r.TLS != nil || r.Header.Get("X-Forwarded-Proto") == "https" {
+				scheme = "https"
+			}
+		}
+
+		url := fmt.Sprintf("%s://%s/join/%s", scheme, host, roomID)
 
 		log.Printf("[CREATE] ✅ %s meeting URL: %s (Host: %s)", mode, url, hostName)
 
