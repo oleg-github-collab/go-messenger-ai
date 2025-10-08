@@ -386,14 +386,18 @@
                     <div style="display: flex; gap: 10px; flex-wrap: wrap;">
                         <button class="notetaker-btn" id="notetakerToggleBtn" style="flex: 1;">
                             <span class="notetaker-icon">🎙️</span>
-                            <span class="notetaker-text">Start AI Assistant</span>
+                            <span class="notetaker-text">Start Recording</span>
+                        </button>
+                        <button class="notetaker-btn-pause" id="notetakerPauseBtn" style="flex: 1; display: none;">
+                            <span class="notetaker-icon">⏸️</span>
+                            <span class="notetaker-text">Pause</span>
                         </button>
                         <button class="notetaker-btn-secondary" id="viewFullTranscriptBtn" style="flex: 1;">
                             <span class="notetaker-icon">📜</span>
-                            <span class="notetaker-text">View Full Transcript</span>
+                            <span class="notetaker-text">View Transcript</span>
                         </button>
                     </div>
-                    <p class="settings-description" id="notetakerStatus">Real-time analysis with AI recommendations</p>
+                    <p class="settings-description" id="notetakerStatus">Real-time transcription with AI analysis</p>
                 </div>
 
                 <!-- Connection Stats -->
@@ -862,6 +866,45 @@
                 Save & Close
             </button>
         </div>
+    </div>
+
+    <!-- Transcript Editor Modal -->
+    <div class="transcript-editor-modal" id="transcriptEditorModal">
+        <div class="transcript-editor-header">
+            <div class="transcript-editor-title">
+                <span>📝</span>
+                <span>Transcript Editor</span>
+            </div>
+            <div class="transcript-editor-actions">
+                <button class="transcript-editor-btn save" id="saveTranscriptBtn">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M17 3H5c-1.11 0-2 .9-2 2v14c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V7l-4-4zm-5 16c-1.66 0-3-1.34-3-3s1.34-3 3-3 3 1.34 3 3-1.34 3-3 3zm3-10H5V5h10v4z"/>
+                    </svg>
+                    Save to Server
+                </button>
+                <button class="transcript-editor-btn download" id="downloadTranscriptBtn">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M19 9h-4V3H9v6H5l7 7 7-7zM5 18v2h14v-2H5z"/>
+                    </svg>
+                    Download
+                </button>
+                <button class="transcript-editor-btn close" id="closeEditorBtn">
+                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M19 6.41L17.59 5 12 10.59 6.41 5 5 6.41 10.59 12 5 17.59 6.41 19 12 13.41 17.59 19 19 17.59 13.41 12z"/>
+                    </svg>
+                    Close
+                </button>
+            </div>
+        </div>
+        <div class="transcript-editor-content" id="transcriptEditorContent">
+            <!-- Transcript entries will be inserted here -->
+        </div>
+    </div>
+
+    <!-- Save Success Notification -->
+    <div class="save-notification" id="saveNotification">
+        <span>✅ Transcript saved successfully!</span>
+        <span id="transcriptLink" style="display: block; margin-top: 8px; font-size: 12px; opacity: 0.8;"></span>
     </div>
 
     <script src="/static/force-browser.js?v=2"></script>

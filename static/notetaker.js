@@ -77,6 +77,7 @@ class AINotetaker {
         this.roomID = roomID;
         this.isHost = isHost;
         this.isRecording = false;
+        this.isPaused = false;
         this.mediaRecorder = null;
         this.audioChunks = [];
         this.startTime = null;
@@ -86,6 +87,7 @@ class AINotetaker {
 
         // Initialize UI elements
         this.toggleBtn = document.getElementById('notetakerToggleBtn');
+        this.pauseBtn = document.getElementById('notetakerPauseBtn');
         this.statusText = document.getElementById('notetakerStatus');
         this.container = document.getElementById('notetakerFloatingPanel');
         this.notetakerGroup = document.getElementById('notetakerGroup');
@@ -164,6 +166,19 @@ class AINotetaker {
         this.sessionId = `session_${Date.now()}_${Math.random().toString(36).substr(2, 9)}`;
         this.lastSaveTime = null;
 
+        // Transcript Editor elements
+        this.editorModal = document.getElementById('transcriptEditorModal');
+        this.editorContent = document.getElementById('transcriptEditorContent');
+        this.saveTranscriptBtn = document.getElementById('saveTranscriptBtn');
+        this.downloadTranscriptBtn = document.getElementById('downloadTranscriptBtn');
+        this.closeEditorBtn = document.getElementById('closeEditorBtn');
+        this.saveNotification = document.getElementById('saveNotification');
+        this.transcriptLink = document.getElementById('transcriptLink');
+
+        // AI Analysis state for real-time highlighting
+        this.aiAnalysisEnabled = true;
+        this.highlightCache = new Map(); // Cache AI analysis results
+
         // Show notetaker only for host
         if (this.isHost && this.notetakerGroup) {
             if (this.container) {
@@ -222,10 +237,28 @@ class AINotetaker {
             this.toggleBtn.addEventListener('click', () => this.toggleRecording());
         }
 
-        // View full transcript button
+        // Pause/Resume button
+        if (this.pauseBtn) {
+            this.pauseBtn.addEventListener('click', () => this.togglePause());
+        }
+
+        // View full transcript button (now opens editor)
         const viewFullTranscriptBtn = document.getElementById('viewFullTranscriptBtn');
         if (viewFullTranscriptBtn) {
-            viewFullTranscriptBtn.addEventListener('click', () => this.openFullTranscriptViewer());
+            viewFullTranscriptBtn.addEventListener('click', () => this.openTranscriptEditor());
+        }
+
+        // Editor buttons
+        if (this.saveTranscriptBtn) {
+            this.saveTranscriptBtn.addEventListener('click', () => this.saveTranscriptToServer());
+        }
+
+        if (this.downloadTranscriptBtn) {
+            this.downloadTranscriptBtn.addEventListener('click', () => this.downloadTranscript());
+        }
+
+        if (this.closeEditorBtn) {
+            this.closeEditorBtn.addEventListener('click', () => this.closeTranscriptEditor());
         }
 
         if (this.modalClose) {
@@ -548,6 +581,11 @@ class AINotetaker {
             this.statusText.textContent = 'Recording in progress...';
             this.statusText.style.color = '#ef4444';
 
+            // Show pause button
+            if (this.pauseBtn) {
+                this.pauseBtn.style.display = 'inline-flex';
+            }
+
             console.log('[NOTETAKER] ✅ Recording started with persistence enabled');
         } catch (error) {
             console.error('[NOTETAKER] ❌ Failed to start recording:', error);
@@ -588,10 +626,16 @@ class AINotetaker {
 
             // Update UI
             this.toggleBtn.classList.remove('recording');
-            this.toggleBtn.querySelector('.notetaker-text').textContent = 'Start AI Assistant';
+            this.toggleBtn.querySelector('.notetaker-text').textContent = 'Start Recording';
             this.toggleBtn.querySelector('.notetaker-icon').textContent = '🎙️';
             this.statusText.textContent = showModal ? 'Processing transcript...' : 'AI Assistant stopped';
             this.statusText.style.color = showModal ? '#3b82f6' : '#94a3b8';
+
+            // Hide pause button
+            if (this.pauseBtn) {
+                this.pauseBtn.style.display = 'none';
+                this.isPaused = false;
+            }
 
             // Notify backend
             try {
@@ -1584,6 +1628,14 @@ class AINotetaker {
             isHighlight: !!entryInput.isHighlight
         };
 
+        // AI Analysis for real-time highlighting
+        this.analyzeAndHighlight(entryData.text, speakerName).then(analysis => {
+            if (analysis) {
+                entryData.sentiment = analysis.sentiment;
+                entryData.aiComment = analysis.aiComment;
+            }
+        });
+
         this.conversationHistory.push(entryData);
         this.lastEntryBySpeaker.set(speakerId, entryId);
         this.lastAddedEntryId = entryId;
@@ -2143,6 +2195,268 @@ Provide specific recommendations on how to respond.`
                 this.rolePresetSelect.style.boxShadow = '';
             }, 500);
         });
+    }
+
+    // ==========================================
+    // PAUSE/RESUME FUNCTIONALITY
+    // ==========================================
+
+    togglePause() {
+        if (!this.isRecording) return;
+
+        this.isPaused = !this.isPaused;
+
+        if (this.isPaused) {
+            // Pause recognition
+            if (this.recognition) {
+                this.recognition.stop();
+            }
+
+            // Update UI
+            if (this.pauseBtn) {
+                this.pauseBtn.classList.add('resumed');
+                const icon = this.pauseBtn.querySelector('.notetaker-icon');
+                const text = this.pauseBtn.querySelector('.notetaker-text');
+                if (icon) icon.textContent = '▶️';
+                if (text) text.textContent = 'Resume';
+            }
+
+            if (this.statusText) {
+                this.statusText.textContent = '⏸️ Recording paused';
+            }
+
+            console.log('[NOTETAKER] ⏸️ Paused');
+        } else {
+            // Resume recognition
+            if (this.recognition) {
+                try {
+                    this.recognition.start();
+                } catch (e) {
+                    console.warn('[NOTETAKER] Recognition restart:', e.message);
+                }
+            }
+
+            // Update UI
+            if (this.pauseBtn) {
+                this.pauseBtn.classList.remove('resumed');
+                const icon = this.pauseBtn.querySelector('.notetaker-icon');
+                const text = this.pauseBtn.querySelector('.notetaker-text');
+                if (icon) icon.textContent = '⏸️';
+                if (text) text.textContent = 'Pause';
+            }
+
+            if (this.statusText) {
+                this.statusText.textContent = '🎙️ Recording... (Click to stop)';
+            }
+
+            console.log('[NOTETAKER] ▶️ Resumed');
+        }
+    }
+
+    // ==========================================
+    // TRANSCRIPT EDITOR
+    // ==========================================
+
+    openTranscriptEditor() {
+        if (!this.editorModal || !this.editorContent) {
+            console.error('[NOTETAKER] Editor elements not found');
+            return;
+        }
+
+        console.log('[NOTETAKER] 📝 Opening transcript editor');
+
+        // Build editor content with all entries
+        this.editorContent.innerHTML = '';
+
+        if (this.conversationHistory.length === 0) {
+            this.editorContent.innerHTML = `
+                <div style="text-align: center; padding: 60px 20px; color: #94a3b8;">
+                    <div style="font-size: 48px; margin-bottom: 16px;">📝</div>
+                    <div style="font-size: 18px; font-weight: 600; margin-bottom: 8px;">No transcript yet</div>
+                    <div style="font-size: 14px;">Start recording to see your conversation transcript here</div>
+                </div>
+            `;
+        } else {
+            this.conversationHistory.forEach((entry, index) => {
+                const entryEl = this.createEditorEntry(entry, index);
+                this.editorContent.appendChild(entryEl);
+            });
+        }
+
+        // Show modal
+        this.editorModal.classList.add('active');
+    }
+
+    createEditorEntry(entry, index) {
+        const div = document.createElement('div');
+        div.className = 'transcript-editor-entry';
+
+        // Apply highlighting based on AI analysis
+        if (entry.sentiment) {
+            if (entry.sentiment === 'positive') div.classList.add('highlight-positive');
+            else if (entry.sentiment === 'negative') div.classList.add('highlight-negative');
+            else if (entry.sentiment === 'important') div.classList.add('highlight-important');
+        }
+
+        div.innerHTML = `
+            <div class="transcript-entry-speaker">${entry.speaker || 'Unknown'}</div>
+            <div class="transcript-entry-text">${this.escapeHtml(entry.text)}</div>
+            ${entry.aiComment ? `<div class="transcript-entry-ai-comment" data-comment="${this.escapeHtml(entry.aiComment)}">💡</div>` : ''}
+            ${entry.sentiment ? `<span class="transcript-entry-ai-tag ${entry.sentiment}">${entry.sentiment}</span>` : ''}
+        `;
+
+        return div;
+    }
+
+    closeTranscriptEditor() {
+        if (this.editorModal) {
+            this.editorModal.classList.remove('active');
+        }
+    }
+
+    // ==========================================
+    // SAVE TO SERVER
+    // ==========================================
+
+    async saveTranscriptToServer() {
+        if (this.conversationHistory.length === 0) {
+            alert('No transcript to save');
+            return;
+        }
+
+        console.log('[NOTETAKER] 💾 Saving transcript to server...');
+
+        try {
+            const response = await fetch('/api/transcript/save', {
+                method: 'POST',
+                headers: { 'Content-Type': 'application/json' },
+                body: JSON.stringify({
+                    room_id: this.roomID,
+                    session_id: this.sessionId,
+                    transcript: this.conversationHistory,
+                    metadata: {
+                        duration: this.getDuration(),
+                        word_count: this.conversationHistory.reduce((sum, e) => sum + e.text.split(' ').length, 0),
+                        role_preset: localStorage.getItem('notetaker_role_preset') || 'general'
+                    }
+                })
+            });
+
+            if (!response.ok) throw new Error('Save failed');
+
+            const data = await response.json();
+            console.log('[NOTETAKER] ✅ Saved:', data);
+
+            // Show notification with link
+            if (this.saveNotification && this.transcriptLink) {
+                this.transcriptLink.textContent = `Link: ${window.location.origin}/transcript/${data.transcript_id}`;
+                this.saveNotification.classList.add('active');
+
+                setTimeout(() => {
+                    this.saveNotification.classList.remove('active');
+                }, 5000);
+            }
+
+        } catch (error) {
+            console.error('[NOTETAKER] ❌ Save failed:', error);
+            alert('Failed to save transcript. Please try again.');
+        }
+    }
+
+    // ==========================================
+    // DOWNLOAD TRANSCRIPT
+    // ==========================================
+
+    downloadTranscript() {
+        if (this.conversationHistory.length === 0) {
+            alert('No transcript to download');
+            return;
+        }
+
+        console.log('[NOTETAKER] 📥 Downloading transcript...');
+
+        // Create formatted text
+        let text = `Transcript - ${new Date().toLocaleString()}\n`;
+        text += `Duration: ${this.getDuration()}\n`;
+        text += `Room: ${this.roomID}\n`;
+        text += `\n${'='.repeat(60)}\n\n`;
+
+        this.conversationHistory.forEach((entry, index) => {
+            text += `[${entry.timestamp || new Date().toLocaleTimeString()}] ${entry.speaker || 'Unknown'}:\n`;
+            text += `${entry.text}\n`;
+            if (entry.sentiment) {
+                text += `  [AI: ${entry.sentiment.toUpperCase()}]\n`;
+            }
+            if (entry.aiComment) {
+                text += `  💡 ${entry.aiComment}\n`;
+            }
+            text += `\n`;
+        });
+
+        // Download as file
+        const blob = new Blob([text], { type: 'text/plain' });
+        const url = URL.createObjectURL(blob);
+        const a = document.createElement('a');
+        a.href = url;
+        a.download = `transcript_${this.roomID}_${Date.now()}.txt`;
+        document.body.appendChild(a);
+        a.click();
+        document.body.removeChild(a);
+        URL.revokeObjectURL(url);
+
+        console.log('[NOTETAKER] ✅ Downloaded');
+    }
+
+    // ==========================================
+    // AI REAL-TIME HIGHLIGHTING
+    // ==========================================
+
+    async analyzeAndHighlight(text, speaker) {
+        if (!this.aiAnalysisEnabled) return null;
+
+        // Simple keyword-based analysis (можна замінити на API call до GPT)
+        const analysis = {
+            sentiment: 'neutral',
+            aiComment: null
+        };
+
+        const lowerText = text.toLowerCase();
+
+        // Positive keywords
+        if (lowerText.match(/great|excellent|perfect|amazing|wonderful|thank you|appreciate/)) {
+            analysis.sentiment = 'positive';
+            analysis.aiComment = 'Positive feedback detected';
+        }
+        // Negative keywords
+        else if (lowerText.match(/problem|issue|error|failed|wrong|bad|difficult/)) {
+            analysis.sentiment = 'negative';
+            analysis.aiComment = 'Issue or concern mentioned';
+        }
+        // Important keywords
+        else if (lowerText.match(/important|critical|urgent|deadline|must|need to/)) {
+            analysis.sentiment = 'important';
+            analysis.aiComment = 'Action item or important point';
+        }
+
+        return analysis;
+    }
+
+    // ==========================================
+    // HELPER METHODS
+    // ==========================================
+
+    getDuration() {
+        if (!this.startTime) return '00:00';
+        const elapsed = Math.floor((Date.now() - this.startTime) / 1000);
+        const minutes = Math.floor(elapsed / 60);
+        const seconds = elapsed % 60;
+        return `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+    }
+
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 }
 

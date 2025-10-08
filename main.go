@@ -1640,6 +1640,60 @@ Provide your analysis in JSON format with these fields:
 	}, nil
 }
 
+func saveTranscriptHandler(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		RoomID     string                   `json:"room_id"`
+		SessionID  string                   `json:"session_id"`
+		Transcript []map[string]interface{} `json:"transcript"`
+		Metadata   map[string]interface{}   `json:"metadata"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "invalid request", http.StatusBadRequest)
+		return
+	}
+
+	// Generate unique transcript ID
+	transcriptID := uuid.NewString()
+
+	// Store in Redis with 7 days TTL
+	transcriptKey := fmt.Sprintf("transcript:%s", transcriptID)
+	transcriptData := map[string]interface{}{
+		"room_id":    req.RoomID,
+		"session_id": req.SessionID,
+		"transcript": req.Transcript,
+		"metadata":   req.Metadata,
+		"created_at": time.Now().Format(time.RFC3339),
+	}
+
+	transcriptJSON, err := json.Marshal(transcriptData)
+	if err != nil {
+		http.Error(w, "failed to marshal transcript", http.StatusInternalServerError)
+		return
+	}
+
+	ctx := context.Background()
+	if err := rdb.Set(ctx, transcriptKey, transcriptJSON, 7*24*time.Hour).Err(); err != nil {
+		log.Printf("[TRANSCRIPT] ❌ Failed to save: %v", err)
+		http.Error(w, "failed to save transcript", http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("[TRANSCRIPT] ✅ Saved transcript %s for room %s", transcriptID, req.RoomID)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":       true,
+		"transcript_id": transcriptID,
+		"expires_at":    time.Now().Add(7 * 24 * time.Hour).Format(time.RFC3339),
+	})
+}
+
 func main() {
 	flag.Parse()
 
@@ -1966,6 +2020,9 @@ func main() {
 	http.HandleFunc("/api/notetaker/stop", authMiddleware(stopNotetakerHandler))
 	http.HandleFunc("/api/notetaker/status", authMiddleware(notetakerStatusHandler))
 	http.HandleFunc("/api/notetaker/analyze", authMiddleware(analyzeTranscriptHandler))
+
+	// Transcript save endpoint
+	http.HandleFunc("/api/transcript/save", authMiddleware(saveTranscriptHandler))
 
 	// Initialize start time for health check
 	startTime = time.Now()
