@@ -4,21 +4,23 @@
 
 This document describes the new modular code organization for the messenger application. The goal is to split large monolithic files into smaller, maintainable modules while preserving all existing functionality.
 
-## Status: Phase 2 In Progress ⚡
+## Status: Phase 3 In Progress ⚡
 
 **Phase 1** (Safe foundation) - COMPLETE ✅:
 - ✅ Folder structure created
 - ✅ Base CSS modules (variables, reset, animations)
 - ✅ Core JS utilities (logger, storage, events, API, DOM)
 
-**Phase 2** (Component extraction) - IN PROGRESS ⚡:
+**Phase 2** (Component extraction) - COMPLETE ✅:
 - ✅ Notetaker CSS split into 8 components
 - ✅ Audio mixer module created
 - ✅ Speech recognition module created
 - ⏳ Full notetaker migration (deferred - too risky)
 
-**Phase 3** (Full migration) - PENDING ⏸️:
-- Awaiting testing of Phase 2 before proceeding
+**Phase 3** (Core modules) - IN PROGRESS ⚡:
+- ✅ WebRTC modules (4 files): ICE config, Media manager, Peer connection, Signaling
+- ✅ UI modules (2 files): Video controls, Connection status
+- ⏳ Integration with existing code (next step)
 
 ---
 
