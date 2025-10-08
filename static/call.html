@@ -9,6 +9,7 @@
     <title>Video Call - Kaminskyi Messenger</title>
     <link rel="stylesheet" href="/static/call.css">
     <link rel="stylesheet" href="/static/role-presets.css">
+    <link rel="stylesheet" href="/static/role-preset-buttons.css?v=1">
     <link rel="stylesheet" href="/static/transcript-viewer.css">
 </head>
 <body>
@@ -212,6 +213,54 @@
                         <option value="es-ES">🇪🇸 Español</option>
                         <option value="fr-FR">🇫🇷 Français</option>
                     </select>
+
+                    <!-- AI Role Preset Selection - INTERACTIVE BUTTONS -->
+                    <div class="role-preset-container">
+                        <div class="role-preset-header">
+                            <span class="role-preset-label">🎭 AI Role Preset</span>
+                            <span class="role-preset-status" id="rolePresetStatus">✓ Active</span>
+                        </div>
+
+                        <div class="role-preset-grid">
+                            <button class="role-preset-btn active" data-role="">
+                                <span class="emoji">🎯</span>
+                                <span>General</span>
+                            </button>
+                            <button class="role-preset-btn" data-role="language-teacher">
+                                <span class="emoji">👨‍🏫</span>
+                                <span>Teacher</span>
+                            </button>
+                            <button class="role-preset-btn" data-role="therapist">
+                                <span class="emoji">🧠</span>
+                                <span>Therapist</span>
+                            </button>
+                            <button class="role-preset-btn" data-role="business-coach">
+                                <span class="emoji">💼</span>
+                                <span>Coach</span>
+                            </button>
+                            <button class="role-preset-btn" data-role="medical-consultant">
+                                <span class="emoji">⚕️</span>
+                                <span>Medical</span>
+                            </button>
+                            <button class="role-preset-btn" data-role="tutor">
+                                <span class="emoji">📚</span>
+                                <span>Tutor</span>
+                            </button>
+                        </div>
+
+                        <select id="notetakerRolePresetSelect" style="display: none;">
+                            <option value="">general</option>
+                            <option value="language-teacher">language-teacher</option>
+                            <option value="therapist">therapist</option>
+                            <option value="business-coach">business-coach</option>
+                            <option value="medical-consultant">medical-consultant</option>
+                            <option value="tutor">tutor</option>
+                        </select>
+
+                        <p class="role-preset-description">
+                            Selected: <span class="selected-role-name" id="selectedRoleName">General</span>
+                        </p>
+                    </div>
 
                     <!-- Meeting Configuration Button -->
                     <button class="config-open-btn" id="configOpenBtn">
@@ -822,6 +871,7 @@
     <script src="/static/enhanced-gif-picker.js?v=2"></script>
     <script src="/static/waiting-room.js?v=2"></script>
     <script src="/static/role-presets.js?v=2"></script>
+    <script src="/static/role-preset-buttons.js?v=1"></script>
     <script src="/static/transcript-editor.js?v=2"></script>
     <script src="/static/transcript-viewer-full.js?v=2"></script>
     <script src="/static/meeting-config.js?v=2"></script>

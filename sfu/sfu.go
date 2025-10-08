@@ -18,8 +18,10 @@ import (
 )
 
 const (
-	rtcpPLIInterval = time.Second * 2
+	rtcpPLIInterval = time.Millisecond * 800 // CRITICAL: Reduced from 2s for lower latency
 	maxParticipants = 20
+	maxBitrate      = 2500000 // 2.5 Mbps max per participant for smooth HD
+	minBitrate      = 150000  // 150 Kbps minimum
 )
 
 func qualityFromRID(rid string) QualityLevel {
@@ -136,43 +138,53 @@ func (r *SFURoom) AddParticipant(participantID, name string, conn *websocket.Con
 		return nil, 0, fmt.Errorf("room is full (max %d participants)", maxParticipants)
 	}
 
-	// Create WebRTC config with optimized settings
+	// CRITICAL: Ultra-optimized WebRTC config for Germany-Ukraine connectivity
 	config := webrtc.Configuration{
 		ICEServers: []webrtc.ICEServer{
-			{
-				URLs: []string{"stun:stun.l.google.com:19302"},
-			},
+			// Multiple STUN servers for redundancy
+			{URLs: []string{"stun:stun.l.google.com:19302"}},
+			{URLs: []string{"stun:stun1.l.google.com:19302"}},
+			{URLs: []string{"stun:stun2.l.google.com:19302"}},
+			{URLs: []string{"stun:stun.cloudflare.com:3478"}},
 		},
-		// Optimize for faster connection and better reliability
-		BundlePolicy:  webrtc.BundlePolicyMaxBundle,
-		RTCPMuxPolicy: webrtc.RTCPMuxPolicyRequire,
+		// CRITICAL: Aggressive bundle and ICE policies for speed
+		BundlePolicy:      webrtc.BundlePolicyMaxBundle,
+		RTCPMuxPolicy:     webrtc.RTCPMuxPolicyRequire,
+		ICETransportPolicy: webrtc.ICETransportPolicyAll, // Try all routes
 	}
 
-	// Set aggressive ICE settings
+	// CRITICAL: Ultra-aggressive ICE settings for fast long-distance connectivity
 	settingEngine := webrtc.SettingEngine{}
 	settingEngine.SetICETimeouts(
-		time.Second*3,
-		time.Second*10,
-		time.Second*1,
+		time.Second*1,    // disconnectedTimeout (reduced from 3s)
+		time.Second*5,    // failedTimeout (reduced from 10s)
+		time.Millisecond*500, // keepAliveInterval (reduced from 1s)
 	)
 	settingEngine.SetNetworkTypes([]webrtc.NetworkType{
 		webrtc.NetworkTypeUDP4,
 		webrtc.NetworkTypeUDP6,
+		webrtc.NetworkTypeTCP4, // Also try TCP for firewall bypass
 	})
+	// CRITICAL: Wide port range for better connectivity
+	settingEngine.SetEphemeralUDPPortRange(40000, 50000)
 
-	// Add TURN server if credentials provided
+	// CRITICAL: TURN server with multiple transports for reliability
 	if turnHost != "" && turnUser != "" && turnPass != "" {
-		// Use turnHost as-is (already cleaned in main.go)
 		config.ICEServers = append(config.ICEServers, webrtc.ICEServer{
 			URLs: []string{
 				fmt.Sprintf("turn:%s:3478", turnHost),
 				fmt.Sprintf("turn:%s:3478?transport=udp", turnHost),
 				fmt.Sprintf("turn:%s:3478?transport=tcp", turnHost),
+				fmt.Sprintf("turns:%s:5349", turnHost), // Secure TURN over TLS
+				fmt.Sprintf("turns:%s:5349?transport=tcp", turnHost),
 			},
-			Username:   turnUser,
-			Credential: turnPass,
+			Username:       turnUser,
+			Credential:     turnPass,
+			CredentialType: webrtc.ICECredentialTypePassword,
 		})
-		log.Printf("[SFU] ✅ Added TURN server %s:3478 for participant %s", turnHost, participantID)
+		log.Printf("[SFU] ✅ TURN server configured: %s (UDP/TCP/TLS) for %s", turnHost, participantID)
+	} else {
+		log.Printf("[SFU] ⚠️ No TURN server - using STUN only (may fail with strict firewalls)")
 	}
 
 	// Create MediaEngine with codec preferences for better quality

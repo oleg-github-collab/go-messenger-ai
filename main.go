@@ -29,6 +29,8 @@ const (
 	validPassword = "QwertY24$"
 	sessionTTL    = 24 * time.Hour
 	meetingTTL    = 8 * time.Hour
+	buildVersion  = "v1.1.0-role-presets-ui" // UPDATED: Interactive role preset buttons
+	buildDate     = "2025-10-08"
 )
 
 var (
@@ -431,10 +433,10 @@ func cleanupRoom(roomID string) {
 	}
 	mu.Unlock()
 
-	// Delete from Redis
-	deleteMeeting(roomID)
-
-	log.Printf("[ROOM] 🗑️  Cleaned up room %s", roomID)
+	// CRITICAL FIX: Do NOT delete meeting from Redis on cleanup
+	// This allows multiple sessions with the same link
+	// Meeting should only be deleted when it expires (TTL) or host explicitly ends it
+	log.Printf("[ROOM] 🗑️  Cleaned up room memory %s (meeting still active in Redis)", roomID)
 }
 
 func wsHandler(w http.ResponseWriter, r *http.Request) {
@@ -1256,13 +1258,10 @@ func sfuWSHandler(w http.ResponseWriter, r *http.Request) {
 	room.RemoveParticipant(participantID)
 	log.Printf("[SFU-WS] 👋 %s left group room %s", userName, roomID)
 
-	// If host left, deactivate meeting
-	if isHost {
-		log.Printf("[SFU-WS] 🔒 Host left - deactivating meeting %s", roomID)
-		if err := deactivateMeeting(roomID); err != nil {
-			log.Printf("[SFU-WS] ⚠️  Failed to deactivate meeting: %v", err)
-		}
-	}
+	// CRITICAL FIX: Do NOT deactivate meeting when host leaves
+	// Meeting should stay active until TTL expires or explicitly ended
+	// This allows multiple sessions and rejoining
+	log.Printf("[SFU-WS] 👋 %s left (meeting remains active for rejoining)", userName)
 
 	// Notify others
 	for _, p := range room.GetAllParticipants() {
@@ -1399,16 +1398,17 @@ func analyzeTranscriptHandler(w http.ResponseWriter, r *http.Request) {
 		Transcript   string   `json:"transcript"`
 		Participants []string `json:"participants"`
 		Duration     string   `json:"duration"`
+		RolePreset   string   `json:"rolePreset,omitempty"` // Role preset for customized analysis
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid request", http.StatusBadRequest)
 		return
 	}
 
-	log.Printf("[NOTETAKER] 🤖 Analyzing transcript (%d chars)", len(req.Transcript))
+	log.Printf("[NOTETAKER] 🤖 Analyzing transcript (%d chars) with role preset: %s", len(req.Transcript), req.RolePreset)
 
-	// Call OpenAI GPT-4 for analysis
-	analysis, err := generateMeetingAnalysis(req.Transcript, req.Participants, req.Duration)
+	// Call OpenAI GPT-4o for analysis with role-specific prompts
+	analysis, err := generateMeetingAnalysis(req.Transcript, req.Participants, req.Duration, req.RolePreset)
 	if err != nil {
 		log.Printf("[NOTETAKER] ❌ Analysis failed: %v", err)
 		http.Error(w, fmt.Sprintf("analysis failed: %v", err), http.StatusInternalServerError)
@@ -1421,7 +1421,7 @@ func analyzeTranscriptHandler(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(analysis)
 }
 
-func generateMeetingAnalysis(transcript string, participants []string, duration string) (*MeetingAnalysis, error) {
+func generateMeetingAnalysis(transcript string, participants []string, duration string, rolePreset string) (*MeetingAnalysis, error) {
 	// Check if OpenAI API key is configured
 	if openAIAPIKey == "" {
 		log.Printf("[NOTETAKER] ⚠️  OpenAI API key not configured")
@@ -1435,13 +1435,67 @@ func generateMeetingAnalysis(transcript string, participants []string, duration 
 		}, nil
 	}
 
-	// Prepare GPT-4 prompt
-	prompt := fmt.Sprintf(`You are an expert meeting analyst. Analyze this meeting transcript and provide:
+	// Prepare role-specific GPT-4o prompt
+	var systemPrompt string
+	var analysisInstructions string
 
+	switch rolePreset {
+	case "language-teacher":
+		systemPrompt = "You are an expert language teacher and linguist. Analyze this conversation focusing on language learning aspects."
+		analysisInstructions = `Analyze focusing on:
+1. Grammar patterns and structures used
+2. Vocabulary breadth and new words introduced
+3. Common errors and mistakes to correct
+4. Pronunciation and fluency observations
+5. Recommended areas for improvement`
+
+	case "therapist":
+		systemPrompt = "You are a professional therapist and counselor. Analyze this conversation focusing on emotional and psychological aspects."
+		analysisInstructions = `Analyze focusing on:
+1. Emotional states and patterns observed
+2. Key therapeutic insights and breakthroughs
+3. Coping mechanisms discussed
+4. Relationship dynamics and patterns
+5. Recommended therapeutic homework or follow-up topics`
+
+	case "business-coach":
+		systemPrompt = "You are an experienced business coach and strategy consultant. Analyze this conversation focusing on business and professional development."
+		analysisInstructions = `Analyze focusing on:
+1. Business challenges and opportunities identified
+2. Strategic decisions and action items
+3. Key performance indicators (KPIs) discussed
+4. Risk factors and mitigation strategies
+5. Leadership and team dynamics insights`
+
+	case "medical-consultant":
+		systemPrompt = "You are a medical professional analyzing a consultation session. Focus on health-related information."
+		analysisInstructions = `Analyze focusing on:
+1. Symptoms and health concerns discussed
+2. Medical history and relevant information
+3. Diagnostic observations and questions
+4. Treatment recommendations or action items
+5. Follow-up care and monitoring needed`
+
+	case "tutor":
+		systemPrompt = "You are an educational tutor analyzing a tutoring session. Focus on learning outcomes and student progress."
+		analysisInstructions = `Analyze focusing on:
+1. Learning objectives covered
+2. Concepts mastered and areas needing review
+3. Teaching methods and their effectiveness
+4. Student engagement and comprehension level
+5. Homework assignments and practice recommendations`
+
+	default:
+		// General meeting analysis
+		systemPrompt = "You are a professional meeting analyst. Provide concise, actionable insights."
+		analysisInstructions = `Analyze this meeting and provide:
 1. Executive Summary (2-3 sentences)
 2. Key Discussion Points (bullet list)
 3. Action Items with assignees (if mentioned)
-4. Important Decisions Made
+4. Important Decisions Made`
+	}
+
+	prompt := fmt.Sprintf(`%s
 
 Meeting Duration: %s
 Participants: %s
@@ -1450,18 +1504,18 @@ Transcript:
 %s
 
 Provide your analysis in JSON format with these fields:
-- summary: string
-- key_points: array of strings
-- action_items: array of strings
-- decisions: array of strings`, duration, strings.Join(participants, ", "), transcript)
+- summary: string (2-3 sentences)
+- key_points: array of strings (5-8 key insights)
+- action_items: array of strings (actionable next steps)
+- decisions: array of strings (important conclusions or decisions)`, analysisInstructions, duration, strings.Join(participants, ", "), transcript)
 
-	// Call OpenAI API
+	// Call OpenAI API with GPT-4o for superior analysis quality
 	reqBody := map[string]interface{}{
-		"model": "gpt-4o-mini",
+		"model": "gpt-4o",
 		"messages": []map[string]string{
 			{
 				"role":    "system",
-				"content": "You are a professional meeting analyst. Provide concise, actionable insights.",
+				"content": systemPrompt,
 			},
 			{
 				"role":    "user",
@@ -1659,6 +1713,8 @@ func main() {
 			"sfu":       sfuOK,
 			"uptime":    time.Since(startTime).Seconds(),
 			"timestamp": time.Now().Unix(),
+			"version":   buildVersion,
+			"build_date": buildDate,
 		}
 
 		w.Header().Set("Content-Type", "application/json")

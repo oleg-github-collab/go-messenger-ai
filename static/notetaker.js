@@ -90,6 +90,7 @@ class AINotetaker {
         this.container = document.getElementById('notetakerFloatingPanel');
         this.notetakerGroup = document.getElementById('notetakerGroup');
         this.langSelect = document.getElementById('notetakerLangSelect');
+        this.rolePresetSelect = document.getElementById('notetakerRolePresetSelect'); // NEW: Role preset selector
         this.modal = document.getElementById('notetakerModal');
         this.modalBackdrop = document.getElementById('notetakerModalBackdrop');
         this.modalClose = document.getElementById('notetakerModalClose');
@@ -204,6 +205,9 @@ class AINotetaker {
             if (typeof RolePresetsManager !== 'undefined') {
                 rolePresetsManager = new RolePresetsManager();
                 console.log('[NOTETAKER] 👔 Role presets manager initialized');
+
+                // Populate role preset dropdown if available
+                this.populateRolePresets();
             }
 
             // Initialize transcript editor
@@ -557,7 +561,7 @@ class AINotetaker {
         }
     }
 
-    async stopRecording() {
+    async stopRecording(showModal = true) {
         try {
             console.log('[NOTETAKER] 🛑 Stopping recording...');
 
@@ -582,15 +586,18 @@ class AINotetaker {
             // Stop duration timer
             this.stopDurationTimer();
 
+            // Close real-time panel
+            this.closeRTPanel();
+
             const duration = this.startTime ? new Date() - this.startTime : 0;
             const durationStr = this.formatDuration(duration);
 
             // Update UI
             this.toggleBtn.classList.remove('recording');
-            this.toggleBtn.querySelector('.notetaker-text').textContent = 'Start Recording';
+            this.toggleBtn.querySelector('.notetaker-text').textContent = 'Start AI Assistant';
             this.toggleBtn.querySelector('.notetaker-icon').textContent = '🎙️';
-            this.statusText.textContent = 'Processing transcript...';
-            this.statusText.style.color = '#3b82f6';
+            this.statusText.textContent = showModal ? 'Processing transcript...' : 'AI Assistant stopped';
+            this.statusText.style.color = showModal ? '#3b82f6' : '#94a3b8';
 
             // Notify backend
             try {
@@ -616,8 +623,10 @@ class AINotetaker {
             // Release audio capture resources
             this.releaseRecordingResources();
 
-            // Show analysis modal
-            this.showAnalysisModal(durationStr);
+            // Show analysis modal only if requested
+            if (showModal) {
+                this.showAnalysisModal(durationStr);
+            }
 
         } catch (error) {
             console.error('[NOTETAKER] ❌ Failed to stop recording:', error);
@@ -667,13 +676,23 @@ class AINotetaker {
 
     async requestServerAnalysis(participants, duration) {
         try {
+            // Get current role preset for customized analysis
+            let rolePreset = null;
+            if (typeof rolePresetsManager !== 'undefined' && rolePresetsManager) {
+                const currentRole = rolePresetsManager.getCurrentRole();
+                rolePreset = currentRole ? currentRole.id : null;
+            }
+
+            console.log('[NOTETAKER] 🎯 Analyzing with role preset:', rolePreset);
+
             const response = await fetch('/api/notetaker/analyze', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     transcript: this.transcript,
                     participants,
-                    duration
+                    duration,
+                    rolePreset: rolePreset
                 })
             });
 
@@ -1031,6 +1050,11 @@ class AINotetaker {
         if (this.rtPanel) {
             this.rtPanel.classList.remove('active');
             this.rtPanel.classList.remove('minimized');
+        }
+
+        // Stop recording if active when panel is closed
+        if (this.isRecording) {
+            this.stopRecording(false); // false = don't show analysis modal
         }
     }
 
@@ -2083,6 +2107,56 @@ Provide specific recommendations on how to respond.`
         };
 
         return colorMap[categoryId] || '#64748b';
+    }
+
+    // NEW: Populate role preset dropdown with visual indication
+    populateRolePresets() {
+        if (!this.rolePresetSelect || !rolePresetsManager) return;
+
+        const presets = [
+            { id: '', name: '🎯 General Meeting', icon: '🎯' },
+            { id: 'language-teacher', name: '👨‍🏫 Language Teacher', icon: '👨‍🏫' },
+            { id: 'therapist', name: '🧠 Therapist/Counselor', icon: '🧠' },
+            { id: 'business-coach', name: '💼 Business Coach', icon: '💼' },
+            { id: 'medical-consultant', name: '⚕️ Medical Consultant', icon: '⚕️' },
+            { id: 'tutor', name: '📚 Academic Tutor', icon: '📚' }
+        ];
+
+        // Clear existing options
+        this.rolePresetSelect.innerHTML = '';
+
+        // Add options with icons
+        presets.forEach(preset => {
+            const option = document.createElement('option');
+            option.value = preset.id;
+            option.textContent = preset.name;
+            this.rolePresetSelect.appendChild(option);
+        });
+
+        // Set initial value from rolePresetsManager
+        const currentRole = rolePresetsManager.getCurrentRole();
+        if (currentRole) {
+            this.rolePresetSelect.value = currentRole.id;
+        }
+
+        // Add change listener to sync with rolePresetsManager
+        this.rolePresetSelect.addEventListener('change', (e) => {
+            const selectedId = e.target.value;
+            if (selectedId) {
+                rolePresetsManager.selectRole(selectedId);
+            } else {
+                rolePresetsManager.clearSelection();
+            }
+            console.log('[NOTETAKER] 🎭 Role preset changed to:', selectedId || 'general');
+
+            // Visual feedback
+            this.rolePresetSelect.style.borderColor = '#8b5cf6';
+            this.rolePresetSelect.style.boxShadow = '0 0 0 3px rgba(139, 92, 246, 0.2)';
+            setTimeout(() => {
+                this.rolePresetSelect.style.borderColor = '';
+                this.rolePresetSelect.style.boxShadow = '';
+            }, 500);
+        });
     }
 }
 

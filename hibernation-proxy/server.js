@@ -35,7 +35,7 @@ const cache = new NodeCache({ stdTTL: 10 }); // 10 second cache
 // ========================
 
 const CONFIG = {
-  DO_API_TOKEN: process.env.DO_API_TOKEN || 'your_digitalocean_api_token_here',
+  DO_API_TOKEN: process.env.DO_API_TOKEN,
 
   DROPLETS: {
     messenger: {

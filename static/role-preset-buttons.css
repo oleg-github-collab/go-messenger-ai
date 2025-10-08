@@ -1,0 +1,123 @@
+/* Role Preset Interactive Buttons */
+.role-preset-container {
+    margin-top: 20px;
+    padding: 16px;
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.15), rgba(99, 102, 241, 0.08));
+    border-radius: 12px;
+    border: 2px solid #8b5cf6;
+}
+
+.role-preset-header {
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    margin-bottom: 12px;
+}
+
+.role-preset-label {
+    font-weight: 700;
+    color: #a78bfa;
+    font-size: 16px;
+    display: flex;
+    align-items: center;
+    gap: 8px;
+}
+
+.role-preset-status {
+    font-size: 12px;
+    color: #10b981;
+    font-weight: 500;
+    padding: 4px 12px;
+    background: rgba(16, 185, 129, 0.15);
+    border-radius: 12px;
+    border: 1px solid rgba(16, 185, 129, 0.3);
+}
+
+.role-preset-grid {
+    display: grid;
+    grid-template-columns: repeat(2, 1fr);
+    gap: 10px;
+    margin-bottom: 12px;
+}
+
+.role-preset-btn {
+    padding: 12px;
+    border: 2px solid rgba(139, 92, 246, 0.3);
+    background: rgba(30, 41, 59, 0.5);
+    border-radius: 8px;
+    cursor: pointer;
+    font-size: 14px;
+    font-weight: 600;
+    color: #cbd5e1;
+    transition: all 0.2s;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
+    position: relative;
+    overflow: hidden;
+}
+
+.role-preset-btn:hover {
+    border-color: rgba(139, 92, 246, 0.6);
+    background: rgba(139, 92, 246, 0.15);
+    transform: translateY(-2px);
+    box-shadow: 0 4px 12px rgba(139, 92, 246, 0.3);
+}
+
+.role-preset-btn.active {
+    border-color: #8b5cf6;
+    background: linear-gradient(135deg, rgba(139, 92, 246, 0.3), rgba(99, 102, 241, 0.2));
+    color: #f8fafc;
+    box-shadow: 0 0 0 3px rgba(139, 92, 246, 0.2), inset 0 0 20px rgba(139, 92, 246, 0.1);
+}
+
+.role-preset-btn.active::before {
+    content: '✓';
+    position: absolute;
+    top: 4px;
+    right: 4px;
+    font-size: 14px;
+    color: #10b981;
+    background: rgba(16, 185, 129, 0.2);
+    width: 20px;
+    height: 20px;
+    border-radius: 50%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    animation: checkPulse 0.3s ease;
+}
+
+@keyframes checkPulse {
+    0% { transform: scale(0); opacity: 0; }
+    50% { transform: scale(1.2); }
+    100% { transform: scale(1); opacity: 1; }
+}
+
+.role-preset-btn .emoji {
+    font-size: 24px;
+    transition: transform 0.2s;
+}
+
+.role-preset-btn:hover .emoji {
+    transform: scale(1.1);
+}
+
+.role-preset-btn.active .emoji {
+    transform: scale(1.15);
+    filter: drop-shadow(0 0 8px rgba(139, 92, 246, 0.5));
+}
+
+.role-preset-description {
+    color: #cbd5e1;
+    font-size: 12px;
+    margin: 0;
+    text-align: center;
+}
+
+.selected-role-name {
+    color: #a78bfa;
+    font-weight: 600;
+    font-size: 13px;
+}
