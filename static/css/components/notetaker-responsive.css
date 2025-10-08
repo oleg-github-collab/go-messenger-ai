@@ -1,0 +1,35 @@
+/* AI Notetaker Mobile Responsive Styles */
+
+@media (max-width: 768px) {
+    .notetaker-floating-panel {
+        top: 60px;
+        right: 12px;
+        left: 12px;
+        width: auto;
+    }
+
+    .notetaker-settings-group {
+        padding: 20px;
+    }
+
+    .notetaker-quick-stats {
+        grid-template-columns: repeat(2, 1fr);
+    }
+
+    .notetaker-tabs {
+        overflow-x: auto;
+        scrollbar-width: thin;
+    }
+
+    .notetaker-controls {
+        flex-direction: column;
+    }
+
+    #reopenNotetakerBtn {
+        width: 56px;
+        height: 56px;
+        bottom: 100px;
+        right: 16px;
+        font-size: 24px;
+    }
+}

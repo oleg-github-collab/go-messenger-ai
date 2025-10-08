@@ -1,0 +1,11 @@
+/* AI Notetaker - Modular CSS Entry Point */
+
+/* Import all notetaker components */
+@import './components/notetaker-panel.css';
+@import './components/notetaker-status.css';
+@import './components/notetaker-tabs.css';
+@import './components/notetaker-forms.css';
+@import './components/notetaker-transcript.css';
+@import './components/notetaker-buttons.css';
+@import './components/notetaker-editor.css';
+@import './components/notetaker-responsive.css';
