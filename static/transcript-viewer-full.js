@@ -6,19 +6,45 @@ class TranscriptViewer {
         this.transcriptData = [];
         this.highlights = [];
         this.categories = [];
+        this.rolePreset = null; // Current role preset with categories
         this.filter = 'all'; // all, highlights, category
         this.modal = null;
+        this.liveMode = false; // Real-time transcript display
+        this.autoScroll = true;
 
         console.log('[TRANSCRIPT-VIEWER] Initialized');
     }
 
-    show(transcriptData = [], highlights = [], categories = []) {
+    show(transcriptData = [], highlights = [], categories = [], rolePreset = null) {
         this.transcriptData = transcriptData;
         this.highlights = highlights;
         this.categories = categories;
+        this.rolePreset = rolePreset; // Store role preset for color coding
+
+        console.log('[TRANSCRIPT-VIEWER] Opening with', {
+            entries: transcriptData.length,
+            highlights: highlights.length,
+            categories: categories.length,
+            preset: rolePreset?.name
+        });
 
         this.createModal();
         this.render();
+    }
+
+    // Real-time transcript updates
+    updateLive(newEntry) {
+        if (!this.liveMode || !this.modal) return;
+
+        this.transcriptData.push(newEntry);
+        this.render();
+
+        if (this.autoScroll) {
+            const content = document.getElementById('transcriptContent');
+            if (content) {
+                content.scrollTop = content.scrollHeight;
+            }
+        }
     }
 
     createModal() {
@@ -94,7 +120,7 @@ class TranscriptViewer {
         document.getElementById('totalHighlights').textContent = this.highlights.length;
 
         if (this.transcriptData.length === 0) {
-            content.innerHTML = '<div class="transcript-empty">No transcript available yet</div>';
+            content.innerHTML = '<div class="transcript-empty">💬 No transcript available yet<br><small>Transcript will appear here during the call</small></div>';
             return;
         }
 
@@ -106,21 +132,118 @@ class TranscriptViewer {
             filtered = this.transcriptData.filter(entry => entry.category);
         }
 
-        content.innerHTML = filtered.map((entry, index) => {
+        // Group by categories if role preset is active
+        if (this.rolePreset && this.filter === 'categories') {
+            content.innerHTML = this.renderByCategories(filtered);
+        } else {
+            content.innerHTML = this.renderChronological(filtered);
+        }
+    }
+
+    renderChronological(entries) {
+        return entries.map((entry, index) => {
             const isHighlight = entry.isHighlight || this.highlights.some(h => h.text === entry.text);
-            const categoryTag = entry.category ? `<span class="category-tag">${entry.category}</span>` : '';
+
+            // Get category color from role preset
+            let categoryColor = '#6b7280';
+            let categoryName = entry.category || '';
+
+            if (this.rolePreset && entry.category) {
+                const cat = this.rolePreset.categories.find(c => c.name === entry.category || c.id === entry.categoryId);
+                if (cat) {
+                    categoryColor = cat.color;
+                    categoryName = cat.name;
+                }
+            }
+
+            const categoryTag = categoryName ?
+                `<span class="category-tag" style="background-color: ${categoryColor}15; color: ${categoryColor}; border-color: ${categoryColor}40;">
+                    ${this.getCategoryIcon(entry.categoryId)} ${categoryName}
+                </span>` : '';
+
+            const highlightStyle = isHighlight ? `border-left: 3px solid ${categoryColor}; background-color: ${categoryColor}08;` : '';
 
             return `
-                <div class="transcript-entry ${isHighlight ? 'highlight' : ''}">
+                <div class="transcript-entry ${isHighlight ? 'highlight' : ''}" style="${highlightStyle}">
                     <div class="entry-header">
                         <span class="entry-speaker">${entry.speaker || 'Unknown'}</span>
                         <span class="entry-time">${entry.timestamp || this.formatTime(index * 5)}</span>
                         ${categoryTag}
                     </div>
-                    <div class="entry-text">${this.highlightKeywords(entry.text)}</div>
+                    <div class="entry-text">${this.highlightKeywordsByCategory(entry.text, entry.categoryId)}</div>
+                    ${entry.analysis ? `<div class="entry-analysis">💡 ${entry.analysis}</div>` : ''}
                 </div>
             `;
         }).join('');
+    }
+
+    renderByCategories(entries) {
+        if (!this.rolePreset) return this.renderChronological(entries);
+
+        const grouped = {};
+
+        // Group entries by category
+        entries.forEach(entry => {
+            const catId = entry.categoryId || 'uncategorized';
+            if (!grouped[catId]) grouped[catId] = [];
+            grouped[catId].push(entry);
+        });
+
+        let html = '';
+
+        // Render each category group
+        this.rolePreset.categories.forEach(cat => {
+            const items = grouped[cat.id] || [];
+            if (items.length === 0) return;
+
+            html += `
+                <div class="category-section" style="border-left: 4px solid ${cat.color};">
+                    <div class="category-header" style="background-color: ${cat.color}15;">
+                        <h3 style="color: ${cat.color};">
+                            ${this.getCategoryIcon(cat.id)} ${cat.name}
+                            <span class="category-count">${items.length}</span>
+                        </h3>
+                        <p class="category-desc">${cat.description}</p>
+                    </div>
+                    <div class="category-items">
+                        ${items.map((entry, idx) => `
+                            <div class="transcript-entry compact" style="border-left-color: ${cat.color};">
+                                <div class="entry-header">
+                                    <span class="entry-speaker">${entry.speaker || 'Unknown'}</span>
+                                    <span class="entry-time">${entry.timestamp || this.formatTime(idx * 5)}</span>
+                                </div>
+                                <div class="entry-text">${this.highlightKeywordsByCategory(entry.text, cat.id)}</div>
+                                ${entry.analysis ? `<div class="entry-analysis" style="color: ${cat.color};">💡 ${entry.analysis}</div>` : ''}
+                            </div>
+                        `).join('')}
+                    </div>
+                </div>
+            `;
+        });
+
+        return html || '<div class="transcript-empty">No categorized entries yet</div>';
+    }
+
+    getCategoryIcon(categoryId) {
+        const icons = {
+            'grammar': '📚',
+            'vocabulary': '📖',
+            'errors': '❌',
+            'progress': '✅',
+            'homework': '📝',
+            'emotions': '😊',
+            'patterns': '🔄',
+            'triggers': '⚡',
+            'insights': '💡',
+            'goals': '🎯',
+            'relationships': '👥',
+            'action_items': '✓',
+            'decisions': '⚖️',
+            'risks': '⚠️',
+            'next_steps': '➡️',
+            'blockers': '🚧'
+        };
+        return icons[categoryId] || '•';
     }
 
     highlightKeywords(text) {
@@ -130,6 +253,40 @@ class TranscriptViewer {
         keywords.forEach(keyword => {
             const regex = new RegExp(`\\b${keyword}\\b`, 'gi');
             result = result.replace(regex, `<mark>$&</mark>`);
+        });
+
+        return result;
+    }
+
+    highlightKeywordsByCategory(text, categoryId) {
+        if (!text) return '';
+
+        const categoryKeywords = {
+            'grammar': ['present perfect', 'past simple', 'passive voice', 'conditional', 'modal verb', 'tense', 'article', 'preposition'],
+            'vocabulary': ['synonym', 'antonym', 'idiom', 'phrase', 'collocation', 'expression', 'word'],
+            'errors': ['mistake', 'error', 'incorrect', 'wrong', 'fix', 'correct'],
+            'progress': ['improvement', 'better', 'good job', 'excellent', 'well done', 'progress'],
+            'homework': ['homework', 'assignment', 'exercise', 'practice', 'study', 'prepare'],
+            'emotions': ['feel', 'emotion', 'anxious', 'happy', 'sad', 'angry', 'worried', 'stressed'],
+            'patterns': ['always', 'usually', 'often', 'tend to', 'habit', 'pattern', 'recurring'],
+            'triggers': ['trigger', 'stress', 'anxiety', 'cause', 'makes me', 'when'],
+            'insights': ['realize', 'understand', 'insight', 'aha', 'now I see', 'makes sense'],
+            'goals': ['goal', 'want to', 'plan', 'will', 'going to', 'hope', 'aim'],
+            'action_items': ['todo', 'action', 'task', 'need to', 'must', 'should', 'will'],
+            'decisions': ['decide', 'decision', 'choose', 'option', 'alternative'],
+            'risks': ['risk', 'concern', 'worry', 'problem', 'issue', 'challenge'],
+            'blockers': ['blocker', 'blocked', 'stuck', 'cannot', 'unable', 'prevent']
+        };
+
+        let result = this.highlightKeywords(text); // First apply general keywords
+
+        // Then apply category-specific keywords
+        const keywords = categoryKeywords[categoryId] || [];
+        keywords.forEach(keyword => {
+            const regex = new RegExp(`\\b${keyword}\\b`, 'gi');
+            result = result.replace(regex, match =>
+                `<strong class="category-keyword" style="color: inherit; font-weight: 600;">${match}</strong>`
+            );
         });
 
         return result;
