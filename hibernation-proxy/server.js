@@ -20,13 +20,15 @@ const CONFIG = {
     messenger: {
       id: 522123497,
       ip: '64.227.116.250',
-      port: 80,
+      port: 443,
+      protocol: 'https',
       healthPath: '/api/health'
     },
     turn: {
       id: 522123449,
       ip: '64.226.72.235',
-      port: 3478,
+      port: 443,
+      protocol: 'https',
       healthPath: '/health' // TURN server health check
     }
   },
@@ -103,11 +105,13 @@ async function wakeUpDroplet(dropletId) {
 
 async function checkHealth(dropletConfig) {
   try {
-    const healthUrl = `http://${dropletConfig.ip}:${dropletConfig.port}${dropletConfig.healthPath}`;
+    const protocol = dropletConfig.protocol || 'http';
+    const healthUrl = `${protocol}://${dropletConfig.ip}:${dropletConfig.port}${dropletConfig.healthPath}`;
     console.log(`🏥 Health check: ${healthUrl}`);
 
     const response = await axios.get(healthUrl, {
       timeout: 5000,
+      httpsAgent: new (require('https').Agent)({ rejectUnauthorized: false }), // Accept self-signed certs
       validateStatus: (status) => status === 200
     });
 
@@ -159,7 +163,8 @@ async function waitForDropletReady(dropletConfig, maxWaitMs = 120000) {
 // ========================
 
 async function proxyRequest(req, res, dropletConfig) {
-  const targetUrl = `http://${dropletConfig.ip}:${dropletConfig.port}${req.url}`;
+  const protocol = dropletConfig.protocol || 'http';
+  const targetUrl = `${protocol}://${dropletConfig.ip}:${dropletConfig.port}${req.url}`;
 
   console.log(`🔄 Proxying: ${req.method} ${targetUrl}`);
 
@@ -176,6 +181,7 @@ async function proxyRequest(req, res, dropletConfig) {
       },
       data: req.body,
       responseType: 'stream',
+      httpsAgent: new (require('https').Agent)({ rejectUnauthorized: false }), // Accept self-signed certs
       validateStatus: () => true, // Accept any status
       timeout: 30000
     });
@@ -438,15 +444,9 @@ async function handleDropletRequest(req, res, targetName) {
     }
 
     if (status === 'active') {
-      // Droplet is active, check health
-      const healthy = await checkHealth(dropletConfig);
-
-      if (!healthy) {
-        console.log(`⏳ Droplet active but services not ready yet`);
-        return sendLoadingPage(res, targetName, 10);
-      }
-
-      // All good, proxy the request
+      // Droplet is active - just proxy the request
+      // Health check is optional - let nginx/app handle errors
+      console.log(`✅ Droplet active, proxying request`);
       return await proxyRequest(req, res, dropletConfig);
     }
 
