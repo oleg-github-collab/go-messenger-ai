@@ -7,6 +7,17 @@ const axios = require('axios');
 const NodeCache = require('node-cache');
 
 const app = express();
+
+// Middleware - use raw for proxying, but save original buffer
+app.use((req, res, next) => {
+  let data = '';
+  req.on('data', chunk => { data += chunk; });
+  req.on('end', () => {
+    req.rawBody = data;
+    next();
+  });
+});
+
 const cache = new NodeCache({ stdTTL: 10 }); // 10 second cache
 
 // ========================
@@ -167,6 +178,8 @@ async function proxyRequest(req, res, dropletConfig) {
   const targetUrl = `${protocol}://${dropletConfig.ip}:${dropletConfig.port}${req.url}`;
 
   console.log(`🔄 Proxying: ${req.method} ${targetUrl}`);
+  console.log(`📦 Content-Type: ${req.get('content-type') || 'none'}`);
+  console.log(`📏 Body size: ${req.rawBody ? req.rawBody.length : 0} bytes`);
 
   try {
     const response = await axios({
@@ -179,12 +192,15 @@ async function proxyRequest(req, res, dropletConfig) {
         'x-forwarded-proto': req.protocol,
         'x-real-ip': req.ip
       },
-      data: req.body,
+      data: req.rawBody || '',
       responseType: 'stream',
       httpsAgent: new (require('https').Agent)({ rejectUnauthorized: false }), // Accept self-signed certs
       validateStatus: () => true, // Accept any status
-      timeout: 30000
+      timeout: 30000,
+      maxRedirects: 5
     });
+
+    console.log(`✅ Response status: ${response.status}`);
 
     // Copy headers
     Object.keys(response.headers).forEach(key => {
@@ -196,6 +212,8 @@ async function proxyRequest(req, res, dropletConfig) {
 
   } catch (error) {
     console.error(`❌ Proxy error:`, error.message);
+    console.error(`❌ Error code:`, error.code);
+    console.error(`❌ Error stack:`, error.stack);
     res.status(502).send('Bad Gateway - Droplet unreachable');
   }
 }
@@ -483,8 +501,15 @@ app.all('*', async (req, res) => {
   const host = req.get('host') || '';
   const targetName = CONFIG.DOMAIN_MAPPING[host];
 
+  console.log(`\n🌐 Incoming request:`);
+  console.log(`   Host header: ${host}`);
+  console.log(`   Target: ${targetName || 'default (messenger)'}`);
+  console.log(`   Method: ${req.method}`);
+  console.log(`   Path: ${req.url}`);
+
   if (!targetName) {
     // Default to messenger if domain not recognized
+    console.log(`⚠️  Domain not in mapping, defaulting to messenger`);
     return handleDropletRequest(req, res, 'messenger');
   }
 
