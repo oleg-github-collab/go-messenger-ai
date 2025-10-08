@@ -5,8 +5,18 @@
 const express = require('express');
 const axios = require('axios');
 const NodeCache = require('node-cache');
+const http = require('http');
+const httpProxy = require('http-proxy');
 
 const app = express();
+const server = http.createServer(app);
+
+// Create HTTP proxy for WebSocket support
+const proxy = httpProxy.createProxyServer({
+  ws: true,
+  secure: false,  // Accept self-signed certs
+  changeOrigin: true
+});
 
 // Middleware - use raw for proxying, but save original buffer
 app.use((req, res, next) => {
@@ -517,10 +527,69 @@ app.all('*', async (req, res) => {
 });
 
 // ========================
+// WEBSOCKET UPGRADE HANDLER
+// ========================
+
+server.on('upgrade', async (req, socket, head) => {
+  const host = req.headers.host || '';
+  const targetName = CONFIG.DOMAIN_MAPPING[host] || 'messenger';
+  const dropletConfig = CONFIG.DROPLETS[targetName];
+
+  console.log(`\n🔌 WebSocket upgrade request:`);
+  console.log(`   Host: ${host}`);
+  console.log(`   Target: ${targetName}`);
+  console.log(`   Path: ${req.url}`);
+
+  if (!dropletConfig) {
+    console.error(`❌ No droplet config for: ${targetName}`);
+    socket.destroy();
+    return;
+  }
+
+  try {
+    // Check if droplet is active
+    const status = await getDropletStatus(dropletConfig.id);
+    console.log(`📊 Droplet status for WebSocket: ${status}`);
+
+    if (status === 'off') {
+      console.log(`💤 Droplet sleeping, waking up for WebSocket...`);
+      await wakeUpDroplet(dropletConfig.id);
+      await waitForDropletReady(dropletConfig, CONFIG.WAKE_UP_TIMEOUT);
+    }
+
+    // Proxy WebSocket connection
+    const protocol = dropletConfig.protocol || 'http';
+    const wsProtocol = protocol === 'https' ? 'wss' : 'ws';
+    const target = `${wsProtocol}://${dropletConfig.ip}:${dropletConfig.port}`;
+
+    console.log(`🔄 Proxying WebSocket to: ${target}${req.url}`);
+
+    proxy.ws(req, socket, head, {
+      target: target,
+      secure: false,
+      ws: true
+    });
+
+  } catch (error) {
+    console.error(`❌ WebSocket upgrade error:`, error.message);
+    socket.destroy();
+  }
+});
+
+// Handle proxy errors
+proxy.on('error', (err, req, res) => {
+  console.error('❌ Proxy error:', err.message);
+  if (res && res.writeHead) {
+    res.writeHead(502, { 'Content-Type': 'text/plain' });
+    res.end('Bad Gateway - Proxy Error');
+  }
+});
+
+// ========================
 // START SERVER
 // ========================
 
-const server = app.listen(CONFIG.PORT, () => {
+server.listen(CONFIG.PORT, () => {
   console.log(`
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
 🚀 Hibernation Proxy Server Started
@@ -531,6 +600,7 @@ const server = app.listen(CONFIG.PORT, () => {
    - turn.kaminskyi.chat → Droplet ${CONFIG.DROPLETS.turn.id}
 💾 Cache TTL: ${cache.options.stdTTL} seconds
 ⏱️  Wake timeout: ${CONFIG.WAKE_UP_TIMEOUT}ms
+🔌 WebSocket: Enabled
 ━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
   `);
 });

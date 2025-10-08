@@ -315,6 +315,9 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (initialized) {
                     console.log('[CALL] ✅ WebRTC initialized successfully');
 
+                    // Update media health badge
+                    updateMediaHealthBadge('ok', 'Camera & microphone ready');
+
                     // Initialize adaptive quality
                     if (window.AdaptiveQuality) {
                         adaptiveQuality = new window.AdaptiveQuality(webrtc);
@@ -338,6 +341,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     }, 500);
                 } else {
                     console.error('[CALL] ❌ Failed to initialize WebRTC');
+                    updateMediaHealthBadge('error', 'Failed to access camera');
                 }
             };
 
