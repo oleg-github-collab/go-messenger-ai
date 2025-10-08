@@ -1,0 +1,18 @@
+/* Main CSS Entry Point - Modular Design System */
+
+/* Base */
+@import './base/variables.css';
+@import './base/reset.css';
+
+/* Utils */
+@import './utils/animations.css';
+
+/* Components - will be populated during migration */
+/* @import './components/buttons.css'; */
+/* @import './components/modals.css'; */
+/* @import './components/cards.css'; */
+
+/* Pages - will be populated during migration */
+/* @import './pages/login.css'; */
+/* @import './pages/call.css'; */
+/* @import './pages/guest.css'; */
