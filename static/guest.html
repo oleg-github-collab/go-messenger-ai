@@ -20,7 +20,8 @@
             <h1>Join Meeting</h1>
             <p class="host-name">Hosted by <span id="hostName">Oleh Kaminskyi</span></p>
 
-            <form id="guestForm">
+            <!-- Step 1: Name and Language -->
+            <form id="guestForm" style="display: block;">
                 <div class="input-group">
                     <label for="guestName">Your Name / Ваше ім'я</label>
                     <input type="text" id="guestName" name="guestName" placeholder="Enter your name" required autocomplete="name">
@@ -36,9 +37,57 @@
 
                 <button type="submit" class="join-btn" id="joinBtn">
                     <span class="btn-icon">→</span>
-                    <span id="joinBtnText">Приєднатися</span>
+                    <span id="joinBtnText">Далі</span>
                 </button>
             </form>
+
+            <!-- Step 2: Device Selection -->
+            <div id="deviceSetup" style="display: none;">
+                <h2 style="font-size: 20px; margin-bottom: 20px;">Налаштування пристроїв</h2>
+
+                <!-- Video Preview -->
+                <div style="margin-bottom: 20px;">
+                    <video id="previewVideo" autoplay playsinline muted style="width: 100%; border-radius: 12px; background: #1e293b;"></video>
+                </div>
+
+                <!-- Camera Selection -->
+                <div class="input-group">
+                    <label for="cameraSelect">
+                        <span>📹</span> Камера / Camera
+                    </label>
+                    <select id="cameraSelect" class="language-select">
+                        <option value="">Loading cameras...</option>
+                    </select>
+                    <label style="display: flex; align-items: center; margin-top: 8px; cursor: pointer;">
+                        <input type="checkbox" id="enableVideo" checked style="margin-right: 8px;">
+                        <span>Увімкнути камеру / Enable camera</span>
+                    </label>
+                </div>
+
+                <!-- Microphone Selection -->
+                <div class="input-group">
+                    <label for="microphoneSelect">
+                        <span>🎤</span> Мікрофон / Microphone
+                    </label>
+                    <select id="microphoneSelect" class="language-select">
+                        <option value="">Loading microphones...</option>
+                    </select>
+                    <label style="display: flex; align-items: center; margin-top: 8px; cursor: pointer;">
+                        <input type="checkbox" id="enableAudio" checked style="margin-right: 8px;">
+                        <span>Увімкнути мікрофон / Enable microphone</span>
+                    </label>
+                </div>
+
+                <div style="display: flex; gap: 12px;">
+                    <button type="button" class="join-btn" id="backBtn" style="flex: 1; background: #475569;">
+                        <span>← Назад</span>
+                    </button>
+                    <button type="button" class="join-btn" id="continueBtn" style="flex: 2;">
+                        <span class="btn-icon">→</span>
+                        <span>Приєднатися до дзвінка</span>
+                    </button>
+                </div>
+            </div>
 
             <p class="privacy-note">
                 <span class="icon">🔒</span>
