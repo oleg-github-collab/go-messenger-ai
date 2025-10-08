@@ -20,6 +20,82 @@ body {
     padding-bottom: env(safe-area-inset-bottom); /* iOS safe area */
 }
 
+.media-health-badge {
+    position: absolute;
+    top: 18px;
+    right: 18px;
+    display: inline-flex;
+    align-items: center;
+    gap: 8px;
+    padding: 8px 14px;
+    border-radius: 999px;
+    font-size: 12px;
+    font-weight: 600;
+    letter-spacing: 0.02em;
+    z-index: 60;
+    background: rgba(15, 23, 42, 0.82);
+    border: 1px solid rgba(148, 163, 184, 0.45);
+    color: #e2e8f0;
+    box-shadow: 0 12px 32px rgba(15, 23, 42, 0.45);
+    transition: background 0.2s ease, border-color 0.2s ease, color 0.2s ease;
+}
+
+.media-health-badge .badge-dot {
+    width: 10px;
+    height: 10px;
+    border-radius: 50%;
+    background: #38bdf8;
+    box-shadow: 0 0 0 3px rgba(56, 189, 248, 0.15);
+}
+
+.media-health-badge .badge-text {
+    white-space: nowrap;
+}
+
+.media-health-badge.ok {
+    background: rgba(22, 163, 74, 0.18);
+    color: #bbf7d0;
+    border-color: rgba(34, 197, 94, 0.45);
+}
+
+.media-health-badge.ok .badge-dot {
+    background: #22c55e;
+    box-shadow: 0 0 0 3px rgba(34, 197, 94, 0.18);
+}
+
+.media-health-badge.warning {
+    background: rgba(234, 179, 8, 0.18);
+    color: #fef08a;
+    border-color: rgba(234, 179, 8, 0.45);
+}
+
+.media-health-badge.warning .badge-dot {
+    background: #facc15;
+    box-shadow: 0 0 0 3px rgba(250, 204, 21, 0.18);
+}
+
+.media-health-badge.error {
+    background: rgba(248, 113, 113, 0.2);
+    color: #fecaca;
+    border-color: rgba(239, 68, 68, 0.45);
+}
+
+.media-health-badge.error .badge-dot {
+    background: #ef4444;
+    box-shadow: 0 0 0 3px rgba(248, 113, 113, 0.18);
+}
+
+.media-health-badge.offline {
+    background: rgba(148, 163, 184, 0.2);
+    color: #e2e8f0;
+    border-color: rgba(148, 163, 184, 0.45);
+}
+
+.media-health-badge.offline .badge-dot {
+    background: #94a3b8;
+    box-shadow: 0 0 0 3px rgba(148, 163, 184, 0.2);
+}
+
 /* ============================================
    SETTINGS SCREEN (Before Joining)
    ============================================ */

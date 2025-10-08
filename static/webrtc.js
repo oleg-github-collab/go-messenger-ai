@@ -98,6 +98,13 @@ class WebRTCManager {
         // Load TURN credentials
         this.loadTURNCredentials();
 
+        // Device health & resilience tracking
+        this.trackRecoveryLocks = { audio: false, video: false };
+        this.localTrackHandlers = new Map();
+        this.latestDiagnostics = null;
+        this.expectedAudio = true;
+        this.expectedVideo = true;
+
         // Current quality settings
         this.currentConstraints = this.getConstraints('1080p', 30, 'high');
 
@@ -186,6 +193,9 @@ class WebRTCManager {
 
             console.log('[WebRTC] 🎥 Media preferences:', { enableVideo, enableAudio, cameraId, microphoneId });
 
+            this.expectedAudio = enableAudio;
+            this.expectedVideo = enableVideo;
+
             // Override constraints with user preferences
             const constraints = {
                 audio: enableAudio ? {
@@ -240,6 +250,9 @@ class WebRTCManager {
                 console.log('[WebRTC] Added track:', track.kind);
             });
 
+            await this.runMediaDiagnostics();
+            this.setupLocalTrackMonitoring();
+
             return true;
         } catch (error) {
             console.error('[WebRTC] Failed to initialize:', error);
@@ -281,6 +294,22 @@ class WebRTCManager {
             }
 
             this.remoteStream.addTrack(event.track);
+
+            if (event.track.kind === 'audio') {
+                try {
+                    const audioStream = new MediaStream([event.track]);
+                    window.dispatchEvent(new CustomEvent('notetaker-remote-track', {
+                        detail: {
+                            roomID: this.roomID,
+                            stream: audioStream,
+                            participantStreamId: event.streams && event.streams[0] ? event.streams[0].id : null
+                        }
+                    }));
+                    console.log('[WebRTC] 📡 Dispatched notetaker-remote-track event');
+                } catch (err) {
+                    console.warn('[WebRTC] ⚠️ Failed to dispatch remote audio for notetaker:', err);
+                }
+            }
 
             // Monitor track state
             event.track.onended = () => {
@@ -471,11 +500,13 @@ class WebRTCManager {
     }
 
     toggleAudio(enabled) {
+        this.expectedAudio = enabled;
         if (this.localStream) {
             const audioTrack = this.localStream.getAudioTracks()[0];
             if (audioTrack) {
                 audioTrack.enabled = enabled;
                 console.log('[WebRTC] 🎤 Audio track enabled:', audioTrack.enabled, 'readyState:', audioTrack.readyState);
+                this.runMediaDiagnostics();
             } else {
                 console.warn('[WebRTC] ⚠️  No audio track found in localStream');
             }
@@ -485,6 +516,7 @@ class WebRTCManager {
     }
 
     async toggleVideo(enabled) {
+        this.expectedVideo = enabled;
         if (this.localStream) {
             const videoTrack = this.localStream.getVideoTracks()[0];
             if (videoTrack) {
@@ -492,6 +524,7 @@ class WebRTCManager {
                     // Turning OFF - just disable
                     videoTrack.enabled = false;
                     console.log('[WebRTC] Video: OFF');
+                    this.runMediaDiagnostics();
                 } else {
                     // Turning ON - restart track to ensure visibility
                     console.log('[WebRTC] Video: ON - Restarting track');
@@ -512,6 +545,8 @@ class WebRTCManager {
 
                         const newVideoTrack = newStream.getVideoTracks()[0];
 
+                        this.currentCameraId = newVideoTrack.getSettings().deviceId || this.currentCameraId;
+
                         // Replace track in peer connection
                         const senders = this.peerConnection.getSenders();
                         const videoSender = senders.find(s => s.track && s.track.kind === 'video');
@@ -523,15 +558,18 @@ class WebRTCManager {
                         // Update local stream
                         this.localStream.removeTrack(videoTrack);
                         this.localStream.addTrack(newVideoTrack);
+                        this.setupLocalTrackMonitoring();
 
                         // Update video element
                         this.localVideo.srcObject = this.localStream;
 
                         console.log('[WebRTC] ✅ Video track restarted successfully');
+                        this.runMediaDiagnostics();
                     } catch (error) {
                         console.error('[WebRTC] Failed to restart video:', error);
                         // Fallback: just enable the track
                         videoTrack.enabled = true;
+                        this.runMediaDiagnostics();
                     }
                 }
 
@@ -648,13 +686,15 @@ class WebRTCManager {
             console.log('[WebRTC] ✅ ICE restart offer sent');
         } catch (error) {
             console.error('[WebRTC] ICE restart failed, trying full reconnect:', error);
-            this.reconnect();
+            await this.reconnect();
         }
     }
 
-    reconnect() {
+    async reconnect() {
         console.log('[WebRTC] Attempting full reconnect...');
         this.updateStatus('Reconnecting...', 'warning');
+
+        await this.ensureLocalTracksActive();
 
         // Close existing connection
         if (this.peerConnection) {
@@ -672,7 +712,235 @@ class WebRTCManager {
         }
 
         // Create new offer
-        this.createOffer();
+        await this.createOffer();
+    }
+
+    async runMediaDiagnostics() {
+        if (!this.localStream || !window.MediaHealth || typeof window.MediaHealth.analyzeStream !== 'function') {
+            return null;
+        }
+
+        try {
+            this.latestDiagnostics = await window.MediaHealth.analyzeStream(this.localStream, 'direct', {
+                expectsAudio: this.expectedAudio,
+                expectsVideo: this.expectedVideo
+            });
+            return this.latestDiagnostics;
+        } catch (error) {
+            console.warn('[WebRTC] ⚠️ Media diagnostics failed:', error);
+            return null;
+        }
+    }
+
+    clearLocalTrackMonitoring() {
+        if (!this.localTrackHandlers) return;
+        this.localTrackHandlers.forEach((handlers, track) => {
+            try {
+                track.removeEventListener('ended', handlers.onEnded);
+                track.removeEventListener('mute', handlers.onMute);
+                track.removeEventListener('unmute', handlers.onUnmute);
+            } catch (err) {
+                // Ignore removal errors
+            }
+        });
+        this.localTrackHandlers.clear();
+    }
+
+    removeTrackMonitoring(track) {
+        if (!track || !this.localTrackHandlers) return;
+        const handlers = this.localTrackHandlers.get(track);
+        if (!handlers) return;
+        try {
+            track.removeEventListener('ended', handlers.onEnded);
+            track.removeEventListener('mute', handlers.onMute);
+            track.removeEventListener('unmute', handlers.onUnmute);
+        } catch (err) {
+            // Ignore
+        }
+        this.localTrackHandlers.delete(track);
+    }
+
+    setupLocalTrackMonitoring() {
+        this.clearLocalTrackMonitoring();
+        if (!this.localStream) return;
+
+        this.localStream.getTracks().forEach(track => {
+            const onEnded = () => {
+                console.warn(`[WebRTC] ⚠️ Local ${track.kind} track ended, attempting recovery...`);
+                this.recoverLocalTrack(track.kind).catch(err => {
+                    console.error(`[WebRTC] ❌ Failed to recover ${track.kind} track:`, err);
+                });
+            };
+
+            const onMute = () => {
+                console.warn(`[WebRTC] ⚠️ Local ${track.kind} track muted`);
+                this.runMediaDiagnostics();
+            };
+
+            const onUnmute = () => {
+                console.log(`[WebRTC] 🔊 Local ${track.kind} track unmuted`);
+                this.runMediaDiagnostics();
+            };
+
+            track.addEventListener('ended', onEnded);
+            track.addEventListener('mute', onMute);
+            track.addEventListener('unmute', onUnmute);
+
+            this.localTrackHandlers.set(track, { onEnded, onMute, onUnmute });
+        });
+    }
+
+    async ensureLocalTracksActive() {
+        if (!this.localStream) {
+            const constraints = {
+                audio: this.expectedAudio ? {
+                    deviceId: sessionStorage.getItem('microphoneId') ? { exact: sessionStorage.getItem('microphoneId') } : undefined,
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true
+                } : false,
+                video: this.expectedVideo ? {
+                    deviceId: this.currentCameraId ? { exact: this.currentCameraId } : undefined,
+                    width: { ideal: 1920 },
+                    height: { ideal: 1080 },
+                    frameRate: { ideal: 30 },
+                    facingMode: 'user'
+                } : false
+            };
+
+            try {
+                this.localStream = await navigator.mediaDevices.getUserMedia(constraints);
+                if (this.localVideo) {
+                    this.localVideo.srcObject = this.localStream;
+                }
+                if (this.localPlaceholder) {
+                    this.localPlaceholder.classList.add('hidden');
+                    this.localPlaceholder.style.display = 'none';
+                }
+            } catch (error) {
+                console.error('[WebRTC] ❌ Failed to reacquire local media:', error);
+                return;
+            }
+        }
+
+        if (this.expectedAudio) {
+            const audioTrack = this.localStream.getAudioTracks()[0];
+            if (!audioTrack || audioTrack.readyState !== 'live') {
+                await this.recoverLocalTrack('audio');
+            }
+        }
+
+        if (this.expectedVideo) {
+            const videoTrack = this.localStream.getVideoTracks()[0];
+            if (!videoTrack || videoTrack.readyState !== 'live') {
+                await this.recoverLocalTrack('video');
+            }
+        }
+
+        this.setupLocalTrackMonitoring();
+        await this.runMediaDiagnostics();
+    }
+
+    async recoverLocalTrack(kind) {
+        if (this.trackRecoveryLocks[kind]) {
+            return;
+        }
+
+        if (kind === 'audio' && !this.expectedAudio) return;
+        if (kind === 'video' && !this.expectedVideo) return;
+
+        this.trackRecoveryLocks[kind] = true;
+
+        try {
+            const microphoneId = sessionStorage.getItem('microphoneId');
+            const constraints = kind === 'audio'
+                ? {
+                    audio: {
+                        deviceId: microphoneId ? { exact: microphoneId } : undefined,
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    },
+                    video: false
+                }
+                : {
+                    audio: false,
+                    video: {
+                        deviceId: this.currentCameraId ? { exact: this.currentCameraId } : undefined,
+                        width: { ideal: 1920 },
+                        height: { ideal: 1080 },
+                        frameRate: { ideal: 30 },
+                        facingMode: 'user'
+                    }
+                };
+
+            const replacementStream = await navigator.mediaDevices.getUserMedia(constraints);
+            const newTrack = kind === 'audio'
+                ? replacementStream.getAudioTracks()[0]
+                : replacementStream.getVideoTracks()[0];
+
+            if (!newTrack) {
+                throw new Error(`No ${kind} track returned from getUserMedia`);
+            }
+
+            if (!this.localStream) {
+                this.localStream = new MediaStream();
+            }
+
+            const tracksToRemove = kind === 'audio'
+                ? this.localStream.getAudioTracks()
+                : this.localStream.getVideoTracks();
+
+            tracksToRemove.forEach(track => {
+                this.removeTrackMonitoring(track);
+                const sender = this.peerConnection
+                    ? this.peerConnection.getSenders().find(s => s.track === track)
+                    : null;
+                if (sender) {
+                    sender.replaceTrack(null).catch(() => {});
+                }
+                track.stop();
+                this.localStream.removeTrack(track);
+            });
+
+            this.localStream.addTrack(newTrack);
+
+            replacementStream.getTracks().forEach(track => {
+                if (track !== newTrack) {
+                    track.stop();
+                }
+            });
+
+            if (this.peerConnection) {
+                const existingSender = this.peerConnection.getSenders().find(s => s.track && s.track.kind === kind);
+                if (existingSender) {
+                    await existingSender.replaceTrack(newTrack);
+                } else {
+                    this.peerConnection.addTrack(newTrack, this.localStream);
+                }
+            }
+
+            if (kind === 'video') {
+                this.currentCameraId = newTrack.getSettings().deviceId || this.currentCameraId;
+            }
+
+            if (this.localVideo) {
+                this.localVideo.srcObject = this.localStream;
+            }
+            if (this.localPlaceholder) {
+                this.localPlaceholder.classList.add('hidden');
+                this.localPlaceholder.style.display = 'none';
+            }
+
+            this.setupLocalTrackMonitoring();
+            await this.runMediaDiagnostics();
+
+            console.log(`[WebRTC] ✅ Recovered local ${kind} track`);
+        } catch (error) {
+            console.error(`[WebRTC] ❌ Failed to recover local ${kind} track:`, error);
+        } finally {
+            this.trackRecoveryLocks[kind] = false;
+        }
     }
 
     updateStatus(message, type = 'info') {
@@ -895,6 +1163,8 @@ class WebRTCManager {
         if (this.localStream) {
             this.localStream.getTracks().forEach(track => track.stop());
         }
+
+        this.clearLocalTrackMonitoring();
 
         // Close peer connection
         if (this.peerConnection) {

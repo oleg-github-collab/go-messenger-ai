@@ -38,6 +38,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     const userNameDisplay = document.getElementById('userName');
     const userLabel = document.getElementById('userLabel');
 
+    const mediaHealthBadge = createMediaHealthBadge();
+    updateMediaHealthBadge('warning', 'Checking devices…');
+
     // State
     let socket = null;
     let webrtc = null;
@@ -111,13 +114,19 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     participantDirectory.set('self', guestName);
-    emitNotetakerParticipants();
 
     // Initialize AI Notetaker (host only)
     if (typeof AINotetaker !== 'undefined') {
         notetaker = new AINotetaker(roomID, isHostSession);
         console.log('[CALL] 🤖 AI Notetaker initialized');
     }
+
+    emitNotetakerParticipants();
+
+    window.addEventListener('notetaker-sync-request', (event) => {
+        if (!event.detail || event.detail.roomID !== roomID) return;
+        emitNotetakerParticipants();
+    });
 
     function emitNotetakerParticipants() {
         if (!notetaker) return;
@@ -126,7 +135,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             roster.push({ id, name, isLocal: id === localParticipantId });
         });
         window.dispatchEvent(new CustomEvent('notetaker-participants', {
-            detail: { roomID, participants: roster }
+            detail: { roomID, participants: roster, mode: 'direct' }
         }));
     }
 
@@ -190,6 +199,50 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (socket && socket.readyState === WebSocket.OPEN) {
             e.preventDefault();
             return '';
+        }
+    });
+
+    window.addEventListener('media-health', (event) => {
+        const detail = event.detail;
+        if (!detail || detail.context !== 'direct') return;
+        updateMediaHealthBadge(detail.status || 'ok', detail.message || 'Devices ready');
+    });
+
+    window.addEventListener('offline', () => {
+        updateMediaHealthBadge('offline', 'No internet connection');
+        if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
+            socket.close(4000, 'offline');
+        }
+        if (heartbeatInterval) {
+            clearInterval(heartbeatInterval);
+            heartbeatInterval = null;
+        }
+        if (reconnectTimeout) {
+            clearTimeout(reconnectTimeout);
+            reconnectTimeout = null;
+        }
+        reconnectAttempts = 0;
+    });
+
+    window.addEventListener('online', () => {
+        updateMediaHealthBadge('warning', 'Reconnecting…');
+        reconnectAttempts = 0;
+
+        if (!socket || socket.readyState >= WebSocket.CLOSING) {
+            connectToRoom(roomID);
+        }
+
+        if (window.MediaHealth && webrtc && webrtc.localStream) {
+            window.MediaHealth.analyzeStream(webrtc.localStream, 'direct', {
+                expectsAudio: webrtc.expectedAudio,
+                expectsVideo: webrtc.expectedVideo
+            });
+        }
+
+        if (webrtc && typeof webrtc.ensureLocalTracksActive === 'function') {
+            webrtc.ensureLocalTracksActive().catch(err => {
+                console.warn('[CALL] ⚠️ Failed to ensure local tracks after reconnect:', err);
+            });
         }
     });
 
@@ -381,10 +434,26 @@ document.addEventListener('DOMContentLoaded', async () => {
             socket.onclose = (event) => {
                 console.log('[CALL] WebSocket disconnected', event.code, event.reason);
 
+                if (heartbeatInterval) {
+                    clearInterval(heartbeatInterval);
+                    heartbeatInterval = null;
+                }
+
+                if (reconnectTimeout) {
+                    clearTimeout(reconnectTimeout);
+                    reconnectTimeout = null;
+                }
+
                 // Clean up current connection state
                 if (webrtc && reconnectAttempts > 0) {
                     console.log('[CALL] Cleaning up WebRTC for reconnection...');
                     // Don't fully cleanup, just prepare for reconnect
+                }
+
+                if (!navigator.onLine) {
+                    console.warn('[CALL] Offline detected. Waiting for network to return before reconnecting.');
+                    socket = null;
+                    return;
                 }
 
                 // Attempt to reconnect with better backoff
@@ -413,6 +482,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                         connectToRoom(roomID);
                     }, 5000);
                 }
+
+                socket = null;
             };
 
             socket.onerror = (error) => {
@@ -1452,6 +1523,37 @@ document.addEventListener('DOMContentLoaded', async () => {
     setTimeout(() => {
         hideControls();
     }, 5000);
+
+    function createMediaHealthBadge() {
+        if (!callContainer) return null;
+
+        const badge = document.createElement('div');
+        badge.id = 'mediaHealthBadge';
+        badge.className = 'media-health-badge';
+        badge.innerHTML = `
+            <span class="badge-dot"></span>
+            <span class="badge-text">Checking devices…</span>
+        `;
+
+        callContainer.appendChild(badge);
+        return badge;
+    }
+
+    function updateMediaHealthBadge(state = 'ok', message = 'Devices ready') {
+        if (!mediaHealthBadge) return;
+
+        const states = ['ok', 'warning', 'error', 'offline'];
+        const normalized = states.includes(state) ? state : 'warning';
+
+        mediaHealthBadge.classList.remove('ok', 'warning', 'error', 'offline');
+        mediaHealthBadge.classList.add(normalized);
+        mediaHealthBadge.dataset.state = normalized;
+
+        const textEl = mediaHealthBadge.querySelector('.badge-text');
+        if (textEl) {
+            textEl.textContent = message;
+        }
+    }
 
     function cleanupCall() {
         console.log('[CALL] Cleaning up call...');

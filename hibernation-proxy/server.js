@@ -201,6 +201,10 @@ async function proxyRequest(req, res, dropletConfig) {
 }
 
 function sendLoadingPage(res, targetName, estimatedSeconds = 20) {
+  res.setHeader('Cache-Control', 'no-store, no-cache, must-revalidate, proxy-revalidate');
+  res.setHeader('Pragma', 'no-cache');
+  res.setHeader('Expires', '0');
+  res.setHeader('Retry-After', Math.max(estimatedSeconds, 10));
   res.setHeader('Content-Type', 'text/html; charset=utf-8');
   res.status(503).send(`
 <!DOCTYPE html>

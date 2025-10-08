@@ -66,6 +66,9 @@
         let audioChunks = [];
         let chunkTimer = null;
         let recordingStartTime = null;
+        let localCaptureStream = null;
+        let recordingStream = null;
+        let shouldSelfStopTracks = false;
 
         // Override toggleRecording to add Whisper support
         notetaker.toggleRecording = async function() {
@@ -74,11 +77,32 @@
                 console.log('[WHISPER-INTEGRATION] 🎙️ Starting Whisper-enhanced recording...');
 
                 try {
-                    // Get audio stream
-                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    // Get local audio stream
+                    const baseStream = await navigator.mediaDevices.getUserMedia({ audio: true });
+                    localCaptureStream = baseStream;
+
+                    // Ask notetaker to prepare a mixed stream if available
+                    shouldSelfStopTracks = false;
+                    try {
+                        if (typeof notetaker.prepareRecordingStream === 'function') {
+                            recordingStream = await notetaker.prepareRecordingStream(baseStream);
+                            shouldSelfStopTracks = false;
+                        } else {
+                            recordingStream = baseStream;
+                            shouldSelfStopTracks = true;
+                        }
+                    } catch (mixErr) {
+                        console.warn('[WHISPER-INTEGRATION] ⚠️ Failed to prepare mixed recording stream:', mixErr);
+                        recordingStream = baseStream;
+                        shouldSelfStopTracks = true;
+                    }
+
+                    if (!recordingStream) {
+                        recordingStream = baseStream;
+                    }
 
                     // Create audio recorder
-                    audioRecorder = new MediaRecorder(stream, {
+                    audioRecorder = new MediaRecorder(recordingStream, {
                         mimeType: 'audio/webm;codecs=opus',
                         audioBitsPerSecond: 128000
                     });
@@ -108,6 +132,18 @@
 
                         // Clear chunks
                         audioChunks = [];
+
+                        if (shouldSelfStopTracks && localCaptureStream) {
+                            try {
+                                localCaptureStream.getTracks().forEach(track => track.stop());
+                            } catch (stopErr) {
+                                console.warn('[WHISPER-INTEGRATION] ⚠️ Failed to stop local capture stream:', stopErr);
+                            }
+                        }
+
+                        recordingStream = null;
+                        localCaptureStream = null;
+                        shouldSelfStopTracks = false;
                     };
 
                     // Start recording
@@ -142,9 +178,6 @@
 
                 if (audioRecorder && audioRecorder.state !== 'inactive') {
                     audioRecorder.stop();
-
-                    // Stop all tracks
-                    audioRecorder.stream.getTracks().forEach(track => track.stop());
                 }
 
                 updateStatus('ready', 'Processing complete');
@@ -202,26 +235,31 @@
 
                 // Process result
                 if (result.text && result.text.trim().length > 0) {
-                    const timestamp = Date.now();
+                    if (window.notetaker && typeof window.notetaker.ingestTranscriptionResult === 'function') {
+                        window.notetaker.ingestTranscriptionResult(result, {
+                            language,
+                            capturedAt: Date.now(),
+                            duration: result.duration
+                        });
+                    } else {
+                        const timestamp = Date.now();
 
-                    // Add to transcript manager
-                    const entry = window.transcriptManager.addEntry(
-                        result.text.trim(),
-                        timestamp,
-                        'Host',
-                        {
-                            duration: result.duration,
-                            language: result.language,
-                            segments: result.segments
+                        const entry = window.transcriptManager.addEntry(
+                            result.text.trim(),
+                            timestamp,
+                            'Host',
+                            {
+                                duration: result.duration,
+                                language: result.language,
+                                segments: result.segments
+                            }
+                        );
+
+                        addTranscriptToUI(result.text.trim(), timestamp);
+
+                        if (result.segments) {
+                            autoCategorizeSegments(result.segments, entry.id);
                         }
-                    );
-
-                    // Add to UI
-                    addTranscriptToUI(result.text.trim(), timestamp);
-
-                    // Auto-categorize if segments available
-                    if (result.segments) {
-                        autoCategorizeSegments(result.segments, entry.id);
                     }
 
                     updateStatus('ready', 'Transcription complete');

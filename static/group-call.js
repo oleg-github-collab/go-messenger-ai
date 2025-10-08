@@ -38,6 +38,55 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
+    const mediaHealthBadge = createMediaHealthBadge();
+    updateMediaHealthBadge('warning', 'Checking devices…');
+
+    window.addEventListener('media-health', (event) => {
+        const detail = event.detail;
+        if (!detail || detail.context !== 'group') return;
+        updateMediaHealthBadge(detail.status || 'ok', detail.message || 'Devices ready');
+    });
+
+    window.addEventListener('offline', () => {
+        updateMediaHealthBadge('offline', 'No internet connection');
+
+        if (socket && (socket.readyState === WebSocket.OPEN || socket.readyState === WebSocket.CONNECTING)) {
+            socket.close(4000, 'offline');
+        }
+
+        if (heartbeatInterval) {
+            clearInterval(heartbeatInterval);
+            heartbeatInterval = null;
+        }
+
+        if (reconnectTimeout) {
+            clearTimeout(reconnectTimeout);
+            reconnectTimeout = null;
+        }
+
+        reconnectAttempts = 0;
+    });
+
+    window.addEventListener('online', () => {
+        updateMediaHealthBadge('warning', 'Reconnecting…');
+        reconnectAttempts = 0;
+
+        if (!socket || socket.readyState >= WebSocket.CLOSING) {
+            connectToSFU();
+        }
+
+        if (window.MediaHealth && localStream) {
+            window.MediaHealth.analyzeStream(localStream, 'group', {
+                expectsAudio: isMicOn,
+                expectsVideo: isCameraOn
+            });
+        }
+
+        if (localStream) {
+            monitorLocalTracks();
+        }
+    });
+
     let notetakerUIReadyPromise = null;
     async function ensureNotetakerUI() {
         if (notetakerUIReadyPromise) {
@@ -114,6 +163,208 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Dynacast - track visibility optimization
     let visibilityCheckInterval = null;
     let participantVisibility = new Map(); // participantId -> boolean
+
+    const trackObservers = new Map();
+    const trackRecoveryLocks = { audio: false, video: false };
+
+    function createMediaHealthBadge() {
+        const host = groupCallContainer || document.body;
+        if (!host) return null;
+
+        const badge = document.createElement('div');
+        badge.id = 'groupMediaHealthBadge';
+        badge.className = 'media-health-badge';
+        badge.innerHTML = `
+            <span class="badge-dot"></span>
+            <span class="badge-text">Checking devices…</span>
+        `;
+
+        host.appendChild(badge);
+        return badge;
+    }
+
+    function updateMediaHealthBadge(state = 'ok', message = 'Devices ready') {
+        if (!mediaHealthBadge) return;
+
+        const states = ['ok', 'warning', 'error', 'offline'];
+        const normalized = states.includes(state) ? state : 'warning';
+
+        mediaHealthBadge.classList.remove('ok', 'warning', 'error', 'offline');
+        mediaHealthBadge.classList.add(normalized);
+        mediaHealthBadge.dataset.state = normalized;
+
+        const textEl = mediaHealthBadge.querySelector('.badge-text');
+        if (textEl) {
+            textEl.textContent = message;
+        }
+    }
+
+    function clearTrackObservers() {
+        trackObservers.forEach((handlers, track) => {
+            try {
+                track.removeEventListener('ended', handlers.onEnded);
+                track.removeEventListener('mute', handlers.onMute);
+                track.removeEventListener('unmute', handlers.onUnmute);
+            } catch (err) {
+                // Ignore removal errors
+            }
+        });
+        trackObservers.clear();
+    }
+
+    function monitorLocalTracks() {
+        clearTrackObservers();
+
+        if (!localStream) {
+            return;
+        }
+
+        localStream.getTracks().forEach(track => {
+            const onEnded = () => {
+                console.warn(`[MEDIA] ⚠️ Local ${track.kind} track ended, attempting recovery...`);
+                recoverLocalTrack(track.kind).catch(err => {
+                    console.error(`[MEDIA] ❌ Failed to recover ${track.kind} track:`, err);
+                });
+            };
+
+            const onMute = () => {
+                console.warn(`[MEDIA] ⚠️ Local ${track.kind} track muted`);
+                if (window.MediaHealth && localStream) {
+                    window.MediaHealth.analyzeStream(localStream, 'group', {
+                        expectsAudio: isMicOn,
+                        expectsVideo: isCameraOn
+                    });
+                }
+            };
+
+            const onUnmute = () => {
+                console.log(`[MEDIA] 🔊 Local ${track.kind} track unmuted`);
+                if (window.MediaHealth && localStream) {
+                    window.MediaHealth.analyzeStream(localStream, 'group', {
+                        expectsAudio: isMicOn,
+                        expectsVideo: isCameraOn
+                    });
+                }
+            };
+
+            track.addEventListener('ended', onEnded);
+            track.addEventListener('mute', onMute);
+            track.addEventListener('unmute', onUnmute);
+
+            trackObservers.set(track, { onEnded, onMute, onUnmute });
+        });
+
+        if (window.MediaHealth && localStream) {
+            window.MediaHealth.analyzeStream(localStream, 'group', {
+                expectsAudio: isMicOn,
+                expectsVideo: isCameraOn
+            });
+        }
+    }
+
+    async function recoverLocalTrack(kind) {
+        if (trackRecoveryLocks[kind]) {
+            return;
+        }
+
+        const expectsAudio = kind === 'audio' ? isMicOn : isCameraOn;
+        if (!expectsAudio) return;
+
+        trackRecoveryLocks[kind] = true;
+
+        try {
+            const cameraId = sessionStorage.getItem('cameraId');
+            const microphoneId = sessionStorage.getItem('microphoneId');
+
+            const constraints = kind === 'audio'
+                ? {
+                    audio: buildAudioConstraints({
+                        deviceId: microphoneId ? { exact: microphoneId } : undefined
+                    }),
+                    video: false
+                }
+                : {
+                    audio: false,
+                    video: {
+                        deviceId: cameraId ? { exact: cameraId } : undefined,
+                        width: { ideal: 1280 },
+                        height: { ideal: 720 },
+                        frameRate: { ideal: 30 },
+                        facingMode: 'user'
+                    }
+                };
+
+            const replacementStream = await navigator.mediaDevices.getUserMedia(constraints);
+            const newTrack = kind === 'audio'
+                ? replacementStream.getAudioTracks()[0]
+                : replacementStream.getVideoTracks()[0];
+
+            if (!newTrack) {
+                throw new Error(`No ${kind} track returned from getUserMedia`);
+            }
+
+            if (!localStream) {
+                localStream = new MediaStream();
+            }
+
+            const existingTracks = kind === 'audio'
+                ? localStream.getAudioTracks()
+                : localStream.getVideoTracks();
+
+            existingTracks.forEach(track => {
+                const senders = peerConnection ? peerConnection.getSenders().filter(s => s.track === track) : [];
+                senders.forEach(sender => sender.replaceTrack(null).catch(() => {}));
+                const handlers = trackObservers.get(track);
+                if (handlers) {
+                    try {
+                        track.removeEventListener('ended', handlers.onEnded);
+                        track.removeEventListener('mute', handlers.onMute);
+                        track.removeEventListener('unmute', handlers.onUnmute);
+                    } catch (err) {
+                        // Ignore removal errors
+                    }
+                    trackObservers.delete(track);
+                }
+                track.stop();
+                localStream.removeTrack(track);
+            });
+
+            localStream.addTrack(newTrack);
+
+            replacementStream.getTracks().forEach(track => {
+                if (track !== newTrack) {
+                    track.stop();
+                }
+            });
+
+            if (peerConnection) {
+                const sender = peerConnection.getSenders().find(s => s.track && s.track.kind === kind);
+                if (sender) {
+                    await sender.replaceTrack(newTrack);
+                } else {
+                    peerConnection.addTrack(newTrack, localStream);
+                }
+            }
+
+            if (kind === 'video') {
+                if (previewVideo) {
+                    previewVideo.srcObject = localStream;
+                }
+                const localVideoEl = document.getElementById('localVideo');
+                if (localVideoEl) {
+                    localVideoEl.srcObject = localStream;
+                }
+            }
+
+            monitorLocalTracks();
+
+            console.log(`[MEDIA] ✅ Recovered local ${kind} track`);
+        } catch (error) {
+            console.error(`[MEDIA] ❌ Failed to recover local ${kind} track:`, error);
+        } finally {
+            trackRecoveryLocks[kind] = false;
+        }
+    }
 
     function buildAudioConstraints(extra = {}) {
         return {
@@ -395,6 +646,23 @@ document.addEventListener('DOMContentLoaded', async () => {
                 if (match) {
                     const participantId = match[1];
                     console.log('[GROUP-CALL] 📺 Extracted participant ID:', participantId);
+
+                    if (event.track.kind === 'audio') {
+                        try {
+                            const audioStream = new MediaStream([event.track]);
+                            window.dispatchEvent(new CustomEvent('notetaker-remote-track', {
+                                detail: {
+                                    roomID,
+                                    stream: audioStream,
+                                    participantId,
+                                    participantStreamId: streamId
+                                }
+                            }));
+                            console.log('[GROUP-CALL] 📡 Dispatched notetaker audio stream for participant:', participantId);
+                        } catch (err) {
+                            console.warn('[GROUP-CALL] ⚠️ Could not dispatch notetaker remote audio:', err);
+                        }
+                    }
 
                     // Function to attach stream to participant
                     const attachStream = () => {
@@ -1207,6 +1475,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         audio: isMicOn ? buildAudioConstraints() : false
                     });
                     console.log('[GROUP-CALL] ✅ Emergency recovery successful, got', localStream.getTracks().length, 'tracks');
+                    monitorLocalTracks();
                 } catch (recoveryErr) {
                     console.error('[GROUP-CALL] ❌ Emergency recovery failed:', recoveryErr);
                     alert('Failed to access camera/microphone. Please refresh and try again.');
@@ -1308,6 +1577,17 @@ document.addEventListener('DOMContentLoaded', async () => {
             pendingQualityLevel = currentBitrateLevel;
             lastSentQualityLevel = null;
 
+            if (reconnectTimeout) {
+                clearTimeout(reconnectTimeout);
+                reconnectTimeout = null;
+            }
+
+            if (!navigator.onLine) {
+                console.warn('[GROUP-CALL] Offline detected. Awaiting network restoration before reconnecting.');
+                socket = null;
+                return;
+            }
+
             // Attempt to reconnect
             if (reconnectAttempts < maxReconnectAttempts) {
                 reconnectAttempts++;
@@ -1325,6 +1605,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     connectToSFU();
                 }, 5000);
             }
+
+            socket = null;
         };
     }
 
@@ -1340,6 +1622,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 myName = data.name || 'You';
                 updateParticipantCount(data.participantCount || 1);
                 console.log('[GROUP-CALL] Joined as:', myParticipantId);
+                emitNotetakerParticipants();
                 break;
 
             case 'answer':
@@ -1378,6 +1661,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 existingParticipants.forEach(p => {
                     addParticipantTileEnhanced(p.id, p.name);
                 });
+                emitNotetakerParticipants();
                 updateParticipantCount(existingParticipants.length + 1);
                 break;
 
@@ -1385,6 +1669,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 // New participant joined
                 const joined = typeof message.data === 'string' ? JSON.parse(message.data) : message.data;
                 addParticipantTileEnhanced(joined.id, joined.name);
+                emitNotetakerParticipants();
                 updateParticipantCount(participants.size + 1);
                 break;
 
@@ -1392,6 +1677,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 // Participant left
                 const left = typeof message.data === 'string' ? JSON.parse(message.data) : message.data;
                 removeParticipantTileEnhanced(left.id);
+                emitNotetakerParticipants();
                 updateParticipantCount(participants.size + 1);
                 break;
 
@@ -1682,6 +1968,24 @@ document.addEventListener('DOMContentLoaded', async () => {
 
         // Store message data for replies
         messageDiv.dataset.text = text.startsWith('[GIF]') ? 'GIF' : text;
+
+        try {
+            window.dispatchEvent(new CustomEvent('notetaker-message', {
+                detail: {
+                    roomID,
+                    fromId,
+                    fromName: fromName || (fromId === myParticipantId ? myName : `Participant ${fromId}`),
+                    text,
+                    direction: type,
+                    isPrivate: !!isPrivate,
+                    timestamp: Date.now(),
+                    messageId,
+                    kind: 'chat'
+                }
+            }));
+        } catch (err) {
+            console.warn('[GROUP-CALL] ⚠️ Failed to dispatch notetaker message event:', err);
+        }
 
         return messageId;
     }
@@ -2025,6 +2329,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         });
 
         console.log('[GROUP-CALL] 👤 Participant stored. Total participants:', participants.size);
+        emitNotetakerParticipants();
 
         // Check if there's an orphan stream waiting for this participant
         if (orphanStreams.has(participantId)) {
@@ -2052,12 +2357,29 @@ document.addEventListener('DOMContentLoaded', async () => {
                     });
             };
             setTimeout(tryPlay, 100);
-            setTimeout(tryPlay, 500);
-        } else {
-            console.log('[GROUP-CALL] ℹ️ No orphan stream yet for:', participantName);
-        }
+                    setTimeout(tryPlay, 500);
+                } else {
+                    console.log('[GROUP-CALL] ℹ️ No orphan stream yet for:', participantName);
+                }
 
-        updateGridLayout();
+                if (!match && event.track.kind === 'audio') {
+                    try {
+                        const audioStream = new MediaStream([event.track]);
+                        window.dispatchEvent(new CustomEvent('notetaker-remote-track', {
+                            detail: {
+                                roomID,
+                                stream: audioStream,
+                                participantId: null,
+                                participantStreamId: streamId
+                            }
+                        }));
+                        console.log('[GROUP-CALL] 📡 Dispatched generic remote audio for notetaker');
+                    } catch (err) {
+                        console.warn('[GROUP-CALL] ⚠️ Failed to dispatch generic notetaker audio stream:', err);
+                    }
+                }
+
+                updateGridLayout();
         console.log('[GROUP-CALL] ✅ Added participant tile:', participantName);
     }
 
@@ -2094,6 +2416,7 @@ document.addEventListener('DOMContentLoaded', async () => {
     function removeParticipantTileEnhanced(participantId) {
         removeParticipantTile(participantId);
         updateRecipientList();
+        emitNotetakerParticipants();
     }
 
     // Update grid layout based on participant count
@@ -2150,6 +2473,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     localStream.addTrack(videoTrack);
                 }
 
+                monitorLocalTracks();
+
                 isCameraOn = true;
                 cameraBtn.dataset.active = 'true';
                 cameraBtn.querySelector('.icon-camera-on').style.display = 'block';
@@ -2168,6 +2493,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 cameraBtn.dataset.active = isCameraOn.toString();
                 cameraBtn.querySelector('.icon-camera-on').style.display = isCameraOn ? 'block' : 'none';
                 cameraBtn.querySelector('.icon-camera-off').style.display = isCameraOn ? 'none' : 'block';
+                monitorLocalTracks();
             }
         }
     }
@@ -2212,6 +2538,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                     localStream.addTrack(audioTrack);
                 }
 
+                monitorLocalTracks();
+
                 isMicOn = true;
                 micBtn.dataset.active = 'true';
                 micBtn.querySelector('.icon-mic-on').style.display = 'block';
@@ -2230,6 +2558,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                 micBtn.dataset.active = isMicOn.toString();
                 micBtn.querySelector('.icon-mic-on').style.display = isMicOn ? 'block' : 'none';
                 micBtn.querySelector('.icon-mic-off').style.display = isMicOn ? 'none' : 'block';
+                monitorLocalTracks();
             }
         }
     }
@@ -2913,6 +3242,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             previewStatus.textContent = isCameraOn ? 'Camera ready' : 'Camera off';
             console.log('[GROUP-CALL] ✅ Preview started - Camera:', isCameraOn, 'Mic:', isMicOn);
+
+            monitorLocalTracks();
         } catch (err) {
             console.error('[GROUP-CALL] ❌ Preview failed:', err.name, '-', err.message);
             previewStatus.textContent = 'Failed to access camera/mic';
@@ -2925,6 +3256,8 @@ document.addEventListener('DOMContentLoaded', async () => {
                 previewVideo.srcObject = localStream;
                 previewStatus.textContent = 'Using basic quality';
                 console.log('[GROUP-CALL] ✅ Fallback succeeded');
+
+                monitorLocalTracks();
             } catch (fallbackErr) {
                 console.error('[GROUP-CALL] ❌ Fallback also failed:', fallbackErr.name, '-', fallbackErr.message);
             }
@@ -2949,6 +3282,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                     localStream.addTrack(newVideoTrack);
                     previewVideo.srcObject = localStream;
                     previewStatus.textContent = 'Camera ready';
+                    monitorLocalTracks();
                 } catch (err) {
                     console.error('[GROUP-CALL] Failed to enable camera:', err);
                     previewStatus.textContent = 'Camera unavailable';
@@ -2956,6 +3290,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             } else {
                 previewVideo.srcObject = null;
                 previewStatus.textContent = 'Camera off';
+                monitorLocalTracks();
             }
         }
     });
@@ -2978,9 +3313,12 @@ document.addEventListener('DOMContentLoaded', async () => {
                     });
                     const newAudioTrack = newStream.getAudioTracks()[0];
                     localStream.addTrack(newAudioTrack);
+                    monitorLocalTracks();
                 } catch (err) {
                     console.error('[GROUP-CALL] Failed to enable mic:', err);
                 }
+            } else {
+                monitorLocalTracks();
             }
         }
     });
@@ -3026,6 +3364,7 @@ document.addEventListener('DOMContentLoaded', async () => {
         // Copy stream to local video
         localVideo.srcObject = localStream;
         console.log('[GROUP-CALL] ✅ Local video set');
+        monitorLocalTracks();
 
         // Update button states - SAFE with null checks
         try {
@@ -3208,3 +3547,48 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Start preview on page load
     startPreview();
 });
+    function emitNotetakerParticipants() {
+        const roster = [];
+        const seenIds = new Set();
+
+        participants.forEach((participant, participantId) => {
+            if (!participantId) return;
+            roster.push({
+                id: participantId,
+                name: participant.name || `Participant ${participantId}`,
+                isLocal: false
+            });
+            seenIds.add(participantId);
+        });
+
+        const fallbackId = myParticipantId || 'self';
+        const displayName = myName || 'You';
+
+        if (!seenIds.has(fallbackId)) {
+            roster.push({
+                id: fallbackId,
+                name: displayName,
+                isLocal: true
+            });
+        } else {
+            roster.forEach(item => {
+                if (item.id === fallbackId) {
+                    item.isLocal = true;
+                    item.name = displayName;
+                }
+            });
+        }
+
+        window.dispatchEvent(new CustomEvent('notetaker-participants', {
+            detail: {
+                roomID,
+                participants: roster,
+                mode: 'group'
+            }
+        }));
+    }
+
+    window.addEventListener('notetaker-sync-request', (event) => {
+        if (!event.detail || event.detail.roomID !== roomID) return;
+        emitNotetakerParticipants();
+    });

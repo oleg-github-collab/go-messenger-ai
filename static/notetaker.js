@@ -1,4 +1,77 @@
 // AI Notetaker - WebRTC Audio Recording & Analysis
+class NotetakerAudioMixer {
+    constructor() {
+        this.audioContext = null;
+        this.destination = null;
+        this.sources = new Map();
+    }
+
+    async init() {
+        if (this.audioContext) return;
+        const AudioContextCtor = window.AudioContext || window.webkitAudioContext;
+        if (!AudioContextCtor) {
+            throw new Error('AudioContext not supported in this browser');
+        }
+        this.audioContext = new AudioContextCtor();
+        this.destination = this.audioContext.createMediaStreamDestination();
+        await this.audioContext.resume().catch(() => {});
+    }
+
+    async addStream(stream, key = `stream_${Date.now()}`) {
+        if (!stream || this.sources.has(key)) return;
+        await this.init();
+        try {
+            const sourceNode = this.audioContext.createMediaStreamSource(stream);
+            sourceNode.connect(this.destination);
+            this.sources.set(key, { sourceNode, stream });
+        } catch (err) {
+            console.warn('[NOTETAKER] ⚠️ Failed to add stream to mixer:', err);
+        }
+    }
+
+    removeStream(key) {
+        const entry = this.sources.get(key);
+        if (!entry) return;
+        try {
+            entry.sourceNode.disconnect();
+        } catch (err) {
+            console.warn('[NOTETAKER] ⚠️ Failed to disconnect source node:', err);
+        }
+        this.sources.delete(key);
+    }
+
+    getStream() {
+        return this.destination ? this.destination.stream : null;
+    }
+
+    async resume() {
+        if (this.audioContext && this.audioContext.state === 'suspended') {
+            await this.audioContext.resume().catch(() => {});
+        }
+    }
+
+    cleanup() {
+        this.sources.forEach(({ sourceNode }) => {
+            try {
+                sourceNode.disconnect();
+            } catch (err) {
+                console.warn('[NOTETAKER] ⚠️ Failed to disconnect source during cleanup:', err);
+            }
+        });
+        this.sources.clear();
+
+        if (this.audioContext) {
+            try {
+                this.audioContext.close();
+            } catch (err) {
+                console.warn('[NOTETAKER] ⚠️ Failed to close audio context:', err);
+            }
+        }
+        this.audioContext = null;
+        this.destination = null;
+    }
+}
+
 class AINotetaker {
     constructor(roomID, isHost) {
         this.roomID = roomID;
@@ -31,6 +104,15 @@ class AINotetaker {
         this.rtDuration = document.getElementById('rtDuration');
         this.rtWordCount = document.getElementById('rtWordCount');
 
+        // Speaker controls
+        this.speakerSelect = document.getElementById('notetakerSpeakerSelect');
+        this.cycleSpeakerBtn = document.getElementById('notetakerCycleSpeakerBtn');
+        this.bookmarkBtn = document.getElementById('notetakerBookmarkBtn');
+        this.highlightBtn = document.getElementById('notetakerHighlightBtn');
+        this.floatingPanel = document.getElementById('notetakerFloatingPanel');
+        this.collapseBtn = document.getElementById('notetakerCollapseBtn');
+        this.expandBtn = document.getElementById('notetakerExpandBtn');
+
         // Pre-meeting setup elements
         this.setupToggleBtn = document.getElementById('setupToggleBtn');
         this.setupContent = document.getElementById('setupContent');
@@ -48,6 +130,23 @@ class AINotetaker {
         this.speakerFilter = 'both'; // 'both', 'me', 'partner'
         this.wordCount = 0;
         this.durationTimer = null;
+
+        // Participants & speaker mapping
+        this.participants = new Map();
+        this.speakerAssignments = new Map();
+        this.lastEntryBySpeaker = new Map();
+        this.entryElements = new Map();
+        this.activeSpeakerId = null;
+        this.localParticipantId = null;
+        this.lastAddedEntryId = null;
+
+        // Audio mixing
+        this.remoteStreams = new Map();
+        this.pendingRemoteStreams = new Map();
+        this.audioMixer = null;
+
+        // Panel state
+        this.isPanelCollapsed = false;
 
         // Meeting context for AI
         this.meetingContext = {
@@ -113,6 +212,8 @@ class AINotetaker {
 
         this.initEventListeners();
         this.initSpeechRecognition();
+        this.registerGlobalListeners();
+        this.restorePanelCollapsedState();
     }
 
     initEventListeners() {
@@ -153,6 +254,30 @@ class AINotetaker {
 
         if (this.rtCloseBtn) {
             this.rtCloseBtn.addEventListener('click', () => this.closeRTPanel());
+        }
+
+        if (this.speakerSelect) {
+            this.speakerSelect.addEventListener('change', (e) => this.setActiveSpeaker(e.target.value));
+        }
+
+        if (this.cycleSpeakerBtn) {
+            this.cycleSpeakerBtn.addEventListener('click', () => this.cycleActiveSpeaker());
+        }
+
+        if (this.bookmarkBtn) {
+            this.bookmarkBtn.addEventListener('click', () => this.bookmarkCurrentMoment());
+        }
+
+        if (this.highlightBtn) {
+            this.highlightBtn.addEventListener('click', () => this.toggleHighlightLastEntry());
+        }
+
+        if (this.collapseBtn) {
+            this.collapseBtn.addEventListener('click', () => this.setPanelCollapsed(true));
+        }
+
+        if (this.expandBtn) {
+            this.expandBtn.addEventListener('click', () => this.setPanelCollapsed(false));
         }
 
         // Filter buttons
@@ -485,6 +610,9 @@ class AINotetaker {
 
             console.log('[NOTETAKER] ✅ Recording stopped');
 
+            // Release audio capture resources
+            this.releaseRecordingResources();
+
             // Show analysis modal
             this.showAnalysisModal(durationStr);
 
@@ -764,72 +892,603 @@ class AINotetaker {
         }
     }
 
-    async addToRealtime(speaker, text) {
-        // Check filter
-        if (this.speakerFilter !== 'both' && this.speakerFilter !== speaker) {
-            return; // Skip if filtered out
+    registerGlobalListeners() {
+        this.participantsListener = (event) => {
+            if (!event || !event.detail) return;
+            this.updateParticipants(event.detail);
+        };
+        this.messageListener = (event) => {
+            if (!event || !event.detail) return;
+            this.handleExternalMessage(event.detail);
+        };
+        this.remoteTrackListener = (event) => {
+            if (!event || !event.detail) return;
+            this.trackRemoteStream(event.detail);
+        };
+
+        window.addEventListener('notetaker-participants', this.participantsListener);
+        window.addEventListener('notetaker-message', this.messageListener);
+        window.addEventListener('notetaker-remote-track', this.remoteTrackListener);
+
+        // Request initial data
+        try {
+            window.dispatchEvent(new CustomEvent('notetaker-sync-request', {
+                detail: { roomID: this.roomID }
+            }));
+        } catch (err) {
+            console.warn('[NOTETAKER] ⚠️ Failed to request participants sync:', err);
+        }
+    }
+
+    updateParticipants(detail) {
+        if (!detail || detail.roomID !== this.roomID || !Array.isArray(detail.participants)) {
+            return;
         }
 
-        // Remove empty state if exists
+        this.participants.clear();
+        let detectedLocal = null;
+
+        detail.participants.forEach(participant => {
+            if (!participant || !participant.id) return;
+            const info = {
+                name: participant.name || `Participant ${participant.id}`,
+                isLocal: !!participant.isLocal
+            };
+            this.participants.set(participant.id, info);
+            if (info.isLocal) {
+                detectedLocal = participant.id;
+            }
+        });
+
+        if (detectedLocal) {
+            this.localParticipantId = detectedLocal;
+        } else if (!this.localParticipantId && this.isHost && detail.participants.length > 0) {
+            this.localParticipantId = detail.participants[0].id;
+        }
+
+        this.refreshSpeakerSelect();
+    }
+
+    refreshSpeakerSelect() {
+        if (!this.speakerSelect) return;
+
+        const previouslySelected = this.activeSpeakerId || this.speakerSelect.value;
+        this.speakerSelect.innerHTML = '';
+
+        if (this.participants.size === 0) {
+            const option = document.createElement('option');
+            option.value = this.localParticipantId || 'host';
+            option.textContent = 'You';
+            this.speakerSelect.appendChild(option);
+            this.activeSpeakerId = option.value;
+            return;
+        }
+
+        this.participants.forEach((info, id) => {
+            const option = document.createElement('option');
+            option.value = id;
+            option.textContent = info.isLocal ? `${info.name} (You)` : info.name;
+            this.speakerSelect.appendChild(option);
+        });
+
+        let defaultId = previouslySelected;
+        if (!defaultId || !this.participants.has(defaultId)) {
+            defaultId = this.localParticipantId || this.participants.keys().next().value;
+        }
+
+        if (defaultId) {
+            this.speakerSelect.value = defaultId;
+            this.setActiveSpeaker(defaultId);
+        }
+    }
+
+    setActiveSpeaker(speakerId) {
+        if (!speakerId) return;
+        this.activeSpeakerId = speakerId;
+        if (this.speakerSelect && this.speakerSelect.value !== speakerId) {
+            this.speakerSelect.value = speakerId;
+        }
+    }
+
+    cycleActiveSpeaker() {
+        if (this.participants.size === 0) return;
+        const ids = Array.from(this.participants.keys());
+        if (this.localParticipantId && !ids.includes(this.localParticipantId)) {
+            ids.unshift(this.localParticipantId);
+        }
+
+        const currentIndex = ids.indexOf(this.activeSpeakerId || this.localParticipantId);
+        const nextIndex = currentIndex === -1 ? 0 : (currentIndex + 1) % ids.length;
+        const nextId = ids[nextIndex];
+        this.setActiveSpeaker(nextId);
+    }
+
+    getParticipantDisplayName(participantId) {
+        if (!participantId) return 'Unknown';
+        if (participantId === this.localParticipantId || participantId === 'host') {
+            const local = this.participants.get(participantId);
+            return local ? `${local.name} (You)` : 'You';
+        }
+        const info = this.participants.get(participantId);
+        if (info) return info.name;
+        return `Participant ${participantId}`;
+    }
+
+    getFirstRemoteParticipantId() {
+        for (const [id, info] of this.participants.entries()) {
+            if (!info.isLocal) return id;
+        }
+        return null;
+    }
+
+    handleExternalMessage(detail) {
+        if (!detail || detail.roomID !== this.roomID || !detail.text) return;
+
+        const isLocalDirection = detail.direction === 'sent';
+        let speakerId = detail.fromId;
+
+        if (!speakerId) {
+            speakerId = isLocalDirection ? (this.localParticipantId || 'host') : (this.getFirstRemoteParticipantId() || 'remote');
+        }
+
+        const speakerName = detail.fromName || this.getParticipantDisplayName(speakerId);
+
+        this.addToRealtime({
+            speakerId,
+            speakerName,
+            text: detail.text,
+            timestamp: detail.timestamp || Date.now(),
+            source: detail.kind || 'chat',
+            metadata: {
+                direction: detail.direction,
+                isPrivate: detail.isPrivate,
+                messageId: detail.messageId || null
+            }
+        });
+    }
+
+    trackRemoteStream(detail) {
+        if (!detail || detail.roomID !== this.roomID || !detail.stream) {
+            return;
+        }
+
+        const streamKey = detail.participantId || detail.participantStreamId || `remote-${Date.now()}`;
+        this.remoteStreams.set(streamKey, detail.stream);
+
+        if (this.audioMixer) {
+            this.audioMixer.addStream(detail.stream, streamKey).catch(err => {
+                console.warn('[NOTETAKER] ⚠️ Failed to add remote stream to mixer:', err);
+            });
+        } else {
+            this.pendingRemoteStreams.set(streamKey, detail.stream);
+        }
+    }
+
+    async prepareRecordingStream(localStream) {
+        if (!localStream) throw new Error('Local audio stream missing for notetaker');
+
+        this.localCaptureStream = localStream;
+        this.audioMixer = new NotetakerAudioMixer();
+
+        await this.audioMixer.addStream(localStream, 'local');
+
+        const addPromises = [];
+        this.remoteStreams.forEach((stream, key) => {
+            addPromises.push(this.audioMixer.addStream(stream, key));
+        });
+        this.pendingRemoteStreams.forEach((stream, key) => {
+            addPromises.push(this.audioMixer.addStream(stream, key));
+            this.pendingRemoteStreams.delete(key);
+        });
+
+        if (addPromises.length) {
+            await Promise.all(addPromises).catch(err => {
+                console.warn('[NOTETAKER] ⚠️ Failed to add some streams to mixer:', err);
+            });
+        }
+
+        await this.audioMixer.resume();
+        const mixedStream = this.audioMixer.getStream();
+        this.recordingStream = mixedStream || localStream;
+
+        return this.recordingStream;
+    }
+
+    releaseRecordingResources() {
+        if (this.audioMixer) {
+            this.audioMixer.cleanup();
+            this.audioMixer = null;
+        }
+
+        if (this.localCaptureStream) {
+            try {
+                this.localCaptureStream.getTracks().forEach(track => track.stop());
+            } catch (err) {
+                console.warn('[NOTETAKER] ⚠️ Failed to stop local capture stream:', err);
+            }
+            this.localCaptureStream = null;
+        }
+
+        this.recordingStream = null;
+    }
+
+    resolveCategoryData(category) {
+        if (!category) return null;
+        const categoryId = typeof category === 'string' ? category : category.id;
+
+        if (typeof meetingConfig !== 'undefined' && meetingConfig) {
+            const config = meetingConfig.getConfig ? meetingConfig.getConfig() : meetingConfig.config;
+            const categories = config?.categories || meetingConfig.categories || [];
+            const found = categories.find(cat => cat.id === categoryId || cat.name === categoryId);
+            if (found) {
+                return {
+                    id: found.id,
+                    name: found.name,
+                    color: found.color || '#3b82f6'
+                };
+            }
+        }
+
+        return {
+            id: categoryId,
+            name: typeof category === 'string' ? category : (category.name || categoryId),
+            color: category.color || '#3b82f6'
+        };
+    }
+
+    applyCategoriesToEntry(entryId, categories = []) {
+        if (!entryId || !Array.isArray(categories) || categories.length === 0) return;
+        const entryEl = this.entryElements.get(entryId);
+        if (!entryEl) return;
+
+        const normalized = categories.map(cat => this.resolveCategoryData(cat)).filter(Boolean);
+        if (normalized.length === 0) return;
+
+        const badge = entryEl.querySelector('.rt-category-badge');
+        const primary = normalized[0];
+
+        if (badge) {
+            badge.textContent = normalized.map(cat => cat.name).join(' • ');
+            badge.style.display = 'inline-block';
+            badge.style.background = `${primary.color}33`;
+            badge.style.color = primary.color;
+        }
+
+        entryEl.classList.add(`cat-${primary.id}`);
+        entryEl.style.borderLeftColor = primary.color;
+        entryEl.style.background = `linear-gradient(135deg, ${primary.color}15 0%, ${primary.color}08 100%)`;
+
+        const historyEntry = this.conversationHistory.find(item => item.id === entryId);
+        if (historyEntry) {
+            historyEntry.categories = normalized;
+        }
+
+        if (window.transcriptManager && typeof window.transcriptManager.categorizeEntry === 'function') {
+            normalized.forEach(cat => {
+                window.transcriptManager.categorizeEntry(entryId, cat.id, 0.9);
+            });
+        }
+    }
+
+    updateEntryHighlightState(entryId, isHighlighted) {
+        const entryEl = this.entryElements.get(entryId);
+        if (entryEl) {
+            entryEl.classList.toggle('highlighted', isHighlighted);
+        }
+
+        const historyEntry = this.conversationHistory.find(item => item.id === entryId);
+        if (historyEntry) {
+            historyEntry.isHighlight = isHighlighted;
+        }
+    }
+
+    updateBookmarkState(entryId, isBookmarked) {
+        const entryEl = this.entryElements.get(entryId);
+        if (entryEl) {
+            entryEl.classList.toggle('rt-bookmarked', isBookmarked);
+        }
+
+        const historyEntry = this.conversationHistory.find(item => item.id === entryId);
+        if (historyEntry) {
+            historyEntry.metadata = historyEntry.metadata || {};
+            historyEntry.metadata.bookmarked = isBookmarked;
+        }
+    }
+
+    getLastEntryIdForSpeaker(speakerId) {
+        if (speakerId && this.lastEntryBySpeaker.has(speakerId)) {
+            return this.lastEntryBySpeaker.get(speakerId);
+        }
+        return this.lastAddedEntryId;
+    }
+
+    bookmarkCurrentMoment() {
+        const entryId = this.getLastEntryIdForSpeaker(this.activeSpeakerId || this.localParticipantId);
+        if (!entryId) {
+            alert('No transcript entries to bookmark yet.');
+            return;
+        }
+
+        const historyEntry = this.conversationHistory.find(item => item.id === entryId);
+        const isBookmarked = !(historyEntry?.metadata?.bookmarked);
+        this.updateBookmarkState(entryId, isBookmarked);
+    }
+
+    toggleHighlightLastEntry() {
+        const entryId = this.getLastEntryIdForSpeaker(this.activeSpeakerId || this.localParticipantId);
+        if (!entryId) {
+            alert('No transcript entries to highlight yet.');
+            return;
+        }
+
+        let highlighted = false;
+        if (window.transcriptManager && typeof window.transcriptManager.toggleHighlight === 'function') {
+            highlighted = window.transcriptManager.toggleHighlight(entryId);
+        } else {
+            const historyEntry = this.conversationHistory.find(item => item.id === entryId);
+            highlighted = !(historyEntry?.isHighlight);
+        }
+
+        this.updateEntryHighlightState(entryId, highlighted);
+    }
+
+    setPanelCollapsed(collapsed) {
+        if (!this.floatingPanel) return;
+
+        if (collapsed) {
+            this.floatingPanel.classList.add('collapsed');
+            if (this.collapseBtn) this.collapseBtn.style.display = 'none';
+            if (this.expandBtn) this.expandBtn.style.display = 'inline-flex';
+        } else {
+            this.floatingPanel.classList.remove('collapsed');
+            if (this.collapseBtn) this.collapseBtn.style.display = 'inline-flex';
+            if (this.expandBtn) this.expandBtn.style.display = 'none';
+        }
+
+        this.isPanelCollapsed = collapsed;
+        this.savePanelCollapsedState(collapsed);
+    }
+
+    restorePanelCollapsedState() {
+        if (!this.floatingPanel) return;
+        const stored = localStorage.getItem('notetaker_panel_collapsed');
+        const collapsed = stored === 'true';
+        if (collapsed) {
+            this.setPanelCollapsed(true);
+        } else {
+            this.setPanelCollapsed(false);
+        }
+    }
+
+    savePanelCollapsedState(collapsed) {
+        try {
+            localStorage.setItem('notetaker_panel_collapsed', collapsed ? 'true' : 'false');
+        } catch (err) {
+            console.warn('[NOTETAKER] ⚠️ Failed to persist panel collapse state:', err);
+        }
+    }
+
+    resolveSpeakerId(label) {
+        if (!label) {
+            return this.localParticipantId || 'host';
+        }
+
+        if (this.speakerAssignments.has(label)) {
+            return this.speakerAssignments.get(label);
+        }
+
+        const normalized = label.toLowerCase();
+        if (normalized.includes('1') || normalized.includes('host')) {
+            const localId = this.localParticipantId || 'host';
+            this.speakerAssignments.set(label, localId);
+            return localId;
+        }
+
+        const assignedIds = new Set(this.speakerAssignments.values());
+        let candidate = null;
+        for (const [id, info] of this.participants.entries()) {
+            if (!info.isLocal && !assignedIds.has(id)) {
+                candidate = id;
+                break;
+            }
+        }
+        if (!candidate) {
+            candidate = this.getFirstRemoteParticipantId();
+        }
+        if (!candidate) {
+            candidate = `speaker-${this.speakerAssignments.size + 1}`;
+        }
+        this.speakerAssignments.set(label, candidate);
+        return candidate;
+    }
+
+    ingestTranscriptionResult(result, options = {}) {
+        if (!result || !result.text) return;
+
+        const baseTimestamp = options.capturedAt || Date.now();
+        const segments = Array.isArray(result.segments) && result.segments.length > 0
+            ? result.segments
+            : [{ text: result.text, start: 0, speaker: 'Speaker 1' }];
+
+        const createdEntryIds = [];
+
+        segments.forEach(segment => {
+            const segmentText = (segment.text || '').trim();
+            if (!segmentText) return;
+
+            const speakerId = this.resolveSpeakerId(segment.speaker || segment.spk || segment.speaker_tag || 'Speaker 1');
+            const speakerName = this.getParticipantDisplayName(speakerId);
+            const relativeMs = typeof segment.start === 'number' ? segment.start * 1000 : 0;
+            const timestamp = baseTimestamp + relativeMs;
+
+            const entryData = this.addToRealtime({
+                speakerId,
+                speakerName,
+                text: segmentText,
+                timestamp,
+                source: 'speech',
+                metadata: {
+                    segmentStart: segment.start,
+                    segmentEnd: segment.end,
+                    segmentId: segment.id || null,
+                    confidence: segment.avg_logprob || null,
+                    language: result.language || options.language || null
+                }
+            });
+
+            if (entryData && entryData.id) {
+                createdEntryIds.push(entryData.id);
+            }
+        });
+
+        // Auto categorization with keyword heuristic
+        if (segments && segments.length) {
+            segments.forEach((segment, index) => {
+                if (!createdEntryIds[index]) return;
+                if (!segment.text) return;
+
+                const lowerText = segment.text.toLowerCase();
+                const autoCategories = [];
+                if (lowerText.match(/action|todo|need to|необхідно|маємо зробити/)) {
+                    autoCategories.push('action');
+                }
+                if (lowerText.match(/decided|agree|вирішили|домовились|decision/)) {
+                    autoCategories.push('decision');
+                }
+                if (lowerText.match(/\?|how|what|why|коли|чому|яким чином/)) {
+                    autoCategories.push('question');
+                }
+                if (lowerText.match(/concern|problem|issue|хвилює|переживаю|ризик/)) {
+                    autoCategories.push('concern');
+                }
+
+                if (autoCategories.length > 0) {
+                    this.applyCategoriesToEntry(createdEntryIds[index], autoCategories);
+                }
+            });
+        }
+    }
+
+    async addToRealtime(entryInput) {
+        if (!entryInput || !entryInput.text) {
+            return null;
+        }
+
+        const speakerId = entryInput.speakerId || this.localParticipantId || 'host';
+        const speakerName = entryInput.speakerName || this.getParticipantDisplayName(speakerId);
+        const timestamp = entryInput.timestamp ? new Date(entryInput.timestamp) : new Date();
+        const source = entryInput.source || 'speech';
+
+        if (this.speakerFilter !== 'both') {
+            const isLocal = speakerId === this.localParticipantId || speakerId === 'host';
+            if (this.speakerFilter === 'me' && !isLocal) {
+                return null;
+            }
+            if (this.speakerFilter === 'partner' && isLocal) {
+                return null;
+            }
+        }
+
         const emptyState = this.rtContent.querySelector('.rt-empty-state');
         if (emptyState) {
             emptyState.remove();
         }
 
-        // Store in conversation history
-        const conversationEntry = { speaker, text, timestamp: new Date() };
-        this.conversationHistory.push(conversationEntry);
+        let transcriptEntry = null;
+        if (window.transcriptManager && typeof window.transcriptManager.addEntry === 'function') {
+            transcriptEntry = window.transcriptManager.addEntry(
+                entryInput.text,
+                timestamp.getTime(),
+                speakerName,
+                {
+                    speakerId,
+                    source,
+                    metadata: entryInput.metadata || {}
+                }
+            );
+        }
 
-        // Create transcript entry
+        const entryId = transcriptEntry?.id || entryInput.id || `nt-${Date.now()}-${Math.random().toString(16).slice(2)}`;
+
+        const entryData = {
+            id: entryId,
+            speakerId,
+            speakerName,
+            text: entryInput.text,
+            timestamp,
+            source,
+            metadata: entryInput.metadata || {},
+            categories: entryInput.categories ? [...entryInput.categories] : [],
+            isHighlight: !!entryInput.isHighlight
+        };
+
+        this.conversationHistory.push(entryData);
+        this.lastEntryBySpeaker.set(speakerId, entryId);
+        this.lastAddedEntryId = entryId;
+
         const entry = document.createElement('div');
-        entry.className = `rt-transcript-entry ${speaker} clickable`;
+        entry.className = `rt-transcript-entry clickable ${speakerId === this.localParticipantId ? 'local-speaker' : 'remote-speaker'}`;
+        entry.dataset.entryId = entryId;
+        entry.dataset.speakerId = speakerId;
 
-        const speakerName = speaker === 'me' ? 'You' : 'Partner';
-        const now = new Date();
-        const timestamp = now.toLocaleTimeString('en-US', { hour: '2-digit', minute: '2-digit', second: '2-digit' });
+        const timeLabel = timestamp.toLocaleTimeString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        });
 
         entry.innerHTML = `
-            <div class="rt-speaker">${speakerName}<span class="rt-category-badge" style="display:none;"></span></div>
-            <div class="rt-text">${text}</div>
-            <div class="rt-timestamp">${timestamp}</div>
+            <div class="rt-speaker">${speakerName}<span class="rt-category-badge" style="${entryData.categories.length ? '' : 'display:none;'}"></span></div>
+            <div class="rt-text">${entryData.text}</div>
+            <div class="rt-timestamp">${timeLabel}</div>
         `;
 
         this.rtContent.appendChild(entry);
+        this.entryElements.set(entryId, entry);
 
-        // Auto-scroll to bottom
         this.rtContent.scrollTop = this.rtContent.scrollHeight;
 
-        // Update word count
-        const words = text.split(/\s+/).filter(w => w.length > 0);
+        const words = entryData.text.split(/\s+/).filter(Boolean);
         this.wordCount += words.length;
         if (this.rtWordCount) {
             this.rtWordCount.textContent = `${this.wordCount} words`;
         }
 
-        // Analyze with AI if meeting context is set
-        if (this.meetingContext.goal || this.meetingContext.partnerInfo) {
-            this.analyzeStatementRealtime(entry, text, speaker);
+        this.transcript += `${speakerName}: ${entryData.text}\n`;
+
+        if (entryData.categories.length > 0) {
+            this.applyCategoriesToEntry(entryId, entryData.categories);
         }
 
-        // Add click handler for AI recommendations
+        if (entryData.isHighlight) {
+            this.updateEntryHighlightState(entryId, true);
+        }
+
+        if (entryData.metadata?.bookmarked) {
+            this.updateBookmarkState(entryId, true);
+        }
+
+        if (this.meetingContext.goal || this.meetingContext.partnerInfo) {
+            this.analyzeStatementRealtime(entry, entryData);
+        }
+
         entry.addEventListener('click', () => {
-            this.showAIRecommendation(text, speaker);
+            this.showAIRecommendation(entryData);
         });
+
+        return entryData;
     }
 
-    async analyzeStatementRealtime(entry, text, speaker) {
+    async analyzeStatementRealtime(entry, entryData) {
         try {
-            // Get config from meeting config manager
             const config = meetingConfig ? meetingConfig.getConfig() : null;
             if (!config) return;
 
             const enabledCategories = meetingConfig.getEnabledCategories();
             if (enabledCategories.length === 0) return;
 
-            // Build AI prompt
             const aiPrompt = meetingConfig.buildAIPrompt();
 
-            // Call OpenAI for quick categorization
             const response = await fetch('https://api.openai.com/v1/chat/completions', {
                 method: 'POST',
                 headers: {
@@ -845,7 +1504,7 @@ class AINotetaker {
                         },
                         {
                             role: 'user',
-                            content: `Statement by ${speaker}: "${text}"`
+                            content: `Statement by ${entryData.speakerName}: "${entryData.text}"`
                         }
                     ],
                     temperature: 0.3,
@@ -861,35 +1520,10 @@ class AINotetaker {
             const data = await response.json();
             const categoryId = data.choices[0].message.content.trim().toLowerCase();
 
-            // Find matching category
             const matchedCategory = enabledCategories.find(cat => cat.id === categoryId);
 
             if (matchedCategory) {
-                // Apply custom color and class
-                entry.classList.add(`cat-${categoryId}`);
-                entry.style.borderLeftColor = matchedCategory.color;
-                entry.style.background = `linear-gradient(135deg, ${matchedCategory.color}15 0%, ${matchedCategory.color}08 100%)`;
-
-                // Update badge
-                const badge = entry.querySelector('.rt-category-badge');
-                if (badge) {
-                    badge.textContent = matchedCategory.name;
-                    badge.style.background = `${matchedCategory.color}33`;
-                    badge.style.color = matchedCategory.color;
-                    badge.style.display = 'inline-block';
-                }
-
-                // Store category in conversationHistory for proper data flow
-                const historyEntry = this.conversationHistory.find(h => h.text === text && h.speaker === speaker);
-                if (historyEntry) {
-                    if (!historyEntry.categories) {
-                        historyEntry.categories = [];
-                    }
-                    if (!historyEntry.categories.includes(matchedCategory.name)) {
-                        historyEntry.categories.push(matchedCategory.name);
-                    }
-                }
-
+                this.applyCategoriesToEntry(entryData.id, [matchedCategory.id]);
                 console.log('[NOTETAKER] 🤖 Categorized as:', matchedCategory.name);
             }
         } catch (error) {
@@ -897,8 +1531,7 @@ class AINotetaker {
         }
     }
 
-    async showAIRecommendation(text, speaker) {
-        // Show modal with loading state
+    async showAIRecommendation(entryData) {
         this.aiRecModal.classList.add('active');
         this.aiRecBackdrop.classList.add('active');
         this.aiRecBody.innerHTML = `
@@ -909,12 +1542,10 @@ class AINotetaker {
         `;
 
         try {
-            // Build conversation context
             const recentHistory = this.conversationHistory.slice(-10).map(entry =>
-                `${entry.speaker === 'me' ? 'You' : 'Partner'}: ${entry.text}`
+                `${entry.speakerName || entry.speakerId}: ${entry.text}`
             ).join('\n');
 
-            // Call OpenAI for detailed recommendation
             const response = await fetch('https://api.openai.com/v1/chat/completions', {
                 method: 'POST',
                 headers: {
@@ -930,7 +1561,12 @@ class AINotetaker {
                         },
                         {
                             role: 'user',
-                            content: `Recent conversation:\n${recentHistory}\n\nAnalyze this statement by ${speaker}: "${text}"\n\nProvide specific recommendations on how to respond.`
+                            content: `Recent conversation:
+${recentHistory}
+
+Analyze this statement by ${entryData.speakerName}: "${entryData.text}"
+
+Provide specific recommendations on how to respond.`
                         }
                     ],
                     temperature: 0.7,
@@ -945,8 +1581,7 @@ class AINotetaker {
             const data = await response.json();
             const recommendation = JSON.parse(data.choices[0].message.content);
 
-            // Display recommendation
-            this.displayAIRecommendation(text, speaker, recommendation);
+            this.displayAIRecommendation(entryData, recommendation);
 
         } catch (error) {
             console.error('[NOTETAKER] AI recommendation error:', error);
@@ -959,12 +1594,12 @@ class AINotetaker {
         }
     }
 
-    displayAIRecommendation(text, speaker, recommendation) {
-        const speakerName = speaker === 'me' ? 'You' : 'Partner';
+    displayAIRecommendation(entryData, recommendation) {
+        const speakerName = entryData.speakerName || this.getParticipantDisplayName(entryData.speakerId);
 
         let html = `
             <div class="ai-rec-quote">
-                "${text}"
+                "${entryData.text}"
                 <div style="margin-top: 8px; color: #64748b; font-size: 12px;">— ${speakerName}</div>
             </div>
 
@@ -1058,15 +1693,31 @@ class AINotetaker {
 
     saveSessionState() {
         try {
+            const historySnapshot = this.conversationHistory.map(entry => ({
+                ...entry,
+                timestamp: entry.timestamp instanceof Date ? entry.timestamp.toISOString() : entry.timestamp,
+                categories: Array.isArray(entry.categories) ? entry.categories.map(cat => {
+                    if (!cat) return null;
+                    if (typeof cat === 'string') {
+                        return { id: cat, name: cat };
+                    }
+                    return {
+                        id: cat.id || cat.name,
+                        name: cat.name || cat.id,
+                        color: cat.color || '#3b82f6'
+                    };
+                }).filter(Boolean) : []
+            }));
+
             const state = {
                 sessionId: this.sessionId,
                 roomID: this.roomID,
                 startTime: this.startTime ? this.startTime.getTime() : null,
                 transcript: this.transcript,
-                conversationHistory: this.conversationHistory,
+                conversationHistory: historySnapshot,
                 wordCount: this.wordCount,
                 meetingContext: this.meetingContext,
-                savedAt: new Date().getTime()
+                savedAt: Date.now()
             };
 
             // Save to localStorage with session ID
@@ -1087,7 +1738,15 @@ class AINotetaker {
 
                 this.startTime = state.startTime ? new Date(state.startTime) : null;
                 this.transcript = state.transcript || '';
-                this.conversationHistory = state.conversationHistory || [];
+                this.conversationHistory = Array.isArray(state.conversationHistory) ? state.conversationHistory.map(entry => ({
+                    ...entry,
+                    timestamp: entry.timestamp ? new Date(entry.timestamp) : null,
+                    categories: Array.isArray(entry.categories) ? entry.categories.map(cat => ({
+                        id: cat.id || cat.name,
+                        name: cat.name || cat.id,
+                        color: cat.color || '#3b82f6'
+                    })) : []
+                })) : [];
                 this.wordCount = state.wordCount || 0;
                 this.meetingContext = state.meetingContext || this.meetingContext;
 
@@ -1145,6 +1804,27 @@ class AINotetaker {
         // Stop persistence timer
         this.stopPersistenceTimer();
 
+        // Remove global listeners
+        if (this.participantsListener) {
+            window.removeEventListener('notetaker-participants', this.participantsListener);
+            this.participantsListener = null;
+        }
+        if (this.messageListener) {
+            window.removeEventListener('notetaker-message', this.messageListener);
+            this.messageListener = null;
+        }
+        if (this.remoteTrackListener) {
+            window.removeEventListener('notetaker-remote-track', this.remoteTrackListener);
+            this.remoteTrackListener = null;
+        }
+
+        // Release audio resources
+        this.releaseRecordingResources();
+        this.pendingRemoteStreams.clear();
+        this.remoteStreams.clear();
+        this.entryElements.clear();
+        this.lastEntryBySpeaker.clear();
+
         // Reset state
         this.isRecording = false;
         this.isTogglingRecording = false;
@@ -1172,14 +1852,14 @@ class AINotetaker {
             console.log('[NOTETAKER] ✅ Using conversationHistory data (', this.conversationHistory.length, 'entries)');
 
             entries = this.conversationHistory.map(entry => ({
-                speaker: entry.speaker === 'me' ? 'You' : 'Partner',
+                speaker: entry.speakerName || this.getParticipantDisplayName(entry.speakerId) || 'Participant',
                 text: entry.text || '',
                 timestamp: entry.timestamp ? new Date(entry.timestamp).toLocaleTimeString('en-US', {
                     hour: '2-digit',
                     minute: '2-digit',
                     second: '2-digit'
                 }) : '',
-                categories: entry.categories || []
+                categories: Array.isArray(entry.categories) ? entry.categories.map(cat => cat.name || cat.id || cat) : []
             }));
         } else {
             // FALLBACK: Scrape from DOM if conversationHistory is empty
