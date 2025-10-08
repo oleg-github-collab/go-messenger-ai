@@ -1293,6 +1293,32 @@ func startNotetakerHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// SECURITY: Verify user is host of this room
+	userID := r.Header.Get("X-User-ID")
+	mu.Lock()
+	room, roomExists := rooms[req.RoomID]
+	mu.Unlock()
+
+	if roomExists && room.HostID != userID {
+		log.Printf("[NOTETAKER] ❌ Unauthorized: user %s is not host of room %s", userID, req.RoomID)
+		http.Error(w, "unauthorized: only host can start notetaker", http.StatusForbidden)
+		return
+	}
+
+	// If room not in memory, check Redis
+	if !roomExists {
+		meeting, err := getMeeting(req.RoomID)
+		if err != nil || meeting == nil {
+			http.Error(w, "room not found", http.StatusNotFound)
+			return
+		}
+		if meeting["host_user_id"].(string) != userID {
+			log.Printf("[NOTETAKER] ❌ Unauthorized: user %s is not host of room %s (Redis)", userID, req.RoomID)
+			http.Error(w, "unauthorized: only host can start notetaker", http.StatusForbidden)
+			return
+		}
+	}
+
 	mu.Lock()
 	if _, exists := notetakerSessions[req.RoomID]; exists {
 		mu.Unlock()
@@ -1309,7 +1335,7 @@ func startNotetakerHandler(w http.ResponseWriter, r *http.Request) {
 	notetakerSessions[req.RoomID] = session
 	mu.Unlock()
 
-	log.Printf("[NOTETAKER] 🎙️ Started for room %s", req.RoomID)
+	log.Printf("[NOTETAKER] 🎙️ Started for room %s by host %s", req.RoomID, userID)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
@@ -1335,6 +1361,32 @@ func stopNotetakerHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
+	// SECURITY: Verify user is host of this room
+	userID := r.Header.Get("X-User-ID")
+	mu.Lock()
+	room, roomExists := rooms[req.RoomID]
+	mu.Unlock()
+
+	if roomExists && room.HostID != userID {
+		log.Printf("[NOTETAKER] ❌ Unauthorized stop: user %s is not host of room %s", userID, req.RoomID)
+		http.Error(w, "unauthorized: only host can stop notetaker", http.StatusForbidden)
+		return
+	}
+
+	// If room not in memory, check Redis
+	if !roomExists {
+		meeting, err := getMeeting(req.RoomID)
+		if err != nil || meeting == nil {
+			http.Error(w, "room not found", http.StatusNotFound)
+			return
+		}
+		if meeting["host_user_id"].(string) != userID {
+			log.Printf("[NOTETAKER] ❌ Unauthorized stop: user %s is not host of room %s (Redis)", userID, req.RoomID)
+			http.Error(w, "unauthorized: only host can stop notetaker", http.StatusForbidden)
+			return
+		}
+	}
+
 	mu.Lock()
 	session, exists := notetakerSessions[req.RoomID]
 	if !exists {
@@ -1346,7 +1398,7 @@ func stopNotetakerHandler(w http.ResponseWriter, r *http.Request) {
 	mu.Unlock()
 
 	duration := time.Since(session.StartTime)
-	log.Printf("[NOTETAKER] 🛑 Stopped for room %s (duration: %v)", req.RoomID, duration)
+	log.Printf("[NOTETAKER] 🛑 Stopped for room %s by host %s (duration: %v)", req.RoomID, userID, duration)
 
 	// Use provided transcript or return empty
 	transcript := req.Transcript
