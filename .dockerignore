@@ -1,8 +1,14 @@
 .git
 .gitignore
-README.md
-ARCHITECTURE.md
-DEPLOYMENT_GUIDE.md
 *.md
 .env
 .DS_Store
+Makefile
+test-*
+*.log
+infrastructure/
+.railway/
+railway.toml
+railway.json
+.vscode/
+.idea/
