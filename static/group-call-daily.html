@@ -13,8 +13,8 @@
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
-            background: #1a1a1a;
+            font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
             color: white;
             overflow: hidden;
         }
@@ -30,6 +30,44 @@
             height: 100%;
         }
 
+        /* Top Status Bar */
+        .status-bar {
+            position: absolute;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            z-index: 1000;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 24px;
+            padding: 12px 24px;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #10b981;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { opacity: 1; }
+            50% { opacity: 0.5; }
+        }
+
+        .status-text {
+            font-size: 14px;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.9);
+        }
+
+        /* Loading State */
         .loading {
             position: absolute;
             top: 50%;
@@ -37,21 +75,30 @@
             transform: translate(-50%, -50%);
             text-align: center;
             z-index: 1000;
-            background: rgba(0, 0, 0, 0.8);
-            padding: 40px;
-            border-radius: 16px;
+            background: rgba(255, 255, 255, 0.05);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            padding: 48px 40px;
+            border-radius: 24px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+            min-width: 320px;
         }
 
         .loading h2 {
-            margin-bottom: 20px;
+            margin-bottom: 24px;
             font-size: 24px;
+            font-weight: 600;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
         }
 
         .spinner {
             width: 50px;
             height: 50px;
-            border: 4px solid rgba(255, 255, 255, 0.1);
-            border-top-color: #4ECDC4;
+            border: 4px solid rgba(102, 126, 234, 0.2);
+            border-top-color: #667eea;
             border-radius: 50%;
             animation: spin 1s linear infinite;
             margin: 0 auto;
@@ -61,91 +108,122 @@
             to { transform: rotate(360deg); }
         }
 
+        .loading p {
+            margin-top: 20px;
+            opacity: 0.7;
+            font-size: 14px;
+        }
+
+        /* Error State */
         .error {
             position: absolute;
             top: 50%;
             left: 50%;
             transform: translate(-50%, -50%);
-            background: rgba(239, 68, 68, 0.9);
-            padding: 30px;
-            border-radius: 16px;
+            background: rgba(239, 68, 68, 0.1);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            padding: 40px;
+            border-radius: 24px;
             max-width: 500px;
             text-align: center;
+            box-shadow: 0 8px 32px rgba(239, 68, 68, 0.2);
         }
 
         .error h2 {
-            margin-bottom: 15px;
-        }
-
-        .error button {
-            margin-top: 20px;
-            padding: 12px 24px;
-            background: white;
-            color: #ef4444;
-            border: none;
-            border-radius: 8px;
-            font-size: 16px;
-            cursor: pointer;
+            margin-bottom: 16px;
+            color: #fca5a5;
+            font-size: 22px;
             font-weight: 600;
         }
 
+        .error p {
+            color: rgba(255, 255, 255, 0.8);
+            line-height: 1.6;
+        }
+
+        .error button {
+            margin-top: 24px;
+            padding: 12px 32px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 15px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 16px rgba(102, 126, 234, 0.3);
+        }
+
         .error button:hover {
-            background: #f0f0f0;
+            transform: translateY(-2px);
+            box-shadow: 0 6px 20px rgba(102, 126, 234, 0.4);
         }
 
-        .controls {
+        .error button:active {
+            transform: translateY(0);
+        }
+
+        /* Back Button */
+        .back-button {
             position: absolute;
-            bottom: 30px;
-            left: 50%;
-            transform: translateX(-50%);
-            display: flex;
-            gap: 15px;
-            z-index: 100;
-        }
-
-        .control-btn {
-            width: 60px;
-            height: 60px;
+            top: 20px;
+            left: 20px;
+            z-index: 1000;
+            width: 48px;
+            height: 48px;
             border-radius: 50%;
             border: none;
             background: rgba(255, 255, 255, 0.1);
-            backdrop-filter: blur(10px);
+            backdrop-filter: blur(20px);
+            border: 1px solid rgba(255, 255, 255, 0.2);
             cursor: pointer;
-            font-size: 24px;
-            transition: all 0.3s;
             display: flex;
             align-items: center;
             justify-content: center;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 16px rgba(0, 0, 0, 0.2);
         }
 
-        .control-btn:hover {
+        .back-button:hover {
             background: rgba(255, 255, 255, 0.2);
-            transform: scale(1.1);
+            transform: scale(1.05);
         }
 
-        .control-btn.active {
-            background: #ef4444;
-        }
-
-        .end-btn {
-            background: #ef4444;
-        }
-
-        .end-btn:hover {
-            background: #dc2626;
+        .back-button svg {
+            width: 24px;
+            height: 24px;
+            stroke: white;
         }
     </style>
 </head>
 <body>
     <div id="callContainer">
+        <!-- Back Button -->
+        <button class="back-button" onclick="window.location.href='/home'" title="Back to Home">
+            <svg viewBox="0 0 24 24" fill="none">
+                <path d="M15 18L9 12L15 6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
+            </svg>
+        </button>
+
+        <!-- Status Bar -->
+        <div class="status-bar" id="statusBar" style="display: none;">
+            <div class="status-dot"></div>
+            <span class="status-text" id="statusText">Connected</span>
+        </div>
+
+        <!-- Loading State -->
         <div class="loading" id="loading">
             <h2>Creating connection...</h2>
             <div class="spinner"></div>
-            <p style="margin-top: 20px; opacity: 0.7;">Setting up your meeting</p>
+            <p>Setting up your meeting</p>
         </div>
 
+        <!-- Daily.co Frame -->
         <div id="dailyFrame"></div>
 
+        <!-- Error State -->
         <div id="errorMessage" class="error" style="display: none;">
             <h2>Connection Failed</h2>
             <p id="errorText"></p>
@@ -261,6 +339,12 @@
 
                 console.log('[GROUP-CALL-DAILY] ✅ Joined successfully!');
 
+                // Show status bar after joining
+                setTimeout(() => {
+                    document.getElementById('statusBar').style.display = 'flex';
+                    updateStatus('Connected');
+                }, 1000);
+
                 // Setup event listeners
                 setupEventListeners();
 
@@ -270,14 +354,25 @@
             }
         }
 
+        function updateStatus(text) {
+            const statusText = document.getElementById('statusText');
+            if (statusText) {
+                statusText.textContent = text;
+            }
+        }
+
         function setupEventListeners() {
             // Handle participant events
             callFrame.on('participant-joined', (event) => {
                 console.log('[GROUP-CALL-DAILY] 👤 Participant joined:', event.participant.user_name);
+                updateStatus(`${event.participant.user_name} joined`);
+                setTimeout(() => updateStatus('Connected'), 3000);
             });
 
             callFrame.on('participant-left', (event) => {
                 console.log('[GROUP-CALL-DAILY] 👋 Participant left:', event.participant.user_name);
+                updateStatus(`${event.participant.user_name} left`);
+                setTimeout(() => updateStatus('Connected'), 3000);
             });
 
             // Handle call state
