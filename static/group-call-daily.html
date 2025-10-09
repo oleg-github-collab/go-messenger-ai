@@ -674,6 +674,120 @@
         .stats-content strong {
             color: #667eea;
         }
+
+        /* Background Selection Modal */
+        .bg-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(8px);
+            z-index: 10002;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.2s ease-out;
+        }
+
+        .bg-modal {
+            background: rgba(26, 26, 26, 0.98);
+            backdrop-filter: blur(40px);
+            border: 1.5px solid rgba(255, 255, 255, 0.15);
+            border-radius: 24px;
+            max-width: 700px;
+            width: 90%;
+            max-height: 85vh;
+            overflow: hidden;
+            animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        .bg-modal-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .bg-modal-header h3 {
+            margin: 0;
+            font-size: 20px;
+            font-weight: 700;
+            color: white;
+        }
+
+        .bg-modal-content {
+            padding: 24px;
+            max-height: calc(85vh - 80px);
+            overflow-y: auto;
+        }
+
+        .bg-option-section {
+            margin-bottom: 32px;
+        }
+
+        .bg-option-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .bg-option-section h4 {
+            margin: 0 0 16px 0;
+            font-size: 14px;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.7);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .bg-options-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+            gap: 12px;
+        }
+
+        .bg-option {
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: 16px;
+            padding: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+            align-items: center;
+        }
+
+        .bg-option:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(102, 126, 234, 0.5);
+            transform: translateY(-2px);
+        }
+
+        .bg-option.active {
+            background: rgba(102, 126, 234, 0.2);
+            border-color: #667eea;
+        }
+
+        .bg-preview {
+            width: 100%;
+            aspect-ratio: 16/9;
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 32px;
+            overflow: hidden;
+        }
+
+        .bg-option span {
+            font-size: 13px;
+            font-weight: 500;
+            color: white;
+            text-align: center;
+        }
     </style>
 </head>
 <body>
@@ -1060,30 +1174,39 @@
                         <div class="more-menu-content">
             `;
 
-            // Audio & Video Controls
+            // Background & Video Settings (FREE features only)
             menuHTML += `
                 <div class="menu-section">
-                    <h4>🎧 Audio & Video</h4>
-                    <button class="menu-item" onclick="toggleBackgroundBlur()">
+                    <h4>🎨 Background & Video</h4>
+                    <button class="menu-item" onclick="showBackgroundOptions()">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="12" cy="12" r="3"/>
-                            <path d="M12 2v4m0 12v4M4.22 4.22l2.83 2.83m9.9 9.9l2.83 2.83M2 12h4m12 0h4M4.22 19.78l2.83-2.83m9.9-9.9l2.83-2.83"/>
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                            <circle cx="8.5" cy="8.5" r="1.5"/>
+                            <polyline points="21 15 16 10 5 21"/>
                         </svg>
-                        Toggle Background Blur
+                        Choose Background (Blur/Image)
+                    </button>
+                    <button class="menu-item" onclick="uploadCustomBackground()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                            <polyline points="17 8 12 3 7 8"/>
+                            <line x1="12" y1="3" x2="12" y2="15"/>
+                        </svg>
+                        Upload Custom Background
                     </button>
                     <button class="menu-item" onclick="setVideoQuality('high')">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M23 7l-7 5 7 5V7z"/>
                             <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
                         </svg>
-                        Set Video Quality: High
+                        Video Quality: HD 720p
                     </button>
                     <button class="menu-item" onclick="setVideoQuality('low')">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M23 7l-7 5 7 5V7z"/>
                             <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
                         </svg>
-                        Set Video Quality: Low (Save Bandwidth)
+                        Video Quality: Low (Save Data)
                     </button>
                 </div>
             `;
@@ -1120,33 +1243,24 @@
                 </div>
             `;
 
-            // Recording & Streaming
+            // Local Recording (Browser-based, FREE)
             menuHTML += `
                 <div class="menu-section">
-                    <h4>🎥 Recording & Streaming</h4>
-                    <button class="menu-item" onclick="toggleRecording()">
-                        <svg viewBox="0 0 24 24" fill="currentColor">
-                            <circle cx="12" cy="12" r="10"/>
-                        </svg>
-                        Start Cloud Recording
-                    </button>
+                    <h4>🎥 Recording (Local Only - Free)</h4>
                     <button class="menu-item" onclick="toggleLocalRecording()">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <circle cx="12" cy="12" r="10"/>
                             <path d="M12 6v6l4 2"/>
                         </svg>
-                        Start Local Recording
+                        ${window.localRecorderActive ? 'Stop' : 'Start'} Browser Recording
                     </button>
-                    <button class="menu-item" onclick="startLiveStream()">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polygon points="5 3 19 12 5 21 5 3"/>
-                        </svg>
-                        Start Live Stream (RTMP)
-                    </button>
+                    <p style="font-size: 12px; color: rgba(255,255,255,0.6); margin: 8px 16px 0;">
+                        Records to your device. Cloud recording requires paid plan.
+                    </p>
                 </div>
             `;
 
-            // Network & Performance
+            // Network Stats (FREE)
             menuHTML += `
                 <div class="menu-section">
                     <h4>📊 Network & Performance</h4>
@@ -1155,50 +1269,6 @@
                             <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
                         </svg>
                         Show Network Stats
-                    </button>
-                    <button class="menu-item" onclick="testBandwidth()">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="12" cy="12" r="10"/>
-                            <polyline points="12 6 12 12 16 14"/>
-                        </svg>
-                        Run Bandwidth Test
-                    </button>
-                </div>
-            `;
-
-            // Advanced Features
-            menuHTML += `
-                <div class="menu-section">
-                    <h4>⚡ Advanced Features</h4>
-                    <button class="menu-item" onclick="enableTranscription()">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
-                            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
-                        </svg>
-                        Enable Live Transcription
-                    </button>
-                    <button class="menu-item" onclick="toggleNoiseCancellation()">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
-                            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
-                        </svg>
-                        Advanced Noise Cancellation
-                    </button>
-                    <button class="menu-item" onclick="setLayout('grid')">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="3" y="3" width="7" height="7"/>
-                            <rect x="14" y="3" width="7" height="7"/>
-                            <rect x="14" y="14" width="7" height="7"/>
-                            <rect x="3" y="14" width="7" height="7"/>
-                        </svg>
-                        Grid Layout
-                    </button>
-                    <button class="menu-item" onclick="setLayout('speaker')">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-                            <rect x="7" y="7" width="10" height="10"/>
-                        </svg>
-                        Speaker Layout
                     </button>
                 </div>
             `;
@@ -1221,26 +1291,148 @@
         // DAILY.CO API IMPLEMENTATIONS
         // ============================================
 
-        // Audio & Video Controls
-        async function toggleBackgroundBlur() {
+        // ============================================
+        // BACKGROUND OPTIONS (FREE)
+        // ============================================
+
+        let currentBackgroundType = 'none'; // 'none', 'blur', 'image'
+        let customBackgroundImage = null;
+
+        // Preset backgrounds gallery
+        const backgroundPresets = [
+            'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=1920&q=80', // Gradient abstract
+            'https://images.unsplash.com/photo-1557683316-973673baf926?w=1920&q=80', // Gradient blue
+            'https://images.unsplash.com/photo-1620121692029-d088224ddc74?w=1920&q=80', // Gradient purple
+            'https://images.unsplash.com/photo-1604076984203-587c92ab2e58?w=1920&q=80', // Office blur
+            'https://images.unsplash.com/photo-1497366216548-37526070297c?w=1920&q=80', // Modern office
+            'https://images.unsplash.com/photo-1497366811353-6870744d04b2?w=1920&q=80', // Coworking space
+            'https://images.unsplash.com/photo-1525268771113-32d9e9021a97?w=1920&q=80', // Bookshelf
+            'https://images.unsplash.com/photo-1519681393784-d120267933ba?w=1920&q=80', // Mountains
+        ];
+
+        function showBackgroundOptions() {
+            hideMoreMenu();
+
+            const bgModal = document.createElement('div');
+            bgModal.className = 'bg-modal-overlay';
+            bgModal.innerHTML = `
+                <div class="bg-modal">
+                    <div class="bg-modal-header">
+                        <h3>🎨 Choose Background</h3>
+                        <button class="close-btn" onclick="this.closest('.bg-modal-overlay').remove()">×</button>
+                    </div>
+                    <div class="bg-modal-content">
+                        <div class="bg-option-section">
+                            <h4>Effects</h4>
+                            <div class="bg-options-grid">
+                                <button class="bg-option ${currentBackgroundType === 'none' ? 'active' : ''}" onclick="setBackground('none')">
+                                    <div class="bg-preview" style="background: #1a1a1a;">
+                                        <span>❌</span>
+                                    </div>
+                                    <span>None</span>
+                                </button>
+                                <button class="bg-option ${currentBackgroundType === 'blur' ? 'active' : ''}" onclick="setBackground('blur')">
+                                    <div class="bg-preview" style="background: radial-gradient(circle, rgba(102,126,234,0.5) 0%, rgba(118,75,162,0.5) 100%); backdrop-filter: blur(20px);">
+                                        <span>💫</span>
+                                    </div>
+                                    <span>Blur</span>
+                                </button>
+                            </div>
+                        </div>
+
+                        <div class="bg-option-section">
+                            <h4>Image Backgrounds</h4>
+                            <div class="bg-options-grid">
+                                ${backgroundPresets.map((url, i) => `
+                                    <button class="bg-option" onclick="setBackground('image', '${url}')">
+                                        <div class="bg-preview" style="background-image: url('${url}'); background-size: cover; background-position: center;">
+                                        </div>
+                                        <span>Style ${i + 1}</span>
+                                    </button>
+                                `).join('')}
+                            </div>
+                        </div>
+
+                        <div class="bg-option-section">
+                            <button class="menu-item" onclick="uploadCustomBackground()" style="width: 100%; margin-top: 12px;">
+                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
+                                    <polyline points="17 8 12 3 7 8"/>
+                                    <line x1="12" y1="3" x2="12" y2="15"/>
+                                </svg>
+                                Upload Your Own Image
+                            </button>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(bgModal);
+        }
+
+        async function setBackground(type, imageUrl = null) {
             try {
-                const localVideo = callFrame.localVideo();
-                if (localVideo && localVideo.processor) {
+                if (type === 'none') {
                     await callFrame.updateInputSettings({
                         video: { processor: { type: 'none' } }
                     });
-                    alert('Background blur disabled');
-                } else {
+                    currentBackgroundType = 'none';
+                    console.log('[DAILY] Background removed');
+
+                } else if (type === 'blur') {
                     await callFrame.updateInputSettings({
-                        video: { processor: { type: 'background-blur', config: { strength: 0.8 } } }
+                        video: { processor: { type: 'background-blur', config: { strength: 0.9 } } }
                     });
-                    alert('Background blur enabled!');
+                    currentBackgroundType = 'blur';
+                    console.log('[DAILY] Background blur enabled');
+
+                } else if (type === 'image' && imageUrl) {
+                    // Load image as background
+                    await callFrame.updateInputSettings({
+                        video: {
+                            processor: {
+                                type: 'background-image',
+                                config: { source: imageUrl }
+                            }
+                        }
+                    });
+                    currentBackgroundType = 'image';
+                    customBackgroundImage = imageUrl;
+                    console.log('[DAILY] Background image set');
                 }
+
+                // Update UI
+                document.querySelectorAll('.bg-option').forEach(btn => {
+                    btn.classList.remove('active');
+                });
+                event?.target.closest('.bg-option')?.classList.add('active');
+
             } catch (error) {
-                console.error('[DAILY] Background blur error:', error);
-                alert('Background blur not available');
+                console.error('[DAILY] Background change error:', error);
+                alert('Failed to change background. Feature may not be available.');
             }
-            hideMoreMenu();
+        }
+
+        function uploadCustomBackground() {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'image/*';
+            input.onchange = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                // Create URL from file
+                const imageUrl = URL.createObjectURL(file);
+
+                // Set as background
+                await setBackground('image', imageUrl);
+
+                // Close modal
+                document.querySelector('.bg-modal-overlay')?.remove();
+
+                console.log('[DAILY] Custom background uploaded');
+            };
+            input.click();
         }
 
         async function setVideoQuality(quality) {
@@ -1281,29 +1473,6 @@
             }
         }
 
-        // Recording & Streaming
-        let isRecording = false;
-        async function toggleRecording() {
-            try {
-                if (isRecording) {
-                    await callFrame.stopRecording();
-                    alert('Recording stopped!');
-                    isRecording = false;
-                } else {
-                    await callFrame.startRecording();
-                    alert('Cloud recording started!');
-                    isRecording = true;
-                }
-                console.log('[DAILY] Recording:', isRecording ? 'ON' : 'OFF');
-            } catch (error) {
-                console.error('[DAILY] Recording error:', error);
-                alert('Cloud recording requires a Daily.co paid plan.');
-            }
-            hideMoreMenu();
-        }
-
-        let localRecorder = null;
-        async function toggleLocalRecording() {
             try {
                 if (localRecorder) {
                     await callFrame.stopLocalRecording();
