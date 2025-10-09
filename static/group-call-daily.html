@@ -189,8 +189,8 @@
 
         async function initializeCall() {
             try {
-                // Step 1: Create Daily.co room via our backend
-                console.log('[GROUP-CALL-DAILY] Creating Daily.co room...');
+                // Step 1: Get or create Daily.co room via our backend
+                console.log('[GROUP-CALL-DAILY] Getting Daily.co room... (Host:', isHost, ')');
 
                 const response = await fetch(`/api/daily/create-room?roomId=${roomID}&userName=${userName}`, {
                     method: 'POST',
@@ -198,11 +198,16 @@
                 });
 
                 if (!response.ok) {
-                    throw new Error(`Failed to create room: ${response.status}`);
+                    throw new Error(`Failed to get room: ${response.status}`);
                 }
 
                 const data = await response.json();
-                console.log('[GROUP-CALL-DAILY] Room created:', data.roomUrl);
+                console.log('[GROUP-CALL-DAILY] Room URL:', data.roomUrl);
+
+                // Use correct userName from backend (respects authentication)
+                const actualUserName = data.userName || userName;
+                const actualIsHost = data.isHost !== undefined ? data.isHost : isHost;
+                console.log('[GROUP-CALL-DAILY] Joining as:', actualUserName, '(Host:', actualIsHost + ')');
 
                 // Step 2: Create Daily iframe with custom branding
                 callFrame = window.DailyIframe.createFrame(document.getElementById('dailyFrame'), {
@@ -243,12 +248,11 @@
                 // Hide loading immediately to show Daily.co prejoin UI
                 document.getElementById('loading').style.display = 'none';
 
-                console.log('[GROUP-CALL-DAILY] Joining as:', userName, '(Host:', isHost + ')');
-
                 // Step 3: Join the call (public room - no token needed)
+                // Use actualUserName from backend to ensure correct identity
                 await callFrame.join({
                     url: data.roomUrl,
-                    userName: userName
+                    userName: actualUserName
                 });
 
                 // Step 4: Enable mirrored self-view (this is default in Daily.co)

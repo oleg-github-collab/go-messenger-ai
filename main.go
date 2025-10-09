@@ -2184,14 +2184,39 @@ func main() {
 		}
 
 		roomID := r.URL.Query().Get("roomId")
-		userName := r.URL.Query().Get("userName")
+		userNameFromQuery := r.URL.Query().Get("userName")
 
 		if roomID == "" {
 			http.Error(w, "roomId required", http.StatusBadRequest)
 			return
 		}
 
-		log.Printf("[DAILY-API] 🌐 Creating room for: %s (user: %s)", roomID, userName)
+		// CRITICAL: Check authentication - auth_token cookie = you are HOST (Oleh)
+		var userName string
+		var isHost bool
+
+		// Check auth cookie
+		cookie, err := r.Cookie("auth_token")
+		if err == nil && cookie != nil {
+			// Validate session
+			userID, valid := validateSession(cookie.Value)
+			if valid {
+				userName = "Oleh" // Authenticated user = Host
+				isHost = true
+				log.Printf("[DAILY-API] 🔐 Authenticated user detected: %s (UserID: %s)", userName, userID)
+			}
+		}
+
+		// Fallback to query param if not authenticated
+		if !isHost {
+			userName = userNameFromQuery
+			if userName == "" {
+				userName = "Guest"
+			}
+			isHost = false
+		}
+
+		log.Printf("[DAILY-API] 🌐 Creating room for: %s (user: %s, host: %t)", roomID, userName, isHost)
 
 		// Check if Daily.co is configured
 		if dailyClient == nil || !dailyClient.IsConfigured() {
@@ -2205,27 +2230,44 @@ func main() {
 			return
 		}
 
-		// Create Daily.co room (free plan - no recording)
-		room, err := dailyClient.CreateRoom(daily.CreateRoomRequest{
-			Name:            roomID,
-			Privacy:         "public",
-			EnableRecording: false, // Requires paid plan
-			EnableChat:      true,  // Available on free plan
-			MaxParticipants: 20,    // Available on free plan
-		})
+		// Try to get existing room first (Daily.co creates rooms on first join anyway)
+		// Or create new one if needed
+		var room *models.DailyRoom
+		var err error
 
-		if err != nil {
-			log.Printf("[DAILY-API] ❌ Failed to create room: %v", err)
-			http.Error(w, fmt.Sprintf("Failed to create room: %v", err), http.StatusInternalServerError)
-			return
+		// Try to get existing room
+		existingRoom, getErr := dailyClient.GetRoom(roomID)
+		if getErr != nil {
+			// Room doesn't exist - create it (only if host or doesn't matter for public rooms)
+			log.Printf("[DAILY-API] Room doesn't exist, creating new one...")
+			room, err = dailyClient.CreateRoom(daily.CreateRoomRequest{
+				Name:            roomID,
+				Privacy:         "public",
+				EnableRecording: false, // Requires paid plan
+				EnableChat:      true,  // Available on free plan
+				MaxParticipants: 20,    // Available on free plan
+			})
+
+			if err != nil {
+				log.Printf("[DAILY-API] ❌ Failed to create room: %v", err)
+				http.Error(w, fmt.Sprintf("Failed to create room: %v", err), http.StatusInternalServerError)
+				return
+			}
+			log.Printf("[DAILY-API] ✅ New room created")
+		} else {
+			// Room already exists - use it
+			log.Printf("[DAILY-API] ✅ Using existing room")
+			room = existingRoom
 		}
 
-		log.Printf("[DAILY-API] ✅ Room created: %s", room.URL)
+		log.Printf("[DAILY-API] ✅ Room created: %s (for %s)", room.URL, userName)
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(map[string]interface{}{
 			"roomUrl":  room.URL,
 			"roomName": room.Name,
+			"userName": userName, // Send correct username back to frontend
+			"isHost":   isHost,   // Tell frontend if this is host
 			"success":  true,
 		})
 	})
