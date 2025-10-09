@@ -2193,14 +2193,13 @@ func main() {
 			return
 		}
 
-		// Create Daily.co room
+		// Create Daily.co room (free plan - no recording)
 		room, err := dailyClient.CreateRoom(daily.CreateRoomRequest{
 			Name:            roomID,
 			Privacy:         "public",
-			EnableRecording: true,
-			EnableChat:      true,
-			EnableScreenShare: true,
-			MaxParticipants: 20,
+			EnableRecording: false, // Requires paid plan
+			EnableChat:      true,  // Available on free plan
+			MaxParticipants: 20,    // Available on free plan
 		})
 
 		if err != nil {

@@ -66,17 +66,23 @@ func (c *Client) CreateRoom(req CreateRoomRequest) (*models.DailyRoom, error) {
 		req.MaxParticipants = 20
 	}
 
-	// Build properties object
+	// Build properties object (only free plan features)
 	properties := map[string]interface{}{
-		"enable_recording":    req.EnableRecording,
-		"start_video_off":     req.StartVideoOff,
-		"start_audio_off":     req.StartAudioOff,
-		"enable_chat":         req.EnableChat,
-		"enable_screenshare":  req.EnableScreenShare,
-		"max_participants":    req.MaxParticipants,
-		"enable_prejoin_ui":   true,
-		"enable_network_ui":   true,
-		"enable_noise_cancellation": true,
+		"max_participants": req.MaxParticipants,
+		"enable_chat":      req.EnableChat,
+	}
+
+	// Only add recording if explicitly enabled (requires paid plan)
+	if req.EnableRecording {
+		properties["enable_recording"] = true
+	}
+
+	// Add optional settings if specified
+	if req.StartVideoOff {
+		properties["start_video_off"] = true
+	}
+	if req.StartAudioOff {
+		properties["start_audio_off"] = true
 	}
 
 	// Merge custom properties
