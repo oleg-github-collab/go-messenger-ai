@@ -1325,13 +1325,13 @@
                         <div class="bg-option-section">
                             <h4>Effects</h4>
                             <div class="bg-options-grid">
-                                <button class="bg-option ${currentBackgroundType === 'none' ? 'active' : ''}" onclick="setBackground('none')">
+                                <button class="bg-option ${currentBackgroundType === 'none' ? 'active' : ''}" onclick="setBackground('none').catch(console.error)">
                                     <div class="bg-preview" style="background: #1a1a1a;">
                                         <span>❌</span>
                                     </div>
                                     <span>None</span>
                                 </button>
-                                <button class="bg-option ${currentBackgroundType === 'blur' ? 'active' : ''}" onclick="setBackground('blur')">
+                                <button class="bg-option ${currentBackgroundType === 'blur' ? 'active' : ''}" onclick="setBackground('blur').catch(console.error)">
                                     <div class="bg-preview" style="background: radial-gradient(circle, rgba(102,126,234,0.5) 0%, rgba(118,75,162,0.5) 100%); backdrop-filter: blur(20px);">
                                         <span>💫</span>
                                     </div>
@@ -1344,7 +1344,7 @@
                             <h4>Image Backgrounds</h4>
                             <div class="bg-options-grid">
                                 ${backgroundPresets.map((url, i) => `
-                                    <button class="bg-option" onclick="setBackground('image', '${url}')">
+                                    <button class="bg-option" onclick="setBackground('image', '${url}').catch(console.error)">
                                         <div class="bg-preview" style="background-image: url('${url}'); background-size: cover; background-position: center;">
                                         </div>
                                         <span>Style ${i + 1}</span>
@@ -1421,16 +1421,21 @@
                 const file = e.target.files[0];
                 if (!file) return;
 
-                // Create URL from file
-                const imageUrl = URL.createObjectURL(file);
+                try {
+                    // Create URL from file
+                    const imageUrl = URL.createObjectURL(file);
 
-                // Set as background
-                await setBackground('image', imageUrl);
+                    // Set as background
+                    await setBackground('image', imageUrl);
 
-                // Close modal
-                document.querySelector('.bg-modal-overlay')?.remove();
+                    // Close modal
+                    document.querySelector('.bg-modal-overlay')?.remove();
 
-                console.log('[DAILY] Custom background uploaded');
+                    console.log('[DAILY] Custom background uploaded');
+                } catch (error) {
+                    console.error('[DAILY] Upload error:', error);
+                    alert('Failed to upload background image');
+                }
             };
             input.click();
         }
