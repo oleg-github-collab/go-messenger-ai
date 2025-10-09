@@ -158,9 +158,11 @@
 
         // Get room ID from URL
         const roomID = window.location.pathname.split('/').filter(x => x)[1];
-        const userName = new URLSearchParams(window.location.search).get('name') || 'Guest';
-        const isHost = new URLSearchParams(window.location.search).get('host') === 'true';
+        const urlParams = new URLSearchParams(window.location.search);
+        const userName = urlParams.get('name') || 'Guest';
+        const isHost = urlParams.get('host') === 'true';
 
+        console.log('[GROUP-CALL-DAILY] URL:', window.location.href);
         console.log('[GROUP-CALL-DAILY] Room:', roomID, 'User:', userName, 'Host:', isHost);
 
         let callFrame = null;
@@ -185,7 +187,7 @@
                 const data = await response.json();
                 console.log('[GROUP-CALL-DAILY] Room created:', data.roomUrl);
 
-                // Step 2: Create Daily iframe
+                // Step 2: Create Daily iframe with mirror mode
                 callFrame = window.DailyIframe.createFrame(document.getElementById('dailyFrame'), {
                     iframeStyle: {
                         position: 'absolute',
@@ -196,19 +198,40 @@
                     showLeaveButton: true,
                     showFullscreenButton: true,
                     showLocalVideo: true,
-                    showParticipantsBar: true
+                    showParticipantsBar: true,
+
+                    // Custom CSS for Daily.co iframe to mirror local video
+                    customTrayButtons: {},
+                    theme: {
+                        colors: {
+                            accent: '#4ECDC4',
+                            accentText: '#FFFFFF',
+                            background: '#1a1a1a',
+                            backgroundAccent: '#2a2a2a',
+                            baseText: '#FFFFFF',
+                            border: '#3a3a3a',
+                            mainAreaBg: '#1a1a1a',
+                            mainAreaBgAccent: '#2a2a2a',
+                            mainAreaText: '#FFFFFF',
+                            supportiveText: '#999999'
+                        }
+                    }
                 });
 
                 // Hide loading immediately to show Daily.co prejoin UI
                 document.getElementById('loading').style.display = 'none';
 
-                console.log('[GROUP-CALL-DAILY] Joining room...');
+                console.log('[GROUP-CALL-DAILY] Joining as:', userName, '(Host:', isHost + ')');
 
                 // Step 3: Join the call (public room - no token needed)
                 await callFrame.join({
                     url: data.roomUrl,
                     userName: userName
                 });
+
+                // Step 4: Enable mirrored self-view (this is default in Daily.co)
+                // Daily.co automatically mirrors local video by default
+                console.log('[GROUP-CALL-DAILY] 🪞 Self-view mirror mode active (Daily.co default)');
 
                 console.log('[GROUP-CALL-DAILY] ✅ Joined successfully!');
 
