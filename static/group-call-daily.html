@@ -201,11 +201,10 @@
 
                 console.log('[GROUP-CALL-DAILY] Joining room...');
 
-                // Step 3: Join the call
+                // Step 3: Join the call (public room - no token needed)
                 await callFrame.join({
                     url: data.roomUrl,
-                    userName: userName,
-                    token: data.token // If using private rooms
+                    userName: userName
                 });
 
                 console.log('[GROUP-CALL-DAILY] ✅ Joined successfully!');
