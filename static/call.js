@@ -193,10 +193,22 @@ document.addEventListener('DOMContentLoaded', async () => {
     startCallTimer();
     requestWakeLock();
 
-    // Initialize features from call-features.js
-    if (window.initEmojiPicker) {
-        window.initEmojiPicker();
+    // Initialize EnhancedGIFPicker
+    if (typeof EnhancedGIFPicker !== 'undefined') {
+        const gifPicker = new EnhancedGIFPicker();
+        const emojiBtn = document.getElementById('emojiBtn');
+        if (emojiBtn) {
+            emojiBtn.addEventListener('click', () => {
+                gifPicker.show((gifUrl) => {
+                    // Send GIF as message with special marker
+                    window.sendChatMessage('[GIF]' + gifUrl);
+                });
+            });
+            console.log('[CALL] 🎬 EnhancedGIFPicker initialized');
+        }
     }
+
+    // Initialize settings panel from call-features.js
     if (window.initSettingsPanel) {
         window.initSettingsPanel();
     }
@@ -380,11 +392,16 @@ document.addEventListener('DOMContentLoaded', async () => {
                     case 'join':
                         console.log('[CALL] 🎯 Partner joined! isInitiator:', isInitiator, 'isHostSession:', isHostSession);
 
+                        let joiningUserName = 'Partner';
                         try {
                             const joinInfo = typeof message.data === 'string' ? JSON.parse(message.data) : message.data;
                             if (joinInfo && joinInfo.id) {
-                                participantDirectory.set(joinInfo.id, joinInfo.name || 'Partner');
+                                joiningUserName = joinInfo.name || 'Partner';
+                                participantDirectory.set(joinInfo.id, joiningUserName);
                                 emitNotetakerParticipants();
+
+                                // Show notification
+                                showToast(`${joiningUserName} joined the call`, 'success');
                             }
                         } catch (err) {
                             console.warn('[CALL] ⚠️ Failed to parse partner join payload', err);
@@ -439,6 +456,11 @@ document.addEventListener('DOMContentLoaded', async () => {
                     case 'leave':
                         console.log('[CALL] Partner left');
                         remotePlaceholder.style.display = 'flex';
+
+                        // Show notification
+                        const leavingUserName = participantDirectory.get(message.user) || 'Partner';
+                        showToast(`${leavingUserName} left the call`, 'info');
+
                         if (message.user) {
                             participantDirectory.delete(message.user);
                             emitNotetakerParticipants();
@@ -1609,3 +1631,27 @@ function showFlyingMessage(sender, text, isGif = false) {
 
 // Export for use in other parts
 window.showFlyingMessage = showFlyingMessage;
+
+// Toast notification function
+function showToast(message, type = 'info') {
+    const toast = document.createElement('div');
+    toast.className = `call-toast call-toast-${type}`;
+    toast.textContent = message;
+
+    // Add icon based on type
+    const icon = type === 'success' ? '✅' :
+                 type === 'error' ? '❌' :
+                 type === 'warning' ? '⚠️' : 'ℹ️';
+    toast.textContent = `${icon} ${message}`;
+
+    document.body.appendChild(toast);
+
+    // Show with animation
+    setTimeout(() => toast.classList.add('show'), 10);
+
+    // Auto remove after 3 seconds
+    setTimeout(() => {
+        toast.classList.remove('show');
+        setTimeout(() => toast.remove(), 300);
+    }, 3000);
+}

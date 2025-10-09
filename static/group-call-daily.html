@@ -805,6 +805,8 @@
         console.log('[GROUP-CALL-DAILY] Room:', roomID, 'User:', userName, 'Host:', isHost, 'AuthToken:', authToken ? 'Present' : 'None');
 
         let callFrame = null;
+        let actualIsHost = isHost; // Will be updated from backend response
+        let actualUserName = userName; // Will be updated from backend response
 
         // Initialize Daily.co call
         initializeCall();
@@ -827,8 +829,8 @@
                 console.log('[GROUP-CALL-DAILY] Room URL:', data.roomUrl);
 
                 // Use correct userName from backend (respects authentication)
-                const actualUserName = data.userName || userName;
-                const actualIsHost = data.isHost !== undefined ? data.isHost : isHost;
+                actualUserName = data.userName || userName;
+                actualIsHost = data.isHost !== undefined ? data.isHost : isHost;
                 console.log('[GROUP-CALL-DAILY] Joining as:', actualUserName, '(Host:', actualIsHost + ')');
 
                 // Step 2: Create Daily iframe with MINIMAL UI (we use custom controls)

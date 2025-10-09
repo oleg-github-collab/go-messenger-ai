@@ -570,6 +570,9 @@ class EnhancedGIFPicker {
     }
 }
 
+// Export class to global scope
+window.EnhancedGIFPicker = EnhancedGIFPicker;
+
 // Initialize global instance
 window.enhancedGIFPicker = new EnhancedGIFPicker();
 console.log('[GIF-PICKER] ✅ Enhanced GIF Picker ready');

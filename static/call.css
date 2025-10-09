@@ -3127,3 +3127,44 @@ html, body {
         grid-template-columns: repeat(auto-fill, minmax(140px, 1fr));
     }
 }
+
+
+/* Toast Notifications */
+.call-toast {
+    position: fixed;
+    top: 100px;
+    right: 20px;
+    padding: 12px 20px;
+    border-radius: 12px;
+    font-size: 14px;
+    font-weight: 500;
+    color: white;
+    z-index: 10000;
+    opacity: 0;
+    transform: translateX(400px);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 20px rgba(0, 0, 0, 0.3);
+    backdrop-filter: blur(10px);
+    max-width: 300px;
+}
+
+.call-toast.show {
+    opacity: 1;
+    transform: translateX(0);
+}
+
+.call-toast-success {
+    background: rgba(16, 185, 129, 0.9);
+}
+
+.call-toast-error {
+    background: rgba(239, 68, 68, 0.9);
+}
+
+.call-toast-warning {
+    background: rgba(245, 158, 11, 0.9);
+}
+
+.call-toast-info {
+    background: rgba(59, 130, 246, 0.9);
+}
