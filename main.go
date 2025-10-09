@@ -1969,9 +1969,9 @@ func main() {
 					return
 				}
 			} else {
-				log.Printf("[ROOM] ⚠️  Meeting not found in Redis: %v", err)
-				http.Redirect(w, r, "/meeting-ended?reason=expired", http.StatusFound)
-				return
+				// Meeting not found in Redis - but allow 1-on-1 calls to continue
+				// (P2P WebRTC doesn't strictly need Redis metadata)
+				log.Printf("[ROOM] ⚠️  Meeting not in Redis, but allowing access (may be 1-on-1 P2P): %v", err)
 			}
 		}
 
