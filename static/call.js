@@ -344,12 +344,13 @@ document.addEventListener('DOMContentLoaded', async () => {
                         room: roomId
                     }));
 
-                    // Host is always ready to create offer when partner joins
-                    if (isHostSession) {
-                        console.log('[CALL] 🎯 Ready as HOST - will create offer when guest joins');
-                    } else {
-                        console.log('[CALL] 👤 Ready as GUEST - waiting for offer from host');
-                    }
+                    // Set initiator flag
+                    setTimeout(() => {
+                        if (!peerConnected && isHostSession) {
+                            isInitiator = true;
+                            console.log('[CALL] I am the initiator (host)');
+                        }
+                    }, 500);
                 } else {
                     console.error('[CALL] ❌ Failed to initialize WebRTC');
                     updateMediaHealthBadge('error', 'Failed to access camera');
@@ -389,19 +390,17 @@ document.addEventListener('DOMContentLoaded', async () => {
                             console.warn('[CALL] ⚠️ Failed to parse partner join payload', err);
                         }
 
-                        // FIXED: Host should ALWAYS create offer when guest joins
-                        // This is the most reliable way to establish P2P connection
-                        if (isHostSession) {
+                        // Host should always create offer when guest joins
+                        if (isHostSession && webrtc) {
                             console.log('[CALL] 🎯 HOST creating offer for guest...');
-                            if (webrtc && webrtc.peerConnection) {
-                                await webrtc.createOffer();
-                                peerConnected = true;
-                            } else {
-                                console.error('[CALL] ❌ WebRTC not initialized!');
-                            }
+                            await webrtc.createOffer();
+                            peerConnected = true;
+                        } else if (isInitiator && webrtc) {
+                            console.log('[CALL] 🔄 Initiator creating offer...');
+                            await webrtc.createOffer();
+                            peerConnected = true;
                         } else {
-                            console.log('[CALL] 👤 GUEST waiting for offer from host...');
-                            // Guest just waits for the offer from host
+                            console.log('[CALL] 👤 Waiting for offer from host...');
                         }
                         break;
 
