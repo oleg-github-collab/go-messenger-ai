@@ -1,5 +1,39 @@
 document.addEventListener('DOMContentLoaded', async () => {
-    console.log('[GUEST] Page loaded');
+    console.log('[GUEST] 🚀 Page loaded - checking authentication...');
+
+    // ============================================
+    // CRITICAL: AUTH CHECK FIRST - BEFORE ANYTHING
+    // ============================================
+    function getCookie(name) {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop().split(';').shift();
+        return null;
+    }
+
+    // Get room ID
+    const pathParts = window.location.pathname.split('/');
+    const roomID = pathParts[pathParts.length - 1];
+
+    // Check auth cookie IMMEDIATELY
+    const authToken = getCookie('auth_token');
+    if (authToken) {
+        console.log('[GUEST] 🔐 ✅ AUTH COOKIE FOUND');
+        console.log('[GUEST] 👑 YOU ARE HOST (OLEH)');
+        console.log('[GUEST] ⚡ REDIRECTING TO ROOM:', roomID);
+
+        // Set all session storage
+        sessionStorage.setItem('guestName', 'Oleh');
+        sessionStorage.setItem('isHost', 'true');
+        sessionStorage.setItem('isHost_' + roomID, 'true');
+        sessionStorage.setItem('hostName_' + roomID, 'Oleh');
+
+        // REDIRECT IMMEDIATELY
+        window.location.replace(`/room/${roomID}`);
+        return; // STOP EXECUTION
+    }
+
+    console.log('[GUEST] ❌ No auth cookie - you are guest');
 
     // Language selector
     const languageSelect = document.getElementById('languageSelect');
@@ -40,57 +74,30 @@ document.addEventListener('DOMContentLoaded', async () => {
         }
     }
 
-    // Get room ID from URL
-    const pathParts = window.location.pathname.split('/');
-    const roomID = pathParts[pathParts.length - 1];
-
+    // Validate room ID
     if (!roomID || roomID === 'join') {
         alert('Invalid meeting link');
         return;
     }
 
-    // CRITICAL: Check authentication - auth_token cookie = YOU ARE ALWAYS HOST
-    function getCookie(name) {
-        const value = `; ${document.cookie}`;
-        const parts = value.split(`; ${name}=`);
-        if (parts.length === 2) return parts.pop().split(';').shift();
-        return null;
-    }
-
-    const authToken = getCookie('auth_token');
-    const isAuthenticatedUser = authToken !== null;
-
-    console.log('[GUEST] 🔐 Auth check - Cookie:', authToken ? 'Present' : 'None', 'Authenticated:', isAuthenticatedUser);
-
-    // Check if this user is the host
-    // PRIORITY: auth_token (authenticated) > URL params > sessionStorage
+    // Check URL params for fallback host detection (if no cookie)
     const urlParams = new URLSearchParams(window.location.search);
     const isHostFromURL = urlParams.get('host') === 'true';
     const hostNameFromURL = urlParams.get('name');
-    const isHostFromStorage = sessionStorage.getItem('isHost_' + roomID) === 'true';
-    const hostNameFromStorage = sessionStorage.getItem('hostName_' + roomID);
 
-    // CRITICAL: If you have auth_token cookie, YOU ARE ALWAYS HOST (Oleh)
-    const isHost = isAuthenticatedUser || isHostFromURL || isHostFromStorage;
-    const hostName = isAuthenticatedUser ? 'Oleh' : (hostNameFromURL || hostNameFromStorage);
-
-    if (isHost) {
-        console.log('[GUEST] 🔑 HOST DETECTED - Bypassing guest page');
-        console.log('[GUEST] Source: Auth=' + isAuthenticatedUser + ' URL=' + isHostFromURL + ' Storage=' + isHostFromStorage);
-        console.log('[GUEST] Host name:', hostName);
-
-        // Store host info in sessionStorage
-        sessionStorage.setItem('guestName', hostName || 'Oleh');
+    if (isHostFromURL && hostNameFromURL) {
+        console.log('[GUEST] 🔑 Host detected from URL params:', hostNameFromURL);
+        sessionStorage.setItem('guestName', hostNameFromURL);
         sessionStorage.setItem('isHost', 'true');
         sessionStorage.setItem('isHost_' + roomID, 'true');
-        sessionStorage.setItem('hostName_' + roomID, hostName || 'Oleh');
+        sessionStorage.setItem('hostName_' + roomID, hostNameFromURL);
 
-        console.log('[GUEST] ✅ Redirecting to /room/' + roomID + ' as HOST');
-        window.location.href = `/room/${roomID}`;
+        console.log('[GUEST] ⚡ Redirecting to room...');
+        window.location.replace(`/room/${roomID}`);
         return;
     }
 
-    console.log('[GUEST] 👤 Guest detected - showing guest page');
+    console.log('[GUEST] 👤 Guest flow - showing join page');
 
     // Fetch meeting details
     try {
