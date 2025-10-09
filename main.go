@@ -1943,8 +1943,8 @@ func main() {
 				log.Printf("[ROOM] 🎯 Mode detected: %s", mode)
 
 				if mode == "group" {
-					log.Printf("[ROOM] 👨‍👩‍👧‍👦 Serving group-call.html")
-					serveFile("group-call.html")(w, r)
+					log.Printf("[ROOM] 👨‍👩‍👧‍👦 Serving group-call-daily.html")
+					serveFile("group-call-daily.html")(w, r)
 					return
 				}
 			} else {
@@ -2161,6 +2161,61 @@ func main() {
 			"host":     turnHost,
 			"username": turnUsername,
 			"password": turnPassword,
+		})
+	})
+
+	// Daily.co room creation API
+	http.HandleFunc("/api/daily/create-room", func(w http.ResponseWriter, r *http.Request) {
+		if r.Method != "POST" {
+			http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+			return
+		}
+
+		roomID := r.URL.Query().Get("roomId")
+		userName := r.URL.Query().Get("userName")
+
+		if roomID == "" {
+			http.Error(w, "roomId required", http.StatusBadRequest)
+			return
+		}
+
+		log.Printf("[DAILY-API] 🌐 Creating room for: %s (user: %s)", roomID, userName)
+
+		// Check if Daily.co is configured
+		if dailyClient == nil || !dailyClient.IsConfigured() {
+			log.Printf("[DAILY-API] ⚠️  Daily.co not configured, using fallback SFU")
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]interface{}{
+				"error":    "daily_not_configured",
+				"fallback": true,
+				"message":  "Daily.co not configured, please use SFU instead",
+			})
+			return
+		}
+
+		// Create Daily.co room
+		room, err := dailyClient.CreateRoom(daily.CreateRoomRequest{
+			Name:            roomID,
+			Privacy:         "public",
+			EnableRecording: true,
+			EnableChat:      true,
+			EnableScreenShare: true,
+			MaxParticipants: 20,
+		})
+
+		if err != nil {
+			log.Printf("[DAILY-API] ❌ Failed to create room: %v", err)
+			http.Error(w, fmt.Sprintf("Failed to create room: %v", err), http.StatusInternalServerError)
+			return
+		}
+
+		log.Printf("[DAILY-API] ✅ Room created: %s", room.URL)
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"roomUrl":  room.URL,
+			"roomName": room.Name,
+			"success":  true,
 		})
 	})
 

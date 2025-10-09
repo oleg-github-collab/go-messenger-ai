@@ -1,0 +1,279 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Group Call - Kaminskyi Messenger</title>
+    <script src="https://unpkg.com/@daily-co/daily-js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a1a;
+            color: white;
+            overflow: hidden;
+        }
+
+        #callContainer {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+
+        #dailyFrame {
+            width: 100%;
+            height: 100%;
+        }
+
+        .loading {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 1000;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 40px;
+            border-radius: 16px;
+        }
+
+        .loading h2 {
+            margin-bottom: 20px;
+            font-size: 24px;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-top-color: #4ECDC4;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+            margin: 0 auto;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .error {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            background: rgba(239, 68, 68, 0.9);
+            padding: 30px;
+            border-radius: 16px;
+            max-width: 500px;
+            text-align: center;
+        }
+
+        .error h2 {
+            margin-bottom: 15px;
+        }
+
+        .error button {
+            margin-top: 20px;
+            padding: 12px 24px;
+            background: white;
+            color: #ef4444;
+            border: none;
+            border-radius: 8px;
+            font-size: 16px;
+            cursor: pointer;
+            font-weight: 600;
+        }
+
+        .error button:hover {
+            background: #f0f0f0;
+        }
+
+        .controls {
+            position: absolute;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 15px;
+            z-index: 100;
+        }
+
+        .control-btn {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            border: none;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            cursor: pointer;
+            font-size: 24px;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .control-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.1);
+        }
+
+        .control-btn.active {
+            background: #ef4444;
+        }
+
+        .end-btn {
+            background: #ef4444;
+        }
+
+        .end-btn:hover {
+            background: #dc2626;
+        }
+    </style>
+</head>
+<body>
+    <div id="callContainer">
+        <div class="loading" id="loading">
+            <h2>Connecting to Daily.co...</h2>
+            <div class="spinner"></div>
+            <p style="margin-top: 20px; opacity: 0.7;">Creating secure video room</p>
+        </div>
+
+        <div id="dailyFrame"></div>
+
+        <div id="errorMessage" class="error" style="display: none;">
+            <h2>Connection Failed</h2>
+            <p id="errorText"></p>
+            <button onclick="window.location.href='/home'">Return Home</button>
+        </div>
+    </div>
+
+    <script>
+        console.log('[GROUP-CALL-DAILY] Starting Daily.co integration...');
+
+        // Get room ID from URL
+        const roomID = window.location.pathname.split('/').filter(x => x)[1];
+        const userName = new URLSearchParams(window.location.search).get('name') || 'Guest';
+        const isHost = new URLSearchParams(window.location.search).get('host') === 'true';
+
+        console.log('[GROUP-CALL-DAILY] Room:', roomID, 'User:', userName, 'Host:', isHost);
+
+        let callFrame = null;
+
+        // Initialize Daily.co call
+        initializeCall();
+
+        async function initializeCall() {
+            try {
+                // Step 1: Create Daily.co room via our backend
+                console.log('[GROUP-CALL-DAILY] Creating Daily.co room...');
+
+                const response = await fetch(`/api/daily/create-room?roomId=${roomID}&userName=${userName}`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+
+                if (!response.ok) {
+                    throw new Error(`Failed to create room: ${response.status}`);
+                }
+
+                const data = await response.json();
+                console.log('[GROUP-CALL-DAILY] Room created:', data.roomUrl);
+
+                // Step 2: Create Daily iframe
+                callFrame = window.DailyIframe.createFrame(document.getElementById('dailyFrame'), {
+                    iframeStyle: {
+                        position: 'absolute',
+                        width: '100%',
+                        height: '100%',
+                        border: '0'
+                    },
+                    showLeaveButton: true,
+                    showFullscreenButton: true,
+                    showLocalVideo: true,
+                    showParticipantsBar: true
+                });
+
+                console.log('[GROUP-CALL-DAILY] Joining room...');
+
+                // Step 3: Join the call
+                await callFrame.join({
+                    url: data.roomUrl,
+                    userName: userName,
+                    token: data.token // If using private rooms
+                });
+
+                console.log('[GROUP-CALL-DAILY] ✅ Joined successfully!');
+
+                // Hide loading
+                document.getElementById('loading').style.display = 'none';
+
+                // Setup event listeners
+                setupEventListeners();
+
+            } catch (error) {
+                console.error('[GROUP-CALL-DAILY] ❌ Error:', error);
+                showError(error.message);
+            }
+        }
+
+        function setupEventListeners() {
+            // Handle participant events
+            callFrame.on('participant-joined', (event) => {
+                console.log('[GROUP-CALL-DAILY] 👤 Participant joined:', event.participant.user_name);
+            });
+
+            callFrame.on('participant-left', (event) => {
+                console.log('[GROUP-CALL-DAILY] 👋 Participant left:', event.participant.user_name);
+            });
+
+            // Handle call state
+            callFrame.on('left-meeting', () => {
+                console.log('[GROUP-CALL-DAILY] Left meeting');
+                window.location.href = '/home';
+            });
+
+            callFrame.on('error', (error) => {
+                console.error('[GROUP-CALL-DAILY] ❌ Error:', error);
+                showError(error.errorMsg || 'Unknown error occurred');
+            });
+
+            // Handle recording (if needed)
+            callFrame.on('recording-started', () => {
+                console.log('[GROUP-CALL-DAILY] 🔴 Recording started');
+            });
+
+            callFrame.on('recording-stopped', () => {
+                console.log('[GROUP-CALL-DAILY] ⏹️ Recording stopped');
+            });
+        }
+
+        function showError(message) {
+            document.getElementById('loading').style.display = 'none';
+            document.getElementById('errorMessage').style.display = 'block';
+            document.getElementById('errorText').textContent = message;
+        }
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (callFrame) {
+                callFrame.destroy();
+            }
+        });
+
+        // Handle visibility change (tab switching)
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                console.log('[GROUP-CALL-DAILY] Tab hidden');
+            } else {
+                console.log('[GROUP-CALL-DAILY] Tab visible');
+            }
+        });
+    </script>
+</body>
+</html>
