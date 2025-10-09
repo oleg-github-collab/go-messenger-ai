@@ -159,11 +159,28 @@
         // Get room ID from URL
         const roomID = window.location.pathname.split('/').filter(x => x)[1];
         const urlParams = new URLSearchParams(window.location.search);
-        const userName = urlParams.get('name') || 'Guest';
-        const isHost = urlParams.get('host') === 'true';
+
+        // Check if user is authenticated (has auth_token cookie)
+        function getCookie(name) {
+            const value = `; ${document.cookie}`;
+            const parts = value.split(`; ${name}=`);
+            if (parts.length === 2) return parts.pop().split(';').shift();
+            return null;
+        }
+
+        const authToken = getCookie('auth_token');
+        const isHost = authToken !== null; // If has auth cookie = authenticated host
+
+        // Get username - authenticated user is "Oleh", guests use URL param or default
+        let userName;
+        if (isHost) {
+            userName = 'Oleh'; // Authenticated host username
+        } else {
+            userName = urlParams.get('name') || 'Guest';
+        }
 
         console.log('[GROUP-CALL-DAILY] URL:', window.location.href);
-        console.log('[GROUP-CALL-DAILY] Room:', roomID, 'User:', userName, 'Host:', isHost);
+        console.log('[GROUP-CALL-DAILY] Room:', roomID, 'User:', userName, 'Host:', isHost, 'AuthToken:', authToken ? 'Present' : 'None');
 
         let callFrame = null;
 
@@ -187,7 +204,7 @@
                 const data = await response.json();
                 console.log('[GROUP-CALL-DAILY] Room created:', data.roomUrl);
 
-                // Step 2: Create Daily iframe with mirror mode
+                // Step 2: Create Daily iframe with custom branding
                 callFrame = window.DailyIframe.createFrame(document.getElementById('dailyFrame'), {
                     iframeStyle: {
                         position: 'absolute',
@@ -195,25 +212,30 @@
                         height: '100%',
                         border: '0'
                     },
+
+                    // UI Controls
                     showLeaveButton: true,
                     showFullscreenButton: true,
                     showLocalVideo: true,
                     showParticipantsBar: true,
+                    showRecordingButton: false,        // No recording on free plan
+                    showChatButton: false,             // We have our own chat
+                    showUserNameChangeButton: false,   // Prevent name changes
+                    showBackgroundBlurButton: false,   // Not available on free plan
 
-                    // Custom CSS for Daily.co iframe to mirror local video
-                    customTrayButtons: {},
+                    // Custom theme matching your app design
                     theme: {
                         colors: {
-                            accent: '#4ECDC4',
+                            accent: '#667eea',           // Purple from your gradient
                             accentText: '#FFFFFF',
-                            background: '#1a1a1a',
-                            backgroundAccent: '#2a2a2a',
+                            background: '#0a0a0a',       // Darker background
+                            backgroundAccent: '#1a1a1a',
                             baseText: '#FFFFFF',
-                            border: '#3a3a3a',
-                            mainAreaBg: '#1a1a1a',
-                            mainAreaBgAccent: '#2a2a2a',
+                            border: '#667eea',           // Purple borders
+                            mainAreaBg: '#000000',       // Pure black video area
+                            mainAreaBgAccent: '#1a1a1a',
                             mainAreaText: '#FFFFFF',
-                            supportiveText: '#999999'
+                            supportiveText: '#888888'
                         }
                     }
                 });

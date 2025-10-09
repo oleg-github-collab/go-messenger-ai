@@ -15,21 +15,25 @@ Railway automatically provides SSL certificates for custom domains via Let's Enc
 
 2. **Configure DNS Records:**
 
-   Railway will show you what DNS records to add. Typically:
+   **IMPORTANT:** Railway shows you EXACTLY what to add. Copy from dashboard!
 
    **For root domain (kaminskyi.chat):**
    ```
-   Type: A
-   Name: @
-   Value: [Railway IP address shown in dashboard]
+   Type: CNAME (or ALIAS/ANAME if your DNS provider requires it for root)
+   Name: @  (or leave blank)
+   Value: web-production-91543.up.railway.app  (shown in Railway)
    ```
 
    **For www subdomain:**
    ```
    Type: CNAME
    Name: www
-   Value: [your-app].up.railway.app
+   Value: web-production-91543.up.railway.app  (same as above)
    ```
+
+   **Railway does NOT give you static IP!** Use CNAME pointing to your Railway domain.
+
+   If your DNS provider doesn't support CNAME for root (@), use Cloudflare instead (Option 2).
 
 3. **Wait for DNS Propagation:**
    - Can take 5 minutes to 48 hours
