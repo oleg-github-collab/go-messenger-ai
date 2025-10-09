@@ -387,6 +387,27 @@
                 // Setup event listeners
                 setupEventListeners();
 
+                // ============================================
+                // FUTURE ENHANCEMENTS (Daily.co API Features)
+                // ============================================
+                // 1. Real-time Transcription (Deepgram integration):
+                //    await callFrame.startTranscription();
+                //    callFrame.on('transcription-message', handleTranscript);
+                //
+                // 2. Recording (cloud or local):
+                //    await callFrame.startRecording();
+                //
+                // 3. Analytics tracking:
+                //    callFrame.on('call-quality-stats', trackQuality);
+                //
+                // 4. AI Features:
+                //    - Background noise suppression
+                //    - Voice activity detection
+                //    - Smart turn detection for voice agents
+                //
+                // 5. Custom layouts and active speaker detection
+                // ============================================
+
             } catch (error) {
                 console.error('[GROUP-CALL-DAILY] ❌ Error:', error);
                 showError(error.message);

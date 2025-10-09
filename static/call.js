@@ -448,7 +448,7 @@ document.addEventListener('DOMContentLoaded', async () => {
             };
 
             socket.onclose = (event) => {
-                console.log('[CALL] WebSocket disconnected', event.code, event.reason);
+                console.log('[CALL] 🔌 WebSocket disconnected', event.code, event.reason);
 
                 if (heartbeatInterval) {
                     clearInterval(heartbeatInterval);
@@ -460,41 +460,64 @@ document.addEventListener('DOMContentLoaded', async () => {
                     reconnectTimeout = null;
                 }
 
-                // Clean up current connection state
-                if (webrtc && reconnectAttempts > 0) {
-                    console.log('[CALL] Cleaning up WebRTC for reconnection...');
-                    // Don't fully cleanup, just prepare for reconnect
-                }
+                // Update status
+                updateMediaHealthBadge('warning', 'Connection lost - reconnecting...');
 
+                // Check if offline
                 if (!navigator.onLine) {
-                    console.warn('[CALL] Offline detected. Waiting for network to return before reconnecting.');
+                    console.warn('[CALL] 📡 Offline detected. Waiting for network...');
+                    updateMediaHealthBadge('error', 'No internet connection');
+
+                    // Listen for online event
+                    const onlineHandler = () => {
+                        console.log('[CALL] 📡 Network restored! Reconnecting...');
+                        window.removeEventListener('online', onlineHandler);
+                        reconnectAttempts = 0;
+                        connectToRoom(roomID);
+                    };
+                    window.addEventListener('online', onlineHandler);
+
                     socket = null;
                     return;
                 }
 
-                // Attempt to reconnect with better backoff
+                // Clean disconnect - attempt immediate reconnect
+                const isCleanDisconnect = event.code === 1000 || event.code === 1001;
+
+                // Attempt to reconnect with smart backoff
                 if (reconnectAttempts < maxReconnectAttempts) {
                     reconnectAttempts++;
-                    // Exponential backoff: 1s, 2s, 4s, 8s, max 15s
-                    const delay = Math.min(1000 * Math.pow(2, reconnectAttempts - 1), 15000);
-                    console.log(`[CALL] Reconnecting in ${delay}ms (attempt ${reconnectAttempts}/${maxReconnectAttempts})`);
 
-                    // Show user-friendly message for longer delays
-                    if (delay > 5000 && remotePlaceholder) {
+                    // Faster reconnect for clean disconnects, exponential for errors
+                    const delay = isCleanDisconnect
+                        ? 500  // Immediate retry for clean disconnects
+                        : Math.min(1000 * Math.pow(1.5, reconnectAttempts - 1), 10000);
+
+                    console.log(`[CALL] 🔄 Reconnecting in ${delay}ms (attempt ${reconnectAttempts}/${maxReconnectAttempts})`);
+
+                    // Show user-friendly message
+                    if (remotePlaceholder) {
                         const reconnectMsg = remotePlaceholder.querySelector('.placeholder-text');
                         if (reconnectMsg) {
-                            reconnectMsg.textContent = `Reconnecting... (${Math.floor(delay/1000)}s)`;
+                            const countdown = Math.ceil(delay/1000);
+                            reconnectMsg.textContent = countdown > 1
+                                ? `Reconnecting in ${countdown}s...`
+                                : 'Reconnecting...';
                         }
                     }
 
                     reconnectTimeout = setTimeout(() => {
-                        console.log('[CALL] Attempting reconnection...');
+                        console.log('[CALL] 🔄 Attempting reconnection...');
                         connectToRoom(roomID);
                     }, delay);
                 } else {
-                    console.error('[CALL] Max reconnection attempts reached - auto retrying in 5s');
+                    console.error('[CALL] ⚠️ Max reconnection attempts reached - resetting...');
+                    updateMediaHealthBadge('error', 'Connection lost');
+
+                    // Auto-reset and retry after 5s
                     setTimeout(() => {
-                        reconnectAttempts = 0; // Reset and retry automatically
+                        console.log('[CALL] 🔄 Auto-retry after cooldown...');
+                        reconnectAttempts = 0;
                         connectToRoom(roomID);
                     }, 5000);
                 }
