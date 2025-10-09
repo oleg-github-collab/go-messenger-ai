@@ -622,6 +622,58 @@
             background: rgba(239, 68, 68, 0.3);
             border-color: rgba(239, 68, 68, 0.5);
         }
+
+        /* Stats Overlay */
+        .stats-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(8px);
+            z-index: 10001;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .stats-panel {
+            background: rgba(26, 26, 26, 0.98);
+            backdrop-filter: blur(40px);
+            border: 1.5px solid rgba(255, 255, 255, 0.15);
+            border-radius: 24px;
+            max-width: 600px;
+            width: 90%;
+            padding: 24px;
+            max-height: 80vh;
+            overflow-y: auto;
+        }
+
+        .stats-panel h3 {
+            margin: 0 0 20px 0;
+            font-size: 22px;
+            font-weight: 700;
+            color: white;
+        }
+
+        .stats-panel h4 {
+            margin: 16px 0 8px 0;
+            font-size: 16px;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.8);
+        }
+
+        .stats-content p {
+            margin: 8px 0;
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.9);
+            line-height: 1.6;
+        }
+
+        .stats-content strong {
+            color: #667eea;
+        }
     </style>
 </head>
 <body>
@@ -1000,32 +1052,44 @@
                 <div class="more-menu-overlay" onclick="hideMoreMenu()">
                     <div class="more-menu" onclick="event.stopPropagation()">
                         <div class="more-menu-header">
-                            <h3>Call Options</h3>
+                            <h3>Advanced Options</h3>
                             <button class="close-btn" onclick="hideMoreMenu()">×</button>
                         </div>
                         <div class="more-menu-content">
             `;
 
-            // Host controls
-            if (isHost) {
-                menuHTML += `
-                    <div class="menu-section">
-                        <h4>Host Controls</h4>
-                        <button class="menu-item" onclick="muteAllParticipants()">
-                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/>
-                                <line x1="1" y1="1" x2="23" y2="23"/>
-                            </svg>
-                            Mute All Participants
-                        </button>
-                    </div>
-                `;
-            }
-
-            // Participant list with individual controls
+            // Audio & Video Controls
             menuHTML += `
                 <div class="menu-section">
-                    <h4>Participants (${Object.keys(participants).length})</h4>
+                    <h4>🎧 Audio & Video</h4>
+                    <button class="menu-item" onclick="toggleBackgroundBlur()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="3"/>
+                            <path d="M12 2v4m0 12v4M4.22 4.22l2.83 2.83m9.9 9.9l2.83 2.83M2 12h4m12 0h4M4.22 19.78l2.83-2.83m9.9-9.9l2.83-2.83"/>
+                        </svg>
+                        Toggle Background Blur
+                    </button>
+                    <button class="menu-item" onclick="setVideoQuality('high')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M23 7l-7 5 7 5V7z"/>
+                            <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                        </svg>
+                        Set Video Quality: High
+                    </button>
+                    <button class="menu-item" onclick="setVideoQuality('low')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M23 7l-7 5 7 5V7z"/>
+                            <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                        </svg>
+                        Set Video Quality: Low (Save Bandwidth)
+                    </button>
+                </div>
+            `;
+
+            // Participant list with stats
+            menuHTML += `
+                <div class="menu-section">
+                    <h4>👥 Participants (${Object.keys(participants).length})</h4>
                     <div class="participant-list">
             `;
 
@@ -1039,10 +1103,11 @@
                             <div class="participant-status">
                                 ${p.audio ? '🎤' : '🔇'}
                                 ${p.video ? '📹' : '📷'}
+                                ${p.screen ? '🖥️' : ''}
                             </div>
                         </div>
-                        ${!isSelf && isHost ? `
-                            <button class="small-btn" onclick="muteParticipant('${p.session_id}')">Mute</button>
+                        ${!isSelf ? `
+                            <button class="small-btn" onclick="showParticipantStats('${p.session_id}', '${name}')">Stats</button>
                         ` : ''}
                     </div>
                 `;
@@ -1053,15 +1118,85 @@
                 </div>
             `;
 
-            // Recording controls (if available)
+            // Recording & Streaming
             menuHTML += `
                 <div class="menu-section">
-                    <h4>Recording</h4>
+                    <h4>🎥 Recording & Streaming</h4>
                     <button class="menu-item" onclick="toggleRecording()">
                         <svg viewBox="0 0 24 24" fill="currentColor">
                             <circle cx="12" cy="12" r="10"/>
                         </svg>
-                        Start Recording
+                        Start Cloud Recording
+                    </button>
+                    <button class="menu-item" onclick="toggleLocalRecording()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <path d="M12 6v6l4 2"/>
+                        </svg>
+                        Start Local Recording
+                    </button>
+                    <button class="menu-item" onclick="startLiveStream()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polygon points="5 3 19 12 5 21 5 3"/>
+                        </svg>
+                        Start Live Stream (RTMP)
+                    </button>
+                </div>
+            `;
+
+            // Network & Performance
+            menuHTML += `
+                <div class="menu-section">
+                    <h4>📊 Network & Performance</h4>
+                    <button class="menu-item" onclick="showNetworkStats()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
+                        </svg>
+                        Show Network Stats
+                    </button>
+                    <button class="menu-item" onclick="testBandwidth()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <polyline points="12 6 12 12 16 14"/>
+                        </svg>
+                        Run Bandwidth Test
+                    </button>
+                </div>
+            `;
+
+            // Advanced Features
+            menuHTML += `
+                <div class="menu-section">
+                    <h4>⚡ Advanced Features</h4>
+                    <button class="menu-item" onclick="enableTranscription()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M4 19.5A2.5 2.5 0 0 1 6.5 17H20"/>
+                            <path d="M6.5 2H20v20H6.5A2.5 2.5 0 0 1 4 19.5v-15A2.5 2.5 0 0 1 6.5 2z"/>
+                        </svg>
+                        Enable Live Transcription
+                    </button>
+                    <button class="menu-item" onclick="toggleNoiseCancellation()">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                            <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                        </svg>
+                        Advanced Noise Cancellation
+                    </button>
+                    <button class="menu-item" onclick="setLayout('grid')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="7" height="7"/>
+                            <rect x="14" y="3" width="7" height="7"/>
+                            <rect x="14" y="14" width="7" height="7"/>
+                            <rect x="3" y="14" width="7" height="7"/>
+                        </svg>
+                        Grid Layout
+                    </button>
+                    <button class="menu-item" onclick="setLayout('speaker')">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
+                            <rect x="7" y="7" width="10" height="10"/>
+                        </svg>
+                        Speaker Layout
                     </button>
                 </div>
             `;
@@ -1080,34 +1215,239 @@
             if (overlay) overlay.remove();
         }
 
-        async function muteAllParticipants() {
-            const participants = callFrame.participants();
-            for (const [id, p] of Object.entries(participants)) {
-                if (!p.local && p.audio) {
-                    // Note: Daily.co doesn't allow remote muting for privacy
-                    // This would need to be implemented via backend signaling
-                    console.log('[GROUP-CALL-DAILY] Cannot remotely mute participants (privacy)');
-                    alert('Remote muting requires participant consent. Please ask participants to mute themselves.');
-                    break;
+        // ============================================
+        // DAILY.CO API IMPLEMENTATIONS
+        // ============================================
+
+        // Audio & Video Controls
+        async function toggleBackgroundBlur() {
+            try {
+                const localVideo = callFrame.localVideo();
+                if (localVideo && localVideo.processor) {
+                    await callFrame.updateInputSettings({
+                        video: { processor: { type: 'none' } }
+                    });
+                    alert('Background blur disabled');
+                } else {
+                    await callFrame.updateInputSettings({
+                        video: { processor: { type: 'background-blur', config: { strength: 0.8 } } }
+                    });
+                    alert('Background blur enabled!');
                 }
+            } catch (error) {
+                console.error('[DAILY] Background blur error:', error);
+                alert('Background blur not available');
             }
             hideMoreMenu();
         }
 
-        async function muteParticipant(sessionId) {
-            console.log('[GROUP-CALL-DAILY] Cannot remotely mute participant (privacy)');
-            alert('Remote muting requires participant consent for privacy reasons.');
+        async function setVideoQuality(quality) {
+            try {
+                const settings = quality === 'high'
+                    ? { bandwidth: { trackConstraints: { width: 1280, height: 720 } } }
+                    : { bandwidth: { trackConstraints: { width: 640, height: 360 } } };
+
+                await callFrame.setBandwidth(settings);
+                alert(`Video quality set to ${quality}!`);
+            } catch (error) {
+                console.error('[DAILY] Video quality error:', error);
+                alert('Failed to change video quality');
+            }
+            hideMoreMenu();
         }
 
+        // Participant Stats
+        async function showParticipantStats(sessionId, name) {
+            try {
+                const stats = await callFrame.getNetworkStats();
+                const participantStats = stats.stats[sessionId];
+
+                if (participantStats) {
+                    const videoRecv = participantStats.videoRecv;
+                    const audioRecv = participantStats.audioRecv;
+
+                    alert(`Stats for ${name}:\n\n` +
+                        `Video: ${videoRecv?.width}x${videoRecv?.height} @ ${videoRecv?.fps}fps\n` +
+                        `Video Bitrate: ${Math.round((videoRecv?.kbps || 0))} kbps\n` +
+                        `Audio Bitrate: ${Math.round((audioRecv?.kbps || 0))} kbps\n` +
+                        `Packet Loss: ${((participantStats.videoRecvPacketLoss || 0) * 100).toFixed(1)}%`
+                    );
+                }
+            } catch (error) {
+                console.error('[DAILY] Stats error:', error);
+                alert('Failed to get participant stats');
+            }
+        }
+
+        // Recording & Streaming
+        let isRecording = false;
         async function toggleRecording() {
             try {
-                await callFrame.startRecording();
-                console.log('[GROUP-CALL-DAILY] Recording started');
-                hideMoreMenu();
+                if (isRecording) {
+                    await callFrame.stopRecording();
+                    alert('Recording stopped!');
+                    isRecording = false;
+                } else {
+                    await callFrame.startRecording();
+                    alert('Cloud recording started!');
+                    isRecording = true;
+                }
+                console.log('[DAILY] Recording:', isRecording ? 'ON' : 'OFF');
             } catch (error) {
-                console.error('[GROUP-CALL-DAILY] Recording error:', error);
-                alert('Recording requires a Daily.co paid plan.');
+                console.error('[DAILY] Recording error:', error);
+                alert('Cloud recording requires a Daily.co paid plan.');
             }
+            hideMoreMenu();
+        }
+
+        let localRecorder = null;
+        async function toggleLocalRecording() {
+            try {
+                if (localRecorder) {
+                    await callFrame.stopLocalRecording();
+                    localRecorder = null;
+                    alert('Local recording stopped! Check your downloads.');
+                } else {
+                    localRecorder = await callFrame.startLocalRecording();
+                    alert('Local recording started!');
+                }
+            } catch (error) {
+                console.error('[DAILY] Local recording error:', error);
+                alert('Local recording not supported in this browser');
+            }
+            hideMoreMenu();
+        }
+
+        async function startLiveStream() {
+            const rtmpUrl = prompt('Enter RTMP URL (e.g., from YouTube, Twitch, Facebook):');
+            if (!rtmpUrl) return;
+
+            try {
+                await callFrame.startLiveStreaming({
+                    rtmpUrl: rtmpUrl
+                });
+                alert('Live stream started!');
+            } catch (error) {
+                console.error('[DAILY] Live streaming error:', error);
+                alert('Live streaming requires a Daily.co paid plan.');
+            }
+            hideMoreMenu();
+        }
+
+        // Network & Performance
+        async function showNetworkStats() {
+            try {
+                const stats = await callFrame.getNetworkStats();
+                const quality = stats.quality || 50;
+                const threshold = stats.threshold || 'good';
+
+                let statsHTML = `
+                    <div class="stats-overlay" onclick="this.remove()">
+                        <div class="stats-panel" onclick="event.stopPropagation()">
+                            <h3>📊 Network Statistics</h3>
+                            <div class="stats-content">
+                                <p><strong>Connection Quality:</strong> ${threshold.toUpperCase()} (${quality}%)</p>
+                                <h4>Local Stats:</h4>
+                `;
+
+                const local = stats.stats.local;
+                if (local) {
+                    statsHTML += `
+                        <p>Video Send: ${local.videoSend?.width}x${local.videoSend?.height} @ ${local.videoSend?.fps}fps</p>
+                        <p>Video Bitrate: ${Math.round(local.videoSend?.kbps || 0)} kbps</p>
+                        <p>Audio Bitrate: ${Math.round(local.audioSend?.kbps || 0)} kbps</p>
+                        <p>Packet Loss: ${((local.videoSendPacketLoss || 0) * 100).toFixed(2)}%</p>
+                    `;
+                }
+
+                statsHTML += `
+                            </div>
+                            <button onclick="this.closest('.stats-overlay').remove()" class="menu-item" style="margin-top: 20px;">Close</button>
+                        </div>
+                    </div>
+                `;
+
+                document.body.insertAdjacentHTML('beforeend', statsHTML);
+            } catch (error) {
+                console.error('[DAILY] Network stats error:', error);
+                alert('Failed to get network stats');
+            }
+            hideMoreMenu();
+        }
+
+        async function testBandwidth() {
+            alert('Running bandwidth test... This may take 10-15 seconds.');
+            try {
+                const result = await callFrame.testConnectionQuality();
+                alert(`Bandwidth Test Results:\n\n` +
+                    `Download: ${result.downloadSpeed} Mbps\n` +
+                    `Upload: ${result.uploadSpeed} Mbps\n` +
+                    `Quality: ${result.quality}\n` +
+                    `Recommendation: ${result.recommendation}`
+                );
+            } catch (error) {
+                console.error('[DAILY] Bandwidth test error:', error);
+                alert('Bandwidth test failed. Make sure you have a stable connection.');
+            }
+            hideMoreMenu();
+        }
+
+        // Advanced Features
+        let transcriptionEnabled = false;
+        async function enableTranscription() {
+            try {
+                if (transcriptionEnabled) {
+                    await callFrame.stopTranscription();
+                    alert('Transcription stopped');
+                    transcriptionEnabled = false;
+                } else {
+                    await callFrame.startTranscription();
+                    alert('Live transcription enabled! (Requires Daily.co Enterprise plan)');
+                    transcriptionEnabled = true;
+
+                    // Listen for transcription events
+                    callFrame.on('transcription-message', (event) => {
+                        console.log('[DAILY] Transcription:', event);
+                    });
+                }
+            } catch (error) {
+                console.error('[DAILY] Transcription error:', error);
+                alert('Live transcription requires Daily.co Enterprise plan.');
+            }
+            hideMoreMenu();
+        }
+
+        let noiseCancellation = false;
+        async function toggleNoiseCancellation() {
+            try {
+                noiseCancellation = !noiseCancellation;
+                await callFrame.updateInputSettings({
+                    audio: {
+                        processor: noiseCancellation
+                            ? { type: 'noise-cancellation' }
+                            : { type: 'none' }
+                    }
+                });
+                alert(`Advanced noise cancellation ${noiseCancellation ? 'enabled' : 'disabled'}!`);
+            } catch (error) {
+                console.error('[DAILY] Noise cancellation error:', error);
+                alert('Advanced noise cancellation not available');
+            }
+            hideMoreMenu();
+        }
+
+        async function setLayout(layoutType) {
+            try {
+                // This changes the recording layout, not the client-side layout
+                await callFrame.setRecordingLayout({
+                    preset: layoutType // 'grid' or 'speaker'
+                });
+                alert(`Recording layout set to ${layoutType} view!`);
+            } catch (error) {
+                console.error('[DAILY] Layout error:', error);
+                alert('Layout change not available');
+            }
+            hideMoreMenu();
         }
 
         function updateControlButtons(participant) {
