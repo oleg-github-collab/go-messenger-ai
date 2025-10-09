@@ -508,27 +508,36 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// Check if meeting exists in Redis
+	// Check if meeting exists in Redis (but don't block if not found)
 	meetingData, err := getMeeting(roomID)
-	if err != nil {
-		conn.WriteMessage(websocket.TextMessage, []byte(`{"error":"meeting not found or expired"}`))
-		return
-	}
-
-	// Check if meeting is still active
-	isActive := true
-	if active, ok := meetingData["active"].(bool); ok {
-		isActive = active
-	}
-	if !isActive {
-		log.Printf("[WS] ❌ Meeting is no longer active")
-		conn.WriteMessage(websocket.TextMessage, []byte(`{"error":"meeting has ended"}`))
-		return
-	}
-
 	hostName := "Host"
-	if name, ok := meetingData["host_name"].(string); ok {
-		hostName = name
+	var hostID string
+
+	if err != nil {
+		// Meeting not found in Redis - allow P2P connections anyway
+		log.Printf("[WS] ⚠️  Meeting not in Redis (may be P2P), allowing connection: %v", err)
+		// Use guest name as default, will be overridden if host identified
+		hostName = guestName
+		hostID = ""
+	} else {
+		// Meeting found - check if active
+		isActive := true
+		if active, ok := meetingData["active"].(bool); ok {
+			isActive = active
+		}
+		if !isActive {
+			log.Printf("[WS] ❌ Meeting is no longer active")
+			conn.WriteMessage(websocket.TextMessage, []byte(`{"error":"meeting has ended"}`))
+			return
+		}
+
+		// Get host info from Redis
+		if name, ok := meetingData["host_name"].(string); ok {
+			hostName = name
+		}
+		if id, ok := meetingData["host_id"].(string); ok {
+			hostID = id
+		}
 	}
 
 	// Get or create room in memory
@@ -537,7 +546,7 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 	if !exists {
 		room = &Room{
 			ID:           roomID,
-			HostID:       meetingData["host_id"].(string),
+			HostID:       hostID, // May be empty if Redis not available
 			HostName:     hostName,
 			Participants: make(map[*websocket.Conn]*Participant),
 			WaitingRoom:  make(map[string]*Participant),
