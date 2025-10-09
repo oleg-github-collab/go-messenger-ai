@@ -139,9 +139,9 @@
 <body>
     <div id="callContainer">
         <div class="loading" id="loading">
-            <h2>Connecting to Daily.co...</h2>
+            <h2>Creating connection...</h2>
             <div class="spinner"></div>
-            <p style="margin-top: 20px; opacity: 0.7;">Creating secure video room</p>
+            <p style="margin-top: 20px; opacity: 0.7;">Setting up your meeting</p>
         </div>
 
         <div id="dailyFrame"></div>
@@ -199,6 +199,9 @@
                     showParticipantsBar: true
                 });
 
+                // Hide loading immediately to show Daily.co prejoin UI
+                document.getElementById('loading').style.display = 'none';
+
                 console.log('[GROUP-CALL-DAILY] Joining room...');
 
                 // Step 3: Join the call (public room - no token needed)
@@ -208,9 +211,6 @@
                 });
 
                 console.log('[GROUP-CALL-DAILY] ✅ Joined successfully!');
-
-                // Hide loading
-                document.getElementById('loading').style.display = 'none';
 
                 // Setup event listeners
                 setupEventListeners();
