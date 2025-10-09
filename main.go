@@ -252,19 +252,33 @@ func storeMeeting(roomID, hostID, hostName, mode string) error {
 		"active":     true,
 	}
 	dataJSON, _ := json.Marshal(data)
-	return rdb.Set(ctx, key, dataJSON, meetingTTL).Err()
+	log.Printf("[REDIS] 💾 Storing meeting: %s (host: %s, mode: %s)", roomID, hostName, mode)
+	err := rdb.Set(ctx, key, dataJSON, meetingTTL).Err()
+	if err != nil {
+		log.Printf("[REDIS] ❌ Failed to store meeting: %v", err)
+	} else {
+		log.Printf("[REDIS] ✅ Meeting stored successfully")
+	}
+	return err
 }
 
 // Get meeting data from Redis
 func getMeeting(roomID string) (map[string]interface{}, error) {
 	key := fmt.Sprintf("meeting:%s", roomID)
+	log.Printf("[REDIS] 🔍 Looking up meeting: %s", roomID)
 	data, err := rdb.Get(ctx, key).Result()
 	if err != nil {
+		log.Printf("[REDIS] ❌ Meeting not found: %v", err)
 		return nil, err
 	}
 
 	var result map[string]interface{}
 	err = json.Unmarshal([]byte(data), &result)
+	if err != nil {
+		log.Printf("[REDIS] ❌ Failed to parse meeting data: %v", err)
+	} else {
+		log.Printf("[REDIS] ✅ Meeting found: %+v", result)
+	}
 	return result, err
 }
 
