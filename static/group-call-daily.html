@@ -426,368 +426,6 @@
                 font-size: 10px;
             }
         }
-
-        /* Speaking Indicator */
-        .speaking {
-            animation: speakingPulse 1s ease-in-out infinite !important;
-            border: 3px solid #10b981 !important;
-            box-shadow: 0 0 20px rgba(16, 185, 129, 0.6) !important;
-        }
-
-        @keyframes speakingPulse {
-            0%, 100% {
-                border-color: #10b981;
-                box-shadow: 0 0 20px rgba(16, 185, 129, 0.6);
-            }
-            50% {
-                border-color: #34d399;
-                box-shadow: 0 0 30px rgba(16, 185, 129, 0.9);
-            }
-        }
-
-        /* More Menu Overlay */
-        .more-menu-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.7);
-            backdrop-filter: blur(8px);
-            z-index: 10000;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            animation: fadeIn 0.2s ease-out;
-        }
-
-        .more-menu {
-            background: rgba(26, 26, 26, 0.98);
-            backdrop-filter: blur(40px);
-            border: 1.5px solid rgba(255, 255, 255, 0.15);
-            border-radius: 24px;
-            max-width: 500px;
-            width: 90%;
-            max-height: 80vh;
-            overflow: hidden;
-            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
-            animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        @keyframes slideUp {
-            from {
-                opacity: 0;
-                transform: translateY(20px);
-            }
-            to {
-                opacity: 1;
-                transform: translateY(0);
-            }
-        }
-
-        .more-menu-header {
-            padding: 20px 24px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-
-        .more-menu-header h3 {
-            margin: 0;
-            font-size: 20px;
-            font-weight: 700;
-            color: white;
-        }
-
-        .close-btn {
-            width: 36px;
-            height: 36px;
-            border-radius: 50%;
-            background: rgba(255, 255, 255, 0.1);
-            border: none;
-            color: white;
-            font-size: 24px;
-            cursor: pointer;
-            transition: all 0.2s;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .close-btn:hover {
-            background: rgba(255, 255, 255, 0.2);
-            transform: scale(1.1);
-        }
-
-        .more-menu-content {
-            padding: 20px 24px;
-            max-height: calc(80vh - 80px);
-            overflow-y: auto;
-        }
-
-        .menu-section {
-            margin-bottom: 24px;
-        }
-
-        .menu-section:last-child {
-            margin-bottom: 0;
-        }
-
-        .menu-section h4 {
-            margin: 0 0 12px 0;
-            font-size: 14px;
-            font-weight: 600;
-            color: rgba(255, 255, 255, 0.7);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .menu-item {
-            width: 100%;
-            padding: 14px 16px;
-            background: rgba(255, 255, 255, 0.08);
-            border: 1px solid rgba(255, 255, 255, 0.1);
-            border-radius: 12px;
-            color: white;
-            font-size: 15px;
-            font-weight: 500;
-            cursor: pointer;
-            transition: all 0.2s;
-            display: flex;
-            align-items: center;
-            gap: 12px;
-            margin-bottom: 8px;
-        }
-
-        .menu-item:hover {
-            background: rgba(255, 255, 255, 0.15);
-            border-color: rgba(255, 255, 255, 0.2);
-            transform: translateX(4px);
-        }
-
-        .menu-item svg {
-            width: 20px;
-            height: 20px;
-        }
-
-        .participant-list {
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-        }
-
-        .participant-item {
-            padding: 12px;
-            background: rgba(255, 255, 255, 0.05);
-            border: 1px solid rgba(255, 255, 255, 0.08);
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-
-        .participant-info {
-            display: flex;
-            flex-direction: column;
-            gap: 4px;
-        }
-
-        .participant-name {
-            font-size: 15px;
-            font-weight: 600;
-            color: white;
-        }
-
-        .participant-status {
-            font-size: 13px;
-            color: rgba(255, 255, 255, 0.6);
-            display: flex;
-            gap: 8px;
-        }
-
-        .small-btn {
-            padding: 6px 16px;
-            background: rgba(239, 68, 68, 0.2);
-            border: 1px solid rgba(239, 68, 68, 0.3);
-            border-radius: 8px;
-            color: #fca5a5;
-            font-size: 13px;
-            font-weight: 600;
-            cursor: pointer;
-            transition: all 0.2s;
-        }
-
-        .small-btn:hover {
-            background: rgba(239, 68, 68, 0.3);
-            border-color: rgba(239, 68, 68, 0.5);
-        }
-
-        /* Stats Overlay */
-        .stats-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.8);
-            backdrop-filter: blur(8px);
-            z-index: 10001;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-        }
-
-        .stats-panel {
-            background: rgba(26, 26, 26, 0.98);
-            backdrop-filter: blur(40px);
-            border: 1.5px solid rgba(255, 255, 255, 0.15);
-            border-radius: 24px;
-            max-width: 600px;
-            width: 90%;
-            padding: 24px;
-            max-height: 80vh;
-            overflow-y: auto;
-        }
-
-        .stats-panel h3 {
-            margin: 0 0 20px 0;
-            font-size: 22px;
-            font-weight: 700;
-            color: white;
-        }
-
-        .stats-panel h4 {
-            margin: 16px 0 8px 0;
-            font-size: 16px;
-            font-weight: 600;
-            color: rgba(255, 255, 255, 0.8);
-        }
-
-        .stats-content p {
-            margin: 8px 0;
-            font-size: 14px;
-            color: rgba(255, 255, 255, 0.9);
-            line-height: 1.6;
-        }
-
-        .stats-content strong {
-            color: #667eea;
-        }
-
-        /* Background Selection Modal */
-        .bg-modal-overlay {
-            position: fixed;
-            top: 0;
-            left: 0;
-            right: 0;
-            bottom: 0;
-            background: rgba(0, 0, 0, 0.8);
-            backdrop-filter: blur(8px);
-            z-index: 10002;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            animation: fadeIn 0.2s ease-out;
-        }
-
-        .bg-modal {
-            background: rgba(26, 26, 26, 0.98);
-            backdrop-filter: blur(40px);
-            border: 1.5px solid rgba(255, 255, 255, 0.15);
-            border-radius: 24px;
-            max-width: 700px;
-            width: 90%;
-            max-height: 85vh;
-            overflow: hidden;
-            animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
-        }
-
-        .bg-modal-header {
-            padding: 20px 24px;
-            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-        }
-
-        .bg-modal-header h3 {
-            margin: 0;
-            font-size: 20px;
-            font-weight: 700;
-            color: white;
-        }
-
-        .bg-modal-content {
-            padding: 24px;
-            max-height: calc(85vh - 80px);
-            overflow-y: auto;
-        }
-
-        .bg-option-section {
-            margin-bottom: 32px;
-        }
-
-        .bg-option-section:last-child {
-            margin-bottom: 0;
-        }
-
-        .bg-option-section h4 {
-            margin: 0 0 16px 0;
-            font-size: 14px;
-            font-weight: 600;
-            color: rgba(255, 255, 255, 0.7);
-            text-transform: uppercase;
-            letter-spacing: 0.5px;
-        }
-
-        .bg-options-grid {
-            display: grid;
-            grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
-            gap: 12px;
-        }
-
-        .bg-option {
-            background: rgba(255, 255, 255, 0.05);
-            border: 2px solid rgba(255, 255, 255, 0.1);
-            border-radius: 16px;
-            padding: 8px;
-            cursor: pointer;
-            transition: all 0.2s;
-            display: flex;
-            flex-direction: column;
-            gap: 8px;
-            align-items: center;
-        }
-
-        .bg-option:hover {
-            background: rgba(255, 255, 255, 0.08);
-            border-color: rgba(102, 126, 234, 0.5);
-            transform: translateY(-2px);
-        }
-
-        .bg-option.active {
-            background: rgba(102, 126, 234, 0.2);
-            border-color: #667eea;
-        }
-
-        .bg-preview {
-            width: 100%;
-            aspect-ratio: 16/9;
-            border-radius: 12px;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            font-size: 32px;
-            overflow: hidden;
-        }
-
-        .bg-option span {
-            font-size: 13px;
-            font-weight: 500;
-            color: white;
-            text-align: center;
-        }
     </style>
 </head>
 <body>
@@ -919,8 +557,6 @@
         console.log('[GROUP-CALL-DAILY] Room:', roomID, 'User:', userName, 'Host:', isHost, 'AuthToken:', authToken ? 'Present' : 'None');
 
         let callFrame = null;
-        let actualIsHost = isHost; // Will be updated from backend response
-        let actualUserName = userName; // Will be updated from backend response
 
         // Initialize Daily.co call
         initializeCall();
@@ -943,8 +579,8 @@
                 console.log('[GROUP-CALL-DAILY] Room URL:', data.roomUrl);
 
                 // Use correct userName from backend (respects authentication)
-                actualUserName = data.userName || userName;
-                actualIsHost = data.isHost !== undefined ? data.isHost : isHost;
+                const actualUserName = data.userName || userName;
+                const actualIsHost = data.isHost !== undefined ? data.isHost : isHost;
                 console.log('[GROUP-CALL-DAILY] Joining as:', actualUserName, '(Host:', actualIsHost + ')');
 
                 // Step 2: Create Daily iframe with MINIMAL UI (we use custom controls)
@@ -967,7 +603,23 @@
                     showBackgroundBlurButton: false,
 
                     // Minimal chrome for clean custom UI
-                    customTrayButtons: {}
+                    customTrayButtons: {},
+
+                    // Custom theme matching your app design
+                    theme: {
+                        colors: {
+                            accent: '#667eea',
+                            accentText: '#FFFFFF',
+                            background: '#000000',
+                            backgroundAccent: '#0f172a',
+                            baseText: '#FFFFFF',
+                            border: 'transparent',
+                            mainAreaBg: '#000000',
+                            mainAreaBgAccent: '#000000',
+                            mainAreaText: '#FFFFFF',
+                            supportiveText: '#94a3b8'
+                        }
+                    }
                 });
 
                 // Hide loading immediately to show Daily.co prejoin UI
@@ -1118,512 +770,13 @@
 
                 if (isSharing) {
                     await callFrame.stopScreenShare();
-                    screenShareBtn.classList.remove('active');
                 } else {
                     await callFrame.startScreenShare();
-                    screenShareBtn.classList.add('active');
                 }
-            });
-
-            // More button - show participant controls & advanced features
-            const moreBtn = document.getElementById('moreBtn');
-            moreBtn.addEventListener('click', () => {
-                showMoreMenu();
             });
 
             // Start call timer
             startCallTimer();
-
-            // Setup speaking indicators
-            setupSpeakingIndicators();
-        }
-
-        // Speaking indicator functionality
-        function setupSpeakingIndicators() {
-            callFrame.on('active-speaker-change', (event) => {
-                console.log('[GROUP-CALL-DAILY] Active speaker:', event.activeSpeaker?.peerId);
-
-                // Add visual indicator to participant who is speaking
-                const participants = callFrame.participants();
-                Object.values(participants).forEach(p => {
-                    // Find participant video element and add speaking class
-                    const videoEl = document.querySelector(`[data-participant-id="${p.session_id}"]`);
-                    if (videoEl) {
-                        if (p.session_id === event.activeSpeaker?.peerId) {
-                            videoEl.classList.add('speaking');
-                        } else {
-                            videoEl.classList.remove('speaking');
-                        }
-                    }
-                });
-            });
-        }
-
-        // Show More menu with advanced controls
-        function showMoreMenu() {
-            const participants = callFrame.participants();
-            const isHost = actualIsHost;
-
-            let menuHTML = `
-                <div class="more-menu-overlay" onclick="hideMoreMenu()">
-                    <div class="more-menu" onclick="event.stopPropagation()">
-                        <div class="more-menu-header">
-                            <h3>Advanced Options</h3>
-                            <button class="close-btn" onclick="hideMoreMenu()">×</button>
-                        </div>
-                        <div class="more-menu-content">
-            `;
-
-            // Background & Video Settings (FREE features only)
-            menuHTML += `
-                <div class="menu-section">
-                    <h4>🎨 Background & Video</h4>
-                    <button class="menu-item" onclick="showBackgroundOptions()">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <rect x="3" y="3" width="18" height="18" rx="2" ry="2"/>
-                            <circle cx="8.5" cy="8.5" r="1.5"/>
-                            <polyline points="21 15 16 10 5 21"/>
-                        </svg>
-                        Choose Background (Blur/Image)
-                    </button>
-                    <button class="menu-item" onclick="uploadCustomBackground()">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                            <polyline points="17 8 12 3 7 8"/>
-                            <line x1="12" y1="3" x2="12" y2="15"/>
-                        </svg>
-                        Upload Custom Background
-                    </button>
-                    <button class="menu-item" onclick="setVideoQuality('high')">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M23 7l-7 5 7 5V7z"/>
-                            <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
-                        </svg>
-                        Video Quality: HD 720p
-                    </button>
-                    <button class="menu-item" onclick="setVideoQuality('low')">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M23 7l-7 5 7 5V7z"/>
-                            <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
-                        </svg>
-                        Video Quality: Low (Save Data)
-                    </button>
-                </div>
-            `;
-
-            // Participant list with stats
-            menuHTML += `
-                <div class="menu-section">
-                    <h4>👥 Participants (${Object.keys(participants).length})</h4>
-                    <div class="participant-list">
-            `;
-
-            Object.values(participants).forEach(p => {
-                const isSelf = p.local;
-                const name = p.user_name || 'Guest';
-                menuHTML += `
-                    <div class="participant-item">
-                        <div class="participant-info">
-                            <span class="participant-name">${name}${isSelf ? ' (You)' : ''}</span>
-                            <div class="participant-status">
-                                ${p.audio ? '🎤' : '🔇'}
-                                ${p.video ? '📹' : '📷'}
-                                ${p.screen ? '🖥️' : ''}
-                            </div>
-                        </div>
-                        ${!isSelf ? `
-                            <button class="small-btn" onclick="showParticipantStats('${p.session_id}', '${name}')">Stats</button>
-                        ` : ''}
-                    </div>
-                `;
-            });
-
-            menuHTML += `
-                    </div>
-                </div>
-            `;
-
-            // Local Recording (Browser-based, FREE)
-            menuHTML += `
-                <div class="menu-section">
-                    <h4>🎥 Recording (Local Only - Free)</h4>
-                    <button class="menu-item" onclick="toggleLocalRecording()">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="12" cy="12" r="10"/>
-                            <path d="M12 6v6l4 2"/>
-                        </svg>
-                        ${window.localRecorderActive ? 'Stop' : 'Start'} Browser Recording
-                    </button>
-                    <p style="font-size: 12px; color: rgba(255,255,255,0.6); margin: 8px 16px 0;">
-                        Records to your device. Cloud recording requires paid plan.
-                    </p>
-                </div>
-            `;
-
-            // Network Stats (FREE)
-            menuHTML += `
-                <div class="menu-section">
-                    <h4>📊 Network & Performance</h4>
-                    <button class="menu-item" onclick="showNetworkStats()">
-                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <polyline points="22 12 18 12 15 21 9 3 6 12 2 12"/>
-                        </svg>
-                        Show Network Stats
-                    </button>
-                </div>
-            `;
-
-            menuHTML += `
-                        </div>
-                    </div>
-                </div>
-            `;
-
-            document.body.insertAdjacentHTML('beforeend', menuHTML);
-        }
-
-        function hideMoreMenu() {
-            const overlay = document.querySelector('.more-menu-overlay');
-            if (overlay) overlay.remove();
-        }
-
-        // ============================================
-        // DAILY.CO API IMPLEMENTATIONS
-        // ============================================
-
-        // ============================================
-        // BACKGROUND OPTIONS (FREE)
-        // ============================================
-
-        let currentBackgroundType = 'none'; // 'none', 'blur', 'image'
-        let customBackgroundImage = null;
-
-        // Preset backgrounds gallery
-        const backgroundPresets = [
-            'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=1920&q=80', // Gradient abstract
-            'https://images.unsplash.com/photo-1557683316-973673baf926?w=1920&q=80', // Gradient blue
-            'https://images.unsplash.com/photo-1620121692029-d088224ddc74?w=1920&q=80', // Gradient purple
-            'https://images.unsplash.com/photo-1604076984203-587c92ab2e58?w=1920&q=80', // Office blur
-            'https://images.unsplash.com/photo-1497366216548-37526070297c?w=1920&q=80', // Modern office
-            'https://images.unsplash.com/photo-1497366811353-6870744d04b2?w=1920&q=80', // Coworking space
-            'https://images.unsplash.com/photo-1525268771113-32d9e9021a97?w=1920&q=80', // Bookshelf
-            'https://images.unsplash.com/photo-1519681393784-d120267933ba?w=1920&q=80', // Mountains
-        ];
-
-        function showBackgroundOptions() {
-            hideMoreMenu();
-
-            const bgModal = document.createElement('div');
-            bgModal.className = 'bg-modal-overlay';
-            bgModal.innerHTML = `
-                <div class="bg-modal">
-                    <div class="bg-modal-header">
-                        <h3>🎨 Choose Background</h3>
-                        <button class="close-btn" onclick="this.closest('.bg-modal-overlay').remove()">×</button>
-                    </div>
-                    <div class="bg-modal-content">
-                        <div class="bg-option-section">
-                            <h4>Effects</h4>
-                            <div class="bg-options-grid">
-                                <button class="bg-option ${currentBackgroundType === 'none' ? 'active' : ''}" onclick="setBackground('none').catch(console.error)">
-                                    <div class="bg-preview" style="background: #1a1a1a;">
-                                        <span>❌</span>
-                                    </div>
-                                    <span>None</span>
-                                </button>
-                                <button class="bg-option ${currentBackgroundType === 'blur' ? 'active' : ''}" onclick="setBackground('blur').catch(console.error)">
-                                    <div class="bg-preview" style="background: radial-gradient(circle, rgba(102,126,234,0.5) 0%, rgba(118,75,162,0.5) 100%); backdrop-filter: blur(20px);">
-                                        <span>💫</span>
-                                    </div>
-                                    <span>Blur</span>
-                                </button>
-                            </div>
-                        </div>
-
-                        <div class="bg-option-section">
-                            <h4>Image Backgrounds</h4>
-                            <div class="bg-options-grid">
-                                ${backgroundPresets.map((url, i) => `
-                                    <button class="bg-option" onclick="setBackground('image', '${url}').catch(console.error)">
-                                        <div class="bg-preview" style="background-image: url('${url}'); background-size: cover; background-position: center;">
-                                        </div>
-                                        <span>Style ${i + 1}</span>
-                                    </button>
-                                `).join('')}
-                            </div>
-                        </div>
-
-                        <div class="bg-option-section">
-                            <button class="menu-item" onclick="uploadCustomBackground()" style="width: 100%; margin-top: 12px;">
-                                <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                                    <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                                    <polyline points="17 8 12 3 7 8"/>
-                                    <line x1="12" y1="3" x2="12" y2="15"/>
-                                </svg>
-                                Upload Your Own Image
-                            </button>
-                        </div>
-                    </div>
-                </div>
-            `;
-
-            document.body.appendChild(bgModal);
-        }
-
-        async function setBackground(type, imageUrl = null) {
-            try {
-                if (type === 'none') {
-                    await callFrame.updateInputSettings({
-                        video: { processor: { type: 'none' } }
-                    });
-                    currentBackgroundType = 'none';
-                    console.log('[DAILY] Background removed');
-
-                } else if (type === 'blur') {
-                    await callFrame.updateInputSettings({
-                        video: { processor: { type: 'background-blur', config: { strength: 0.9 } } }
-                    });
-                    currentBackgroundType = 'blur';
-                    console.log('[DAILY] Background blur enabled');
-
-                } else if (type === 'image' && imageUrl) {
-                    // Load image as background
-                    await callFrame.updateInputSettings({
-                        video: {
-                            processor: {
-                                type: 'background-image',
-                                config: { source: imageUrl }
-                            }
-                        }
-                    });
-                    currentBackgroundType = 'image';
-                    customBackgroundImage = imageUrl;
-                    console.log('[DAILY] Background image set');
-                }
-
-                // Update UI
-                document.querySelectorAll('.bg-option').forEach(btn => {
-                    btn.classList.remove('active');
-                });
-                event?.target.closest('.bg-option')?.classList.add('active');
-
-            } catch (error) {
-                console.error('[DAILY] Background change error:', error);
-                alert('Failed to change background. Feature may not be available.');
-            }
-        }
-
-        function uploadCustomBackground() {
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = 'image/*';
-            input.onchange = async (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
-
-                try {
-                    // Create URL from file
-                    const imageUrl = URL.createObjectURL(file);
-
-                    // Set as background
-                    await setBackground('image', imageUrl);
-
-                    // Close modal
-                    document.querySelector('.bg-modal-overlay')?.remove();
-
-                    console.log('[DAILY] Custom background uploaded');
-                } catch (error) {
-                    console.error('[DAILY] Upload error:', error);
-                    alert('Failed to upload background image');
-                }
-            };
-            input.click();
-        }
-
-        async function setVideoQuality(quality) {
-            try {
-                const settings = quality === 'high'
-                    ? { bandwidth: { trackConstraints: { width: 1280, height: 720 } } }
-                    : { bandwidth: { trackConstraints: { width: 640, height: 360 } } };
-
-                await callFrame.setBandwidth(settings);
-                alert(`Video quality set to ${quality}!`);
-            } catch (error) {
-                console.error('[DAILY] Video quality error:', error);
-                alert('Failed to change video quality');
-            }
-            hideMoreMenu();
-        }
-
-        // Participant Stats
-        async function showParticipantStats(sessionId, name) {
-            try {
-                const stats = await callFrame.getNetworkStats();
-                const participantStats = stats.stats[sessionId];
-
-                if (participantStats) {
-                    const videoRecv = participantStats.videoRecv;
-                    const audioRecv = participantStats.audioRecv;
-
-                    alert(`Stats for ${name}:\n\n` +
-                        `Video: ${videoRecv?.width}x${videoRecv?.height} @ ${videoRecv?.fps}fps\n` +
-                        `Video Bitrate: ${Math.round((videoRecv?.kbps || 0))} kbps\n` +
-                        `Audio Bitrate: ${Math.round((audioRecv?.kbps || 0))} kbps\n` +
-                        `Packet Loss: ${((participantStats.videoRecvPacketLoss || 0) * 100).toFixed(1)}%`
-                    );
-                }
-            } catch (error) {
-                console.error('[DAILY] Stats error:', error);
-                alert('Failed to get participant stats');
-            }
-        }
-
-            try {
-                if (localRecorder) {
-                    await callFrame.stopLocalRecording();
-                    localRecorder = null;
-                    alert('Local recording stopped! Check your downloads.');
-                } else {
-                    localRecorder = await callFrame.startLocalRecording();
-                    alert('Local recording started!');
-                }
-            } catch (error) {
-                console.error('[DAILY] Local recording error:', error);
-                alert('Local recording not supported in this browser');
-            }
-            hideMoreMenu();
-        }
-
-        async function startLiveStream() {
-            const rtmpUrl = prompt('Enter RTMP URL (e.g., from YouTube, Twitch, Facebook):');
-            if (!rtmpUrl) return;
-
-            try {
-                await callFrame.startLiveStreaming({
-                    rtmpUrl: rtmpUrl
-                });
-                alert('Live stream started!');
-            } catch (error) {
-                console.error('[DAILY] Live streaming error:', error);
-                alert('Live streaming requires a Daily.co paid plan.');
-            }
-            hideMoreMenu();
-        }
-
-        // Network & Performance
-        async function showNetworkStats() {
-            try {
-                const stats = await callFrame.getNetworkStats();
-                const quality = stats.quality || 50;
-                const threshold = stats.threshold || 'good';
-
-                let statsHTML = `
-                    <div class="stats-overlay" onclick="this.remove()">
-                        <div class="stats-panel" onclick="event.stopPropagation()">
-                            <h3>📊 Network Statistics</h3>
-                            <div class="stats-content">
-                                <p><strong>Connection Quality:</strong> ${threshold.toUpperCase()} (${quality}%)</p>
-                                <h4>Local Stats:</h4>
-                `;
-
-                const local = stats.stats.local;
-                if (local) {
-                    statsHTML += `
-                        <p>Video Send: ${local.videoSend?.width}x${local.videoSend?.height} @ ${local.videoSend?.fps}fps</p>
-                        <p>Video Bitrate: ${Math.round(local.videoSend?.kbps || 0)} kbps</p>
-                        <p>Audio Bitrate: ${Math.round(local.audioSend?.kbps || 0)} kbps</p>
-                        <p>Packet Loss: ${((local.videoSendPacketLoss || 0) * 100).toFixed(2)}%</p>
-                    `;
-                }
-
-                statsHTML += `
-                            </div>
-                            <button onclick="this.closest('.stats-overlay').remove()" class="menu-item" style="margin-top: 20px;">Close</button>
-                        </div>
-                    </div>
-                `;
-
-                document.body.insertAdjacentHTML('beforeend', statsHTML);
-            } catch (error) {
-                console.error('[DAILY] Network stats error:', error);
-                alert('Failed to get network stats');
-            }
-            hideMoreMenu();
-        }
-
-        async function testBandwidth() {
-            alert('Running bandwidth test... This may take 10-15 seconds.');
-            try {
-                const result = await callFrame.testConnectionQuality();
-                alert(`Bandwidth Test Results:\n\n` +
-                    `Download: ${result.downloadSpeed} Mbps\n` +
-                    `Upload: ${result.uploadSpeed} Mbps\n` +
-                    `Quality: ${result.quality}\n` +
-                    `Recommendation: ${result.recommendation}`
-                );
-            } catch (error) {
-                console.error('[DAILY] Bandwidth test error:', error);
-                alert('Bandwidth test failed. Make sure you have a stable connection.');
-            }
-            hideMoreMenu();
-        }
-
-        // Advanced Features
-        let transcriptionEnabled = false;
-        async function enableTranscription() {
-            try {
-                if (transcriptionEnabled) {
-                    await callFrame.stopTranscription();
-                    alert('Transcription stopped');
-                    transcriptionEnabled = false;
-                } else {
-                    await callFrame.startTranscription();
-                    alert('Live transcription enabled! (Requires Daily.co Enterprise plan)');
-                    transcriptionEnabled = true;
-
-                    // Listen for transcription events
-                    callFrame.on('transcription-message', (event) => {
-                        console.log('[DAILY] Transcription:', event);
-                    });
-                }
-            } catch (error) {
-                console.error('[DAILY] Transcription error:', error);
-                alert('Live transcription requires Daily.co Enterprise plan.');
-            }
-            hideMoreMenu();
-        }
-
-        let noiseCancellation = false;
-        async function toggleNoiseCancellation() {
-            try {
-                noiseCancellation = !noiseCancellation;
-                await callFrame.updateInputSettings({
-                    audio: {
-                        processor: noiseCancellation
-                            ? { type: 'noise-cancellation' }
-                            : { type: 'none' }
-                    }
-                });
-                alert(`Advanced noise cancellation ${noiseCancellation ? 'enabled' : 'disabled'}!`);
-            } catch (error) {
-                console.error('[DAILY] Noise cancellation error:', error);
-                alert('Advanced noise cancellation not available');
-            }
-            hideMoreMenu();
-        }
-
-        async function setLayout(layoutType) {
-            try {
-                // This changes the recording layout, not the client-side layout
-                await callFrame.setRecordingLayout({
-                    preset: layoutType // 'grid' or 'speaker'
-                });
-                alert(`Recording layout set to ${layoutType} view!`);
-            } catch (error) {
-                console.error('[DAILY] Layout error:', error);
-                alert('Layout change not available');
-            }
-            hideMoreMenu();
         }
 
         function updateControlButtons(participant) {
@@ -1687,6 +840,98 @@
                 console.log('[GROUP-CALL-DAILY] Tab visible');
             }
         });
+
+        // ============================================
+        // MORE BUTTON - FREE FEATURES ONLY
+        // ============================================
+
+        const moreBtn = document.getElementById('moreBtn');
+        if (moreBtn) {
+            moreBtn.addEventListener('click', () => {
+                const participants = callFrame.participants();
+
+                // Create simple modal with free features
+                const modal = document.createElement('div');
+                modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);z-index:10000;display:flex;align-items:center;justify-content:center;';
+                modal.onclick = () => modal.remove();
+
+                const content = document.createElement('div');
+                content.style.cssText = 'background:#1a1a1a;border-radius:20px;padding:24px;max-width:500px;width:90%;max-height:80vh;overflow-y:auto;';
+                content.onclick = (e) => e.stopPropagation();
+
+                content.innerHTML = `
+                    <h2 style="margin:0 0 20px;color:white;">Call Options</h2>
+
+                    <div style="margin-bottom:20px;">
+                        <h3 style="color:#999;font-size:14px;margin:0 0 12px;">Background</h3>
+                        <button onclick="toggleBackgroundBlur()" style="width:100%;padding:14px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:12px;color:white;cursor:pointer;font-size:15px;margin-bottom:8px;">
+                            Toggle Background Blur
+                        </button>
+                    </div>
+
+                    <div style="margin-bottom:20px;">
+                        <h3 style="color:#999;font-size:14px;margin:0 0 12px;">Video Quality</h3>
+                        <button onclick="setQuality('high')" style="width:100%;padding:14px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:12px;color:white;cursor:pointer;font-size:15px;margin-bottom:8px;">
+                            HD Quality (720p)
+                        </button>
+                        <button onclick="setQuality('low')" style="width:100%;padding:14px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:12px;color:white;cursor:pointer;font-size:15px;">
+                            Low Quality (Save Data)
+                        </button>
+                    </div>
+
+                    <div>
+                        <h3 style="color:#999;font-size:14px;margin:0 0 12px;">Participants (${Object.keys(participants).length})</h3>
+                        ${Object.values(participants).map(p => `
+                            <div style="padding:12px;background:rgba(255,255,255,0.05);border-radius:8px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;">
+                                <span style="color:white;">${p.user_name || 'Guest'}${p.local ? ' (You)' : ''}</span>
+                                <span style="color:#999;font-size:13px;">${p.audio ? '🎤' : '🔇'} ${p.video ? '📹' : '📷'}</span>
+                            </div>
+                        `).join('')}
+                    </div>
+
+                    <button onclick="this.closest('[style*=fixed]').remove()" style="width:100%;padding:14px;background:#667eea;border:none;border-radius:12px;color:white;cursor:pointer;font-size:15px;margin-top:20px;">
+                        Close
+                    </button>
+                `;
+
+                modal.appendChild(content);
+                document.body.appendChild(modal);
+            });
+        }
+
+        // Background blur toggle
+        let blurEnabled = false;
+        window.toggleBackgroundBlur = async () => {
+            try {
+                if (blurEnabled) {
+                    await callFrame.updateInputSettings({ video: { processor: { type: 'none' } } });
+                    blurEnabled = false;
+                    console.log('[DAILY] Background blur OFF');
+                } else {
+                    await callFrame.updateInputSettings({ video: { processor: { type: 'background-blur', config: { strength: 0.9 } } } });
+                    blurEnabled = true;
+                    console.log('[DAILY] Background blur ON');
+                }
+                document.querySelector('[style*="fixed"]')?.remove();
+            } catch (e) {
+                console.error('[DAILY] Blur error:', e);
+                alert('Background blur not available');
+            }
+        };
+
+        // Video quality
+        window.setQuality = async (level) => {
+            try {
+                const settings = level === 'high'
+                    ? { bandwidth: { trackConstraints: { width: 1280, height: 720 } } }
+                    : { bandwidth: { trackConstraints: { width: 640, height: 360 } } };
+                await callFrame.setBandwidth(settings);
+                console.log('[DAILY] Quality set to', level);
+                document.querySelector('[style*="fixed"]')?.remove();
+            } catch (e) {
+                console.error('[DAILY] Quality error:', e);
+            }
+        };
     </script>
 </body>
 </html>
