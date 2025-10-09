@@ -115,10 +115,17 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     participantDirectory.set('self', guestName);
 
-    // Initialize AI Notetaker (host only)
+    // Initialize Modern AI Notetaker
+    let aiNotetaker = null;
     if (typeof AINotetaker !== 'undefined') {
-        notetaker = new AINotetaker(roomID, isHostSession);
-        console.log('[CALL] 🤖 AI Notetaker initialized');
+        aiNotetaker = new AINotetaker(roomID, guestName, isHostSession);
+        console.log('[CALL] 🤖 Modern AI Notetaker initialized');
+    }
+
+    // Legacy notetaker for compatibility
+    if (typeof AINotetaker !== 'undefined' && window.AINotetaker !== AINotetaker) {
+        notetaker = new window.AINotetaker(roomID, isHostSession);
+        console.log('[CALL] 🤖 Legacy AI Notetaker initialized');
     }
 
     emitNotetakerParticipants();
@@ -196,6 +203,11 @@ document.addEventListener('DOMContentLoaded', async () => {
 
     // Prevent accidental page close
     window.addEventListener('beforeunload', (e) => {
+        // Cleanup AI Notetaker
+        if (aiNotetaker) {
+            aiNotetaker.destroy();
+        }
+
         if (socket && socket.readyState === WebSocket.OPEN) {
             e.preventDefault();
             return '';
