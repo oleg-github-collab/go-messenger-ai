@@ -2460,5 +2460,8 @@ Provide specific recommendations on how to respond.`
     }
 }
 
+// Export to global scope
+window.AINotetaker = AINotetaker;
+
 // Global instance (will be initialized in call.js)
 let notetaker = null;

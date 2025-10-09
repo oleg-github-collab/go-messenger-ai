@@ -1181,3 +1181,6 @@ class WebRTCManager {
         }
     }
 }
+
+// Export to global scope for call.js
+window.WebRTCManager = WebRTCManager;
