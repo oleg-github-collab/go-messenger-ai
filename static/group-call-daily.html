@@ -1054,23 +1054,8 @@
         });
 
         // ============================================
-        // MORE BUTTON - BEAUTIFUL FREE FEATURES
+        // MORE BUTTON - REACTIONS & STATS
         // ============================================
-
-        // Background presets
-        const bgPresets = [
-            { name: 'Gradient Blue', url: 'https://images.unsplash.com/photo-1557683316-973673baf926?w=1920&q=80' },
-            { name: 'Gradient Purple', url: 'https://images.unsplash.com/photo-1620121692029-d088224ddc74?w=1920&q=80' },
-            { name: 'Abstract Art', url: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=1920&q=80' },
-            { name: 'Office Space', url: 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=1920&q=80' },
-            { name: 'Modern Room', url: 'https://images.unsplash.com/photo-1497366811353-6870744d04b2?w=1920&q=80' },
-            { name: 'Bookshelf', url: 'https://images.unsplash.com/photo-1525268771113-32d9e9021a97?w=1920&q=80' },
-            { name: 'Mountains', url: 'https://images.unsplash.com/photo-1519681393784-d120267933ba?w=1920&q=80' },
-            { name: 'City View', url: 'https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b?w=1920&q=80' }
-        ];
-
-        let currentBgType = 'none';
-        let currentBgImage = null;
 
         const moreBtn = document.getElementById('moreBtn');
         if (moreBtn) {
@@ -1091,44 +1076,67 @@
                         <button class="daily-close-btn" onclick="closeModal()">×</button>
                     </div>
                     <div class="daily-modal-content">
-                        <!-- Background Section -->
+                        <!-- Reactions Section -->
                         <div class="daily-section">
-                            <h3>🎨 Background</h3>
+                            <h3>😊 Quick Reactions</h3>
                             <div class="bg-grid">
-                                <button class="bg-tile ${currentBgType === 'none' ? 'active' : ''}" onclick="applyBackground('none')">
-                                    <div class="bg-preview" style="background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);">
-                                        <span class="bg-icon">❌</span>
+                                <button class="bg-tile" onclick="sendReaction('👍')">
+                                    <div class="bg-preview" style="background: rgba(255,255,255,0.05);">
+                                        <span class="bg-icon">👍</span>
                                     </div>
-                                    <span class="bg-label">None</span>
+                                    <span class="bg-label">Like</span>
                                 </button>
-                                <button class="bg-tile ${currentBgType === 'blur' ? 'active' : ''}" onclick="applyBackground('blur')">
-                                    <div class="bg-preview" style="background: radial-gradient(circle, rgba(102,126,234,0.6) 0%, rgba(118,75,162,0.6) 100%); backdrop-filter: blur(20px);">
-                                        <span class="bg-icon">💫</span>
+                                <button class="bg-tile" onclick="sendReaction('👏')">
+                                    <div class="bg-preview" style="background: rgba(255,255,255,0.05);">
+                                        <span class="bg-icon">👏</span>
                                     </div>
-                                    <span class="bg-label">Blur</span>
+                                    <span class="bg-label">Clap</span>
                                 </button>
-                                ${bgPresets.map((bg, i) => `
-                                    <button class="bg-tile ${currentBgImage === bg.url ? 'active' : ''}" onclick="applyBackground('image', ${i})">
-                                        <div class="bg-preview" style="background-image: url('${bg.url}'); background-size: cover; background-position: center;"></div>
-                                        <span class="bg-label">${bg.name}</span>
-                                    </button>
-                                `).join('')}
+                                <button class="bg-tile" onclick="sendReaction('❤️')">
+                                    <div class="bg-preview" style="background: rgba(255,255,255,0.05);">
+                                        <span class="bg-icon">❤️</span>
+                                    </div>
+                                    <span class="bg-label">Love</span>
+                                </button>
+                                <button class="bg-tile" onclick="sendReaction('😂')">
+                                    <div class="bg-preview" style="background: rgba(255,255,255,0.05);">
+                                        <span class="bg-icon">😂</span>
+                                    </div>
+                                    <span class="bg-label">Laugh</span>
+                                </button>
+                                <button class="bg-tile" onclick="sendReaction('🎉')">
+                                    <div class="bg-preview" style="background: rgba(255,255,255,0.05);">
+                                        <span class="bg-icon">🎉</span>
+                                    </div>
+                                    <span class="bg-label">Party</span>
+                                </button>
+                                <button class="bg-tile" onclick="sendReaction('🔥')">
+                                    <div class="bg-preview" style="background: rgba(255,255,255,0.05);">
+                                        <span class="bg-icon">🔥</span>
+                                    </div>
+                                    <span class="bg-label">Fire</span>
+                                </button>
                             </div>
-                            <button class="daily-btn-secondary" onclick="uploadCustomBg()" style="margin-top: 12px;">
-                                📁 Upload Your Image
-                            </button>
                         </div>
 
-                        <!-- Quality Section -->
+                        <!-- Network Stats Section -->
                         <div class="daily-section">
-                            <h3>🎥 Video Quality</h3>
-                            <div class="quality-buttons">
-                                <button class="daily-btn-secondary" onclick="applyQuality('high')">
-                                    HD (720p)
-                                </button>
-                                <button class="daily-btn-secondary" onclick="applyQuality('low')">
-                                    Low (360p)
-                                </button>
+                            <h3>📊 Network Stats</h3>
+                            <div class="participant-list">
+                                <div class="participant-card">
+                                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                        <span style="color: rgba(255,255,255,0.6);">Connection Quality:</span>
+                                        <span id="networkQuality" style="color: #4ade80; font-weight: 600;">Good</span>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between; margin-bottom: 8px;">
+                                        <span style="color: rgba(255,255,255,0.6);">Latency:</span>
+                                        <span id="networkLatency" style="color: white; font-weight: 500;">-- ms</span>
+                                    </div>
+                                    <div style="display: flex; justify-content: space-between;">
+                                        <span style="color: rgba(255,255,255,0.6);">Packet Loss:</span>
+                                        <span id="networkLoss" style="color: white; font-weight: 500;">-- %</span>
+                                    </div>
+                                </div>
                             </div>
                         </div>
 
@@ -1165,88 +1173,108 @@
             }
         };
 
-        // Apply background
-        window.applyBackground = async (type, presetIndex) => {
+        // Send reaction to all participants
+        window.sendReaction = async (emoji) => {
             try {
-                if (type === 'none') {
-                    await callFrame.updateInputSettings({ video: { processor: { type: 'none' } } });
-                    currentBgType = 'none';
-                    currentBgImage = null;
-                    console.log('[DAILY] Background removed');
+                // Use Daily.co's sendAppMessage for reactions
+                await callFrame.sendAppMessage({ type: 'reaction', emoji }, '*');
 
-                } else if (type === 'blur') {
-                    await callFrame.updateInputSettings({ video: { processor: { type: 'background-blur', config: { strength: 0.9 } } } });
-                    currentBgType = 'blur';
-                    currentBgImage = null;
-                    console.log('[DAILY] Background blur applied');
+                // Show local reaction animation
+                showReactionAnimation(emoji);
+                console.log('[DAILY] Sent reaction:', emoji);
 
-                } else if (type === 'image' && presetIndex !== undefined) {
-                    const bgUrl = bgPresets[presetIndex].url;
-                    await callFrame.updateInputSettings({
-                        video: {
-                            processor: {
-                                type: 'background-image',
-                                config: { source: bgUrl }
-                            }
-                        }
-                    });
-                    currentBgType = 'image';
-                    currentBgImage = bgUrl;
-                    console.log('[DAILY] Background image applied:', bgPresets[presetIndex].name);
-                }
-
-                // Update UI
-                showMoreModal(); // Refresh to show active state
+                closeModal();
             } catch (e) {
-                console.error('[DAILY] Background error:', e);
-                alert('Failed to apply background. Feature may not be available on free plan.');
+                console.error('[DAILY] Reaction error:', e);
             }
         };
 
-        // Upload custom background
-        window.uploadCustomBg = () => {
-            const input = document.createElement('input');
-            input.type = 'file';
-            input.accept = 'image/*';
-            input.onchange = async (e) => {
-                const file = e.target.files[0];
-                if (!file) return;
+        // Show reaction animation
+        function showReactionAnimation(emoji) {
+            const container = document.createElement('div');
+            container.style.cssText = `
+                position: fixed;
+                bottom: 100px;
+                left: 50%;
+                transform: translateX(-50%);
+                font-size: 80px;
+                z-index: 9999;
+                pointer-events: none;
+                animation: reactionFloat 2s ease-out forwards;
+            `;
+            container.textContent = emoji;
+            document.body.appendChild(container);
 
-                try {
-                    const imageUrl = URL.createObjectURL(file);
-                    await callFrame.updateInputSettings({
-                        video: {
-                            processor: {
-                                type: 'background-image',
-                                config: { source: imageUrl }
-                            }
-                        }
-                    });
-                    currentBgType = 'image';
-                    currentBgImage = imageUrl;
-                    console.log('[DAILY] Custom background uploaded');
-                    closeModal();
-                } catch (e) {
-                    console.error('[DAILY] Upload error:', e);
-                    alert('Failed to upload background');
-                }
-            };
-            input.click();
-        };
-
-        // Apply quality
-        window.applyQuality = async (level) => {
-            try {
-                const settings = level === 'high'
-                    ? { bandwidth: { trackConstraints: { width: 1280, height: 720 } } }
-                    : { bandwidth: { trackConstraints: { width: 640, height: 360 } } };
-                await callFrame.setBandwidth(settings);
-                console.log('[DAILY] Quality set to', level);
-            } catch (e) {
-                console.error('[DAILY] Quality error:', e);
-                alert('Failed to change quality');
+            // Add animation styles
+            if (!document.getElementById('reactionStyles')) {
+                const style = document.createElement('style');
+                style.id = 'reactionStyles';
+                style.textContent = `
+                    @keyframes reactionFloat {
+                        0% { opacity: 1; transform: translateX(-50%) translateY(0) scale(0.5); }
+                        50% { opacity: 1; transform: translateX(-50%) translateY(-100px) scale(1.2); }
+                        100% { opacity: 0; transform: translateX(-50%) translateY(-200px) scale(1); }
+                    }
+                `;
+                document.head.appendChild(style);
             }
-        };
+
+            setTimeout(() => container.remove(), 2000);
+        }
+
+        // Listen for reactions from other participants
+        if (callFrame) {
+            callFrame.on('app-message', (event) => {
+                if (event.data?.type === 'reaction') {
+                    showReactionAnimation(event.data.emoji);
+                }
+            });
+        }
+
+        // Update network stats
+        let statsInterval = setInterval(() => {
+            if (!callFrame) return;
+
+            const stats = callFrame.getNetworkStats();
+            if (stats && stats.latest) {
+                const quality = stats.latest.quality || 0;
+                const latency = stats.latest.videoRecvPacketLoss || 0;
+
+                // Update quality text
+                const qualityEl = document.getElementById('networkQuality');
+                if (qualityEl) {
+                    if (quality > 80) {
+                        qualityEl.textContent = 'Excellent';
+                        qualityEl.style.color = '#4ade80';
+                    } else if (quality > 50) {
+                        qualityEl.textContent = 'Good';
+                        qualityEl.style.color = '#fbbf24';
+                    } else {
+                        qualityEl.textContent = 'Poor';
+                        qualityEl.style.color = '#ef4444';
+                    }
+                }
+
+                // Update latency
+                const latencyEl = document.getElementById('networkLatency');
+                if (latencyEl && stats.latest.videoRoundTripTime) {
+                    latencyEl.textContent = Math.round(stats.latest.videoRoundTripTime * 1000) + ' ms';
+                }
+
+                // Update packet loss
+                const lossEl = document.getElementById('networkLoss');
+                if (lossEl) {
+                    const loss = (stats.latest.videoRecvPacketLoss || 0) * 100;
+                    lossEl.textContent = loss.toFixed(1) + ' %';
+                }
+            }
+        }, 2000); // Update every 2 seconds
+
+        // Cleanup stats interval on page unload
+        window.addEventListener('beforeunload', () => {
+            if (statsInterval) clearInterval(statsInterval);
+            if (callFrame) callFrame.destroy();
+        });
     </script>
 </body>
 </html>
