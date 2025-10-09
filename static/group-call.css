@@ -411,16 +411,26 @@ body {
     grid-template-rows: repeat(4, 1fr);
 }
 
-/* Participant Tile */
+/* ============================================
+   PARTICIPANT TILES - MODERN DESIGN
+   ============================================ */
 .participant-tile {
     position: relative;
-    background: #1a1a1a;
-    border-radius: 8px;
+    background: linear-gradient(135deg, #1e293b 0%, #0f172a 100%);
+    border-radius: 16px;
     overflow: hidden;
     display: flex;
     align-items: center;
     justify-content: center;
-    min-height: 150px;
+    min-height: 180px;
+    border: 2px solid rgba(255, 255, 255, 0.05);
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.3);
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.participant-tile:hover {
+    border-color: rgba(255, 255, 255, 0.15);
+    box-shadow: 0 12px 40px rgba(0, 0, 0, 0.4);
 }
 
 .participant-tile video {
@@ -431,7 +441,13 @@ body {
 }
 
 .participant-tile.local {
-    border: 2px solid #007AFF;
+    border: 2.5px solid rgba(0, 122, 255, 0.6);
+    box-shadow: 0 8px 32px rgba(0, 122, 255, 0.25);
+}
+
+.participant-tile.local:hover {
+    border-color: rgba(0, 122, 255, 0.8);
+    box-shadow: 0 12px 40px rgba(0, 122, 255, 0.35);
 }
 
 .participant-tile.local video {
@@ -440,35 +456,47 @@ body {
 
 .participant-name {
     position: absolute;
-    bottom: 8px;
-    left: 8px;
-    background: rgba(0, 0, 0, 0.7);
-    padding: 4px 8px;
-    border-radius: 4px;
-    font-size: 12px;
-    font-weight: 500;
+    bottom: 12px;
+    left: 12px;
+    background: rgba(0, 0, 0, 0.75);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    padding: 6px 12px;
+    border-radius: 8px;
+    font-size: 13px;
+    font-weight: 600;
+    letter-spacing: 0.2px;
+    border: 1px solid rgba(255, 255, 255, 0.1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
 }
 
 .participant-status {
     position: absolute;
-    top: 8px;
-    right: 8px;
+    top: 12px;
+    right: 12px;
     display: flex;
-    gap: 4px;
+    gap: 6px;
 }
 
 .mic-indicator {
-    width: 24px;
-    height: 24px;
-    background: rgba(255, 59, 48, 0.9);
+    width: 32px;
+    height: 32px;
+    background: rgba(255, 59, 48, 0.85);
+    backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
     border-radius: 50%;
+    border: 2px solid rgba(255, 255, 255, 0.2);
     display: flex;
     align-items: center;
     justify-content: center;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .mic-indicator.active {
-    background: rgba(52, 199, 89, 0.9);
+    background: rgba(52, 199, 89, 0.85);
+    border-color: rgba(52, 199, 89, 0.4);
+    box-shadow: 0 0 16px rgba(52, 199, 89, 0.4);
 }
 
 /* Host Controls */
@@ -511,19 +539,23 @@ body {
     transform: scale(0.95);
 }
 
-/* Top Controls */
+/* ============================================
+   TOP CONTROLS - UNIFIED GLASSMORPHISM DESIGN
+   ============================================ */
 .top-controls {
     position: absolute;
     top: 0;
     left: 0;
     right: 0;
-    padding: 16px;
+    padding: 20px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    background: linear-gradient(180deg, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0) 100%);
+    background: linear-gradient(180deg, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.4) 60%, rgba(0,0,0,0) 100%);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
     z-index: 10;
-    transition: transform 0.3s ease, opacity 0.3s ease;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .top-controls.hidden {
@@ -533,33 +565,61 @@ body {
 }
 
 .back-button {
-    width: 40px;
-    height: 40px;
+    width: 48px;
+    height: 48px;
     border-radius: 50%;
-    border: none;
-    background: rgba(255, 255, 255, 0.2);
+    border: 1.5px solid rgba(255, 255, 255, 0.2);
+    background: rgba(255, 255, 255, 0.15);
     color: white;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
     backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.back-button:hover {
+    background: rgba(255, 255, 255, 0.25);
+    border-color: rgba(255, 255, 255, 0.4);
+    transform: scale(1.05);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+}
+
+.back-button:active {
+    transform: scale(0.95);
 }
 
 .call-info {
     text-align: center;
     flex: 1;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 4px;
 }
 
 .participant-count {
-    font-size: 14px;
+    font-size: 15px;
     font-weight: 600;
-    margin-bottom: 4px;
+    letter-spacing: 0.3px;
+    color: #ffffff;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
 }
 
 .call-timer {
-    font-size: 12px;
-    opacity: 0.7;
+    font-size: 13px;
+    font-weight: 500;
+    color: rgba(255, 255, 255, 0.8);
+    letter-spacing: 0.5px;
+    font-variant-numeric: tabular-nums;
+    text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+    padding: 4px 12px;
+    background: rgba(255, 255, 255, 0.1);
+    border-radius: 20px;
+    backdrop-filter: blur(10px);
 }
 
 /* Right side controls (Camera & Mic) */
@@ -616,29 +676,33 @@ body {
     display: block !important;
 }
 
-/* Bottom Controls */
+/* ============================================
+   BOTTOM CONTROLS - ENHANCED GLASSMORPHISM
+   ============================================ */
 .bottom-controls {
     position: absolute;
     bottom: 0;
     left: 0;
     right: 0;
-    padding: 16px;
+    padding: 24px 20px;
+    padding-bottom: calc(24px + env(safe-area-inset-bottom));
     display: flex;
     align-items: center;
     justify-content: center;
-    gap: 12px;
-    background: linear-gradient(0deg, rgba(0,0,0,0.5) 0%, rgba(0,0,0,0) 100%);
+    background: linear-gradient(0deg, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.4) 40%, rgba(0,0,0,0) 100%);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
     z-index: 10;
-    transition: transform 0.3s ease, opacity 0.3s ease;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
 }
 
 .bottom-controls-inner {
     width: 100%;
-    max-width: 960px;
+    max-width: 1024px;
     display: flex;
     align-items: center;
     justify-content: space-between;
-    gap: 16px;
+    gap: 20px;
 }
 
 .controls-group {
@@ -649,10 +713,12 @@ body {
 
 .controls-group.left-controls {
     justify-content: flex-start;
+    flex: 1;
 }
 
 .controls-group.right-controls {
     justify-content: flex-end;
+    flex: 1;
 }
 
 .notetaker-floating-panel {
@@ -675,19 +741,40 @@ body {
     display: flex;
     flex-direction: column;
     align-items: center;
-    gap: 4px;
-    background: rgba(255, 255, 255, 0.2);
-    border: none;
-    border-radius: 12px;
-    padding: 12px 16px;
+    gap: 6px;
+    background: rgba(255, 255, 255, 0.15);
+    border: 1.5px solid rgba(255, 255, 255, 0.15);
+    border-radius: 16px;
+    padding: 14px 18px;
+    min-width: 70px;
     color: white;
     cursor: pointer;
     backdrop-filter: blur(10px);
+    -webkit-backdrop-filter: blur(10px);
     position: relative;
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+}
+
+.control-btn:hover {
+    background: rgba(255, 255, 255, 0.25);
+    border-color: rgba(255, 255, 255, 0.3);
+    transform: translateY(-2px);
+    box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+}
+
+.control-btn:active {
+    transform: translateY(0);
 }
 
 .control-btn[data-active="false"] {
-    background: rgba(255, 59, 48, 0.9);
+    background: rgba(255, 59, 48, 0.85);
+    border-color: rgba(255, 59, 48, 0.4);
+}
+
+.control-btn[data-active="false"]:hover {
+    background: rgba(255, 59, 48, 0.95);
+    border-color: rgba(255, 59, 48, 0.6);
 }
 
 .control-btn[data-active="false"] .icon-on {
@@ -699,22 +786,33 @@ body {
 }
 
 .btn-label {
-    font-size: 10px;
-    font-weight: 500;
+    font-size: 11px;
+    font-weight: 600;
+    letter-spacing: 0.3px;
 }
 
 .end-call-btn {
-    width: 56px;
-    height: 56px;
+    width: 64px;
+    height: 64px;
     border-radius: 50%;
-    border: none;
-    background: #FF3B30;
+    border: 2px solid rgba(255, 59, 48, 0.3);
+    background: linear-gradient(135deg, #FF3B30 0%, #D32F2F 100%);
     color: white;
     cursor: pointer;
     display: flex;
     align-items: center;
     justify-content: center;
-    box-shadow: 0 4px 12px rgba(255, 59, 48, 0.4);
+    box-shadow: 0 6px 20px rgba(255, 59, 48, 0.5);
+    transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+}
+
+.end-call-btn:hover {
+    transform: scale(1.08);
+    box-shadow: 0 8px 24px rgba(255, 59, 48, 0.6);
+}
+
+.end-call-btn:active {
+    transform: scale(0.95);
 }
 
 .chat-badge {
