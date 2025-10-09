@@ -41,3 +41,6 @@ deploy.tar.gz
 main
 .env
 main
+
+# Archive directory (old infrastructure - preserved locally)
+archive/

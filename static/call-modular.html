@@ -11,7 +11,240 @@
     <!-- Modular CSS -->
     <link rel="stylesheet" href="/static/css/main.css">
     <link rel="stylesheet" href="/static/call.css">
-    <link rel="stylesheet" href="/static/css/notetaker-modular.css">
+    <link rel="stylesheet" href="/static/css/notetaker-complete.css">
+
+    <style>
+        /* Chat panel styling */
+        .chat-panel {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: #0f172a;
+            z-index: 1000;
+            display: flex;
+            flex-direction: column;
+            transform: translateX(100%);
+            transition: transform 0.3s ease;
+        }
+
+        .chat-panel.active {
+            transform: translateX(0);
+        }
+
+        /* Flying messages */
+        .flying-messages-container {
+            position: fixed;
+            top: 80px;
+            left: 20px;
+            right: 20px;
+            pointer-events: none;
+            z-index: 100;
+        }
+
+        .flying-message {
+            background: rgba(30, 41, 59, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 12px 16px;
+            border-radius: 12px;
+            margin-bottom: 8px;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.3);
+            opacity: 0;
+            transform: translateY(-20px);
+            transition: all 0.3s ease;
+            max-width: 400px;
+        }
+
+        .flying-message-author {
+            font-size: 12px;
+            color: #94a3b8;
+            margin-bottom: 4px;
+        }
+
+        .flying-message-text {
+            color: white;
+            font-size: 14px;
+        }
+
+        .flying-message-gif img {
+            max-width: 200px;
+            border-radius: 8px;
+            margin-top: 4px;
+        }
+
+        /* Chat message styling */
+        .chat-message-wrapper {
+            margin-bottom: 16px;
+        }
+
+        .chat-message {
+            background: #1e293b;
+            padding: 12px;
+            border-radius: 12px;
+            max-width: 80%;
+        }
+
+        .chat-message-wrapper.sent .chat-message {
+            background: #3b82f6;
+            margin-left: auto;
+        }
+
+        .message-header {
+            display: flex;
+            justify-content: space-between;
+            margin-bottom: 6px;
+            font-size: 12px;
+            color: #94a3b8;
+        }
+
+        .message-text {
+            color: white;
+            font-size: 14px;
+            word-wrap: break-word;
+        }
+
+        .message-gif img {
+            max-width: 100%;
+            border-radius: 8px;
+            margin-top: 4px;
+        }
+
+        /* Bottom action buttons */
+        .bottom-action-btn {
+            position: relative;
+            width: 48px;
+            height: 48px;
+            border-radius: 50%;
+            background: rgba(30, 41, 59, 0.9);
+            backdrop-filter: blur(10px);
+            border: none;
+            color: white;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .bottom-action-btn:hover {
+            background: rgba(51, 65, 85, 0.9);
+            transform: scale(1.1);
+        }
+
+        .notification-badge {
+            position: absolute;
+            top: -4px;
+            right: -4px;
+            background: #ef4444;
+            color: white;
+            font-size: 10px;
+            font-weight: bold;
+            padding: 2px 6px;
+            border-radius: 10px;
+            min-width: 18px;
+            text-align: center;
+        }
+
+        /* Emoji picker item */
+        .emoji-item {
+            background: none;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 4px;
+            border-radius: 4px;
+            transition: background 0.2s;
+        }
+
+        .emoji-item:hover {
+            background: #334155;
+        }
+
+        .emoji-category {
+            background: none;
+            border: none;
+            font-size: 20px;
+            cursor: pointer;
+            padding: 8px;
+            border-radius: 8px;
+            transition: background 0.2s;
+            opacity: 0.6;
+        }
+
+        .emoji-category.active {
+            background: #334155;
+            opacity: 1;
+        }
+
+        /* GIF picker items */
+        .gif-item {
+            position: relative;
+            cursor: pointer;
+            border-radius: 8px;
+            overflow: hidden;
+            transition: transform 0.2s;
+        }
+
+        .gif-item:hover {
+            transform: scale(1.05);
+        }
+
+        .gif-item img {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .gif-favorite-btn {
+            position: absolute;
+            top: 4px;
+            right: 4px;
+            background: rgba(0, 0, 0, 0.6);
+            border: none;
+            color: white;
+            font-size: 16px;
+            width: 28px;
+            height: 28px;
+            border-radius: 50%;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.2s;
+        }
+
+        .gif-item:hover .gif-favorite-btn {
+            opacity: 1;
+        }
+
+        .gif-favorite-btn.active {
+            opacity: 1;
+        }
+
+        .gif-category-btn {
+            background: #334155;
+            border: none;
+            color: white;
+            padding: 8px 12px;
+            border-radius: 8px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 4px;
+            transition: background 0.2s;
+        }
+
+        .gif-category-btn:hover {
+            background: #475569;
+        }
+
+        #gifPickerModal.active,
+        #gifPickerBackdrop.active {
+            display: block;
+        }
+    </style>
 
     <style>
         /* Temporary status overlay for debugging */
@@ -116,6 +349,164 @@
                 </svg>
             </button>
         </div>
+
+        <!-- Bottom action icons -->
+        <div class="bottom-actions" style="position: fixed; bottom: 85px; right: 20px; display: flex; gap: 10px;">
+            <button class="bottom-action-btn" id="chatIconBtn" title="Chat">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM9 11H7V9h2v2zm4 0h-2V9h2v2zm4 0h-2V9h2v2z"/>
+                </svg>
+                <span class="notification-badge" id="chatBadge" style="display: none;">1</span>
+            </button>
+
+            <button class="bottom-action-btn" id="notetakerToggleBtn" title="AI Notetaker">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M9 11H7v2h2v-2zm4 0h-2v2h2v-2zm4 0h-2v2h2v-2zm2-7h-1V2h-2v2H8V2H6v2H5c-1.11 0-1.99.9-1.99 2L3 20c0 1.1.89 2 2 2h14c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zm0 16H5V9h14v11z"/>
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <!-- Flying Messages Container -->
+    <div class="flying-messages-container" id="flyingMessagesContainer"></div>
+
+    <!-- Chat Panel (full screen overlay) -->
+    <div class="chat-panel" id="chatPanel" style="display: none;">
+        <div class="chat-header" style="padding: 16px; background: #1e293b; border-bottom: 1px solid #334155; display: flex; align-items: center;">
+            <button class="chat-back-btn" id="chatBackBtn" style="display: flex; align-items: center; gap: 8px; background: none; border: none; color: white; cursor: pointer; font-size: 16px;">
+                <svg width="24" height="24" viewBox="0 0 24 24" fill="none">
+                    <path d="M15 18L9 12L15 6" stroke="currentColor" stroke-width="2" stroke-linecap="round" stroke-linejoin="round"/>
+                </svg>
+                <span>Back to call</span>
+            </button>
+        </div>
+        <div class="chat-messages-container" id="chatMessages" style="flex: 1; overflow-y: auto; padding: 16px;">
+            <div class="chat-empty-state" id="chatEmpty" style="text-align: center; padding: 40px 20px; color: #64748b;">
+                <div class="chat-empty-icon" style="font-size: 48px; margin-bottom: 16px;">💬</div>
+                <div class="chat-empty-title" style="font-size: 18px; font-weight: 500; margin-bottom: 8px;">No messages yet</div>
+                <div class="chat-empty-subtitle" style="font-size: 14px;">Send a message to start the conversation</div>
+            </div>
+        </div>
+        <div class="chat-input-area" style="padding: 16px; background: #1e293b; border-top: 1px solid #334155; display: flex; gap: 8px;">
+            <button class="emoji-btn" id="emojiBtn" title="Emoji" style="background: #334155; border: none; color: white; width: 40px; height: 40px; border-radius: 8px; cursor: pointer; font-size: 20px;">😊</button>
+            <button class="gif-btn" id="gifBtn" title="GIF" style="background: #334155; border: none; color: white; width: 40px; height: 40px; border-radius: 8px; cursor: pointer; font-size: 14px; font-weight: bold;">GIF</button>
+            <input type="text" id="messageInput" placeholder="Type a message..." style="flex: 1; background: #334155; border: none; color: white; padding: 0 16px; border-radius: 8px; font-size: 14px;" />
+            <button id="sendMessageBtn" class="send-message-btn" style="background: #3b82f6; border: none; color: white; width: 40px; height: 40px; border-radius: 8px; cursor: pointer; display: flex; align-items: center; justify-content: center;">
+                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <!-- Emoji Picker -->
+    <div class="emoji-picker" id="emojiPicker" style="display: none; position: fixed; bottom: 150px; right: 20px; width: 320px; background: #1e293b; border-radius: 12px; box-shadow: 0 4px 20px rgba(0,0,0,0.5); z-index: 1000;">
+        <div class="emoji-header" style="padding: 12px; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; align-items: center;">
+            <span style="color: white; font-weight: 500;">Emojis</span>
+            <button id="emojiClose" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 20px;">✕</button>
+        </div>
+        <div class="emoji-search" style="padding: 12px;">
+            <input type="text" id="emojiSearch" placeholder="Search emojis..." style="width: 100%; padding: 8px 12px; background: #334155; border: none; border-radius: 8px; color: white; font-size: 14px;" />
+        </div>
+        <div class="emoji-categories" id="emojiCategories" style="padding: 8px 12px; display: flex; gap: 8px; overflow-x: auto; border-bottom: 1px solid #334155;"></div>
+        <div class="emoji-grid" id="emojiGrid" style="padding: 12px; display: grid; grid-template-columns: repeat(8, 1fr); gap: 4px; max-height: 300px; overflow-y: auto;"></div>
+    </div>
+
+    <!-- GIF Picker Modal -->
+    <div id="gifPickerBackdrop" style="display: none; position: fixed; top: 0; left: 0; right: 0; bottom: 0; background: rgba(0,0,0,0.7); z-index: 9998;"></div>
+    <div id="gifPickerModal" style="display: none; position: fixed; top: 50%; left: 50%; transform: translate(-50%, -50%); width: 90%; max-width: 600px; max-height: 80vh; background: #1e293b; border-radius: 16px; box-shadow: 0 8px 32px rgba(0,0,0,0.6); z-index: 9999; overflow: hidden;">
+        <div class="gif-picker-header" style="padding: 16px; border-bottom: 1px solid #334155; display: flex; justify-content: space-between; align-items: center;">
+            <div style="display: flex; gap: 16px;">
+                <button id="gifTrendingTab" class="gif-tab active" style="background: none; border: none; color: white; cursor: pointer; padding: 8px 16px; border-radius: 8px; background: #3b82f6;">Trending</button>
+                <button id="gifFavoritesTab" class="gif-tab" style="background: none; border: none; color: #94a3b8; cursor: pointer; padding: 8px 16px;">Favorites</button>
+            </div>
+            <button id="gifPickerClose" style="background: none; border: none; color: #94a3b8; cursor: pointer; font-size: 24px;">✕</button>
+        </div>
+        <div style="padding: 16px;">
+            <input type="text" id="gifSearch" placeholder="Search GIFs..." style="width: 100%; padding: 12px; background: #334155; border: none; border-radius: 8px; color: white; font-size: 14px; margin-bottom: 12px;" />
+            <div id="gifCategories" style="display: flex; gap: 8px; flex-wrap: wrap; margin-bottom: 16px;"></div>
+            <div id="gifGrid" style="display: grid; grid-template-columns: repeat(auto-fill, minmax(150px, 1fr)); gap: 8px; max-height: 400px; overflow-y: auto;"></div>
+        </div>
+    </div>
+
+    <!-- AI Notetaker Panel -->
+    <div id="notetakerFloatingPanel" class="notetaker-floating-panel hidden">
+        <div class="notetaker-header">
+            <h3>🤖 AI Notetaker</h3>
+            <div class="notetaker-header-actions">
+                <button id="notetakerMinimizeBtn" title="Minimize">−</button>
+                <button id="notetakerCloseBtn" title="Close">✕</button>
+            </div>
+        </div>
+
+        <div class="notetaker-settings">
+            <div class="setting-group">
+                <label>📋 Role Preset</label>
+                <select id="notetakerRoleSelect">
+                    <option value="">🎯 General Meeting</option>
+                    <option value="brainstorming">💡 Brainstorming</option>
+                    <option value="project-planning">📋 Project Planning</option>
+                    <option value="business-coach">💼 Business Coach</option>
+                    <option value="therapist">🧠 Therapist</option>
+                    <option value="language-teacher">📚 Language Teacher</option>
+                    <option value="sales-training">📈 Sales Training</option>
+                    <option value="interview">🎤 Interview</option>
+                </select>
+            </div>
+
+            <div class="setting-group">
+                <label>🌍 Language</label>
+                <select id="notetakerLanguageSelect">
+                    <option value="en-US">English</option>
+                    <option value="uk-UA">Українська</option>
+                </select>
+            </div>
+
+            <div class="setting-group">
+                <label style="display: flex; align-items: center; gap: 8px;">
+                    <input type="checkbox" id="notetakerUseOpenAI">
+                    <span>Use GPT-4o for Enhanced Analysis</span>
+                </label>
+            </div>
+        </div>
+
+        <div class="notetaker-controls">
+            <button class="control-btn start" id="notetakerStartBtn">▶️ Start</button>
+            <button class="control-btn pause" id="notetakerPauseBtn" style="display: none;">⏸️ Pause</button>
+            <button class="control-btn stop" id="notetakerStopBtn" style="display: none;">⏹️ Stop</button>
+        </div>
+
+        <div class="notetaker-live-transcript" id="notetakerLiveTranscript">
+            <div style="text-align: center; padding: 40px 20px; color: #9ca3af;">
+                <p>Press Start to begin recording</p>
+            </div>
+        </div>
+
+        <div class="notetaker-status">
+            <div class="status-indicator">
+                <span class="status-dot" id="notetakerStatusDot"></span>
+                <span id="notetakerStatusText">Ready</span>
+            </div>
+            <div class="status-stats">
+                <div class="stat-item">
+                    <span class="stat-label">⏱️</span>
+                    <span class="stat-value" id="notetakerDuration">00:00</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">📝</span>
+                    <span class="stat-value" id="notetakerWordCount">0</span>
+                </div>
+            </div>
+        </div>
+
+        <div class="notetaker-controls" style="border-top: 1px solid #e5e7eb; border-bottom: none;">
+            <button class="control-btn" style="background: #667eea; color: white; flex: 1;" id="notetakerViewFullBtn">
+                📖 View Full
+            </button>
+            <button class="control-btn" style="background: #10b981; color: white; flex: 1;" id="notetakerSaveBtn">
+                💾 Save
+            </button>
+        </div>
     </div>
 
     <!-- Socket.IO -->
@@ -129,6 +520,10 @@
         import { loggers } from '/static/js/core/logger.js';
         import { globalEvents } from '/static/js/core/events.js';
         import { sessionStore } from '/static/js/core/storage.js';
+        import { createEnhancedNotetaker } from '/static/js/notetaker/index-enhanced.js';
+        import { createChatManager } from '/static/js/chat/chat-manager.js';
+        import { createEmojiPicker } from '/static/js/chat/emoji-picker.js';
+        import { createGIFPicker } from '/static/js/chat/gif-picker.js';
 
         const logger = loggers.call;
 
@@ -160,6 +555,9 @@
         let roomID = null;
         let callTimer = null;
         let callStartTime = null;
+        let chatManager = null;
+        let emojiPicker = null;
+        let gifPicker = null;
 
         // Get room ID from URL
         function getRoomIDFromURL() {
@@ -196,6 +594,12 @@
                 addDebugLog(`Socket error: ${error.message}`, 'error');
                 logger.error('Socket.IO error:', error);
                 connectionStatus.showFailed('Connection error');
+            });
+
+            // Chat message handler
+            socket.on('chat_message', (data) => {
+                logger.log('Chat message received:', data);
+                globalEvents.emit('chat:message-received', data);
             });
 
             return socket;
@@ -280,6 +684,49 @@
                 // Attach local stream to video
                 videoControls.attachLocalStream(localStream);
 
+                // Initialize Notetaker
+                const isHost = sessionStore.get('isHost', false);
+                window.notetaker = createEnhancedNotetaker(roomID, isHost, false); // false = 1-on-1 call
+                await window.notetaker.initialize();
+
+                // Add local stream to notetaker
+                await window.notetaker.addAudioStream(localStream, 'local', 'You');
+
+                addDebugLog('Notetaker initialized', 'success');
+                logger.success('Notetaker ready');
+
+                // Initialize Chat
+                chatManager = createChatManager({
+                    enableFlyingMessages: true,
+                    flyingMessageDuration: 3000
+                });
+                chatManager.init();
+                chatManager.setSocket(socket);
+                chatManager.setLocalParticipant('local', sessionStore.get('guestName', 'You'));
+
+                addDebugLog('Chat initialized', 'success');
+                logger.success('Chat ready');
+
+                // Initialize Emoji Picker
+                emojiPicker = createEmojiPicker();
+                emojiPicker.init();
+
+                // Initialize GIF Picker
+                gifPicker = createGIFPicker();
+                gifPicker.init();
+
+                // Connect GIF button to picker
+                const gifBtn = document.getElementById('gifBtn');
+                if (gifBtn) {
+                    gifBtn.addEventListener('click', () => {
+                        gifPicker.show((gifUrl) => {
+                            chatManager.sendMessage(`[GIF]${gifUrl}`);
+                        });
+                    });
+                }
+
+                addDebugLog('Emoji & GIF pickers initialized', 'success');
+
                 // Setup event listeners
                 setupEventListeners();
 
@@ -299,12 +746,18 @@
         // Setup event listeners
         function setupEventListeners() {
             // Remote stream ready
-            globalEvents.on('remote-stream-ready', (stream) => {
+            globalEvents.on('remote-stream-ready', async (stream) => {
                 addDebugLog('Remote stream ready', 'success');
                 logger.log('Remote stream received');
                 videoControls.attachRemoteStream(stream);
                 connectionStatus.showConnected();
                 startCallTimer();
+
+                // Add remote stream to notetaker
+                if (window.notetaker) {
+                    await window.notetaker.addAudioStream(stream, 'remote', 'Guest');
+                    addDebugLog('Remote stream added to notetaker', 'success');
+                }
             });
 
             // Connection state changes

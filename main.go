@@ -14,13 +14,17 @@ import (
 	"log"
 	"net/http"
 	"os"
+	"os/signal"
 	"strings"
 	"sync"
+	"syscall"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
 	"github.com/redis/go-redis/v9"
+	"messenger/internal/daily"
+	"messenger/internal/transcript"
 	"messenger/sfu"
 )
 
@@ -51,6 +55,11 @@ var (
 
 	// SFU server for group calls
 	sfuServer *sfu.SFUServer
+
+	// Daily.co integration
+	dailyClient     *daily.Client
+	pollingService  *daily.PollingService
+	transcriptProc  *transcript.Processor
 
 	// Server start time for uptime tracking
 	startTime time.Time
@@ -1712,6 +1721,25 @@ func main() {
 	sfuServer = sfu.NewSFUServer()
 	log.Printf("[SFU] ✅ SFU server initialized")
 
+	// Initialize Daily.co client
+	dailyClient = daily.NewClient()
+	if dailyClient.IsConfigured() {
+		log.Printf("[DAILY] ✅ Daily.co client initialized")
+	} else {
+		log.Printf("[DAILY] ⚠️  Daily.co not configured (optional)")
+	}
+
+	// Initialize transcript processor
+	transcriptProc = transcript.NewProcessor(&redisAdapter{rdb: rdb})
+	log.Printf("[TRANSCRIPT] ✅ Transcript processor initialized")
+
+	// Start polling service for Daily.co recordings
+	if dailyClient.IsConfigured() {
+		pollingService = daily.NewPollingService(dailyClient, transcriptProc, 5*time.Minute)
+		pollingService.Start()
+		log.Printf("[POLLING] ✅ Recording polling service started (5 min interval)")
+	}
+
 	// Setup static files
 	staticFS, err := fs.Sub(staticFiles, "static")
 	if err != nil {
@@ -1944,6 +1972,41 @@ func main() {
 		serveFile("call-modular.html")(w, r)
 	})
 
+	// Group call modular route
+	http.HandleFunc("/group-call-modular/", func(w http.ResponseWriter, r *http.Request) {
+		pathParts := strings.Split(r.URL.Path, "/")
+		roomID := ""
+		if len(pathParts) >= 3 {
+			roomID = pathParts[2]
+		}
+
+		log.Printf("[GROUP-CALL-MODULAR] 👥 Request for room: %s", roomID)
+
+		if roomID != "" {
+			meetingData, err := getMeeting(roomID)
+			if err == nil {
+				isActive := true
+				if active, ok := meetingData["active"].(bool); ok {
+					isActive = active
+				}
+				if !isActive {
+					http.Redirect(w, r, "/meeting-ended?reason=ended", http.StatusFound)
+					return
+				}
+				log.Printf("[GROUP-CALL-MODULAR] ✅ Meeting found and active")
+			} else {
+				http.Redirect(w, r, "/meeting-ended?reason=expired", http.StatusFound)
+				return
+			}
+		} else {
+			http.Redirect(w, r, "/", http.StatusFound)
+			return
+		}
+
+		log.Printf("[GROUP-CALL-MODULAR] 🚀 Serving group-call-modular.html")
+		serveFile("group-call-modular.html")(w, r)
+	})
+
 	// Create meeting (host only)
 	http.HandleFunc("/create", authMiddleware(func(w http.ResponseWriter, r *http.Request) {
 		userID := r.Header.Get("X-User-ID")
@@ -2073,7 +2136,14 @@ func main() {
 	http.HandleFunc("/api/notetaker/status", authMiddleware(notetakerStatusHandler))
 	http.HandleFunc("/api/notetaker/analyze", authMiddleware(analyzeTranscriptHandler))
 
-	// Transcript save endpoint
+	// Enhanced Notetaker endpoints (OpenAI integration)
+	http.HandleFunc("/api/openai/analyze", handleOpenAIAnalyze)
+	http.HandleFunc("/api/openai/insights", handleOpenAIInsights)
+	http.HandleFunc("/api/notetaker/save", handleNotetakerSave)
+	http.HandleFunc("/api/notetaker/share", handleNotetakerShare)
+	http.HandleFunc("/shared-transcript/", handleSharedTranscript)
+
+	// Transcript save endpoint (legacy)
 	http.HandleFunc("/api/transcript/save", authMiddleware(saveTranscriptHandler))
 
 	// Initialize start time for health check
@@ -2086,5 +2156,50 @@ func main() {
 	log.Printf("⏱️  Meeting TTL: %v", meetingTTL)
 	log.Printf("🌐 Server: %s", *addr)
 
-	log.Fatal(http.ListenAndServe(*addr, nil))
+	// Setup graceful shutdown
+	srv := &http.Server{
+		Addr: *addr,
+	}
+
+	// Start server in goroutine
+	go func() {
+		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+			log.Fatalf("❌ Server error: %v", err)
+		}
+	}()
+
+	// Wait for interrupt signal
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	<-quit
+
+	log.Printf("🛑 Shutting down server...")
+
+	// Stop polling service
+	if pollingService != nil {
+		pollingService.Stop()
+	}
+
+	// Graceful shutdown with timeout
+	shutdownCtx, cancel := context.WithTimeout(context.Background(), 10*time.Second)
+	defer cancel()
+
+	if err := srv.Shutdown(shutdownCtx); err != nil {
+		log.Printf("❌ Server forced to shutdown: %v", err)
+	}
+
+	log.Printf("✅ Server exited")
+}
+
+// redisAdapter adapts go-redis client to transcript.RedisClient interface
+type redisAdapter struct {
+	rdb *redis.Client
+}
+
+func (r *redisAdapter) Set(ctx context.Context, key string, value interface{}, expiration time.Duration) error {
+	return r.rdb.Set(ctx, key, value, expiration).Err()
+}
+
+func (r *redisAdapter) Get(ctx context.Context, key string) (string, error) {
+	return r.rdb.Get(ctx, key).Result()
 }
