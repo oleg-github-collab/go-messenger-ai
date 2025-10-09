@@ -426,6 +426,202 @@
                 font-size: 10px;
             }
         }
+
+        /* Speaking Indicator */
+        .speaking {
+            animation: speakingPulse 1s ease-in-out infinite !important;
+            border: 3px solid #10b981 !important;
+            box-shadow: 0 0 20px rgba(16, 185, 129, 0.6) !important;
+        }
+
+        @keyframes speakingPulse {
+            0%, 100% {
+                border-color: #10b981;
+                box-shadow: 0 0 20px rgba(16, 185, 129, 0.6);
+            }
+            50% {
+                border-color: #34d399;
+                box-shadow: 0 0 30px rgba(16, 185, 129, 0.9);
+            }
+        }
+
+        /* More Menu Overlay */
+        .more-menu-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.7);
+            backdrop-filter: blur(8px);
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            animation: fadeIn 0.2s ease-out;
+        }
+
+        .more-menu {
+            background: rgba(26, 26, 26, 0.98);
+            backdrop-filter: blur(40px);
+            border: 1.5px solid rgba(255, 255, 255, 0.15);
+            border-radius: 24px;
+            max-width: 500px;
+            width: 90%;
+            max-height: 80vh;
+            overflow: hidden;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+            animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+        }
+
+        @keyframes slideUp {
+            from {
+                opacity: 0;
+                transform: translateY(20px);
+            }
+            to {
+                opacity: 1;
+                transform: translateY(0);
+            }
+        }
+
+        .more-menu-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .more-menu-header h3 {
+            margin: 0;
+            font-size: 20px;
+            font-weight: 700;
+            color: white;
+        }
+
+        .close-btn {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .close-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.1);
+        }
+
+        .more-menu-content {
+            padding: 20px 24px;
+            max-height: calc(80vh - 80px);
+            overflow-y: auto;
+        }
+
+        .menu-section {
+            margin-bottom: 24px;
+        }
+
+        .menu-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .menu-section h4 {
+            margin: 0 0 12px 0;
+            font-size: 14px;
+            font-weight: 600;
+            color: rgba(255, 255, 255, 0.7);
+            text-transform: uppercase;
+            letter-spacing: 0.5px;
+        }
+
+        .menu-item {
+            width: 100%;
+            padding: 14px 16px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            color: white;
+            font-size: 15px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            margin-bottom: 8px;
+        }
+
+        .menu-item:hover {
+            background: rgba(255, 255, 255, 0.15);
+            border-color: rgba(255, 255, 255, 0.2);
+            transform: translateX(4px);
+        }
+
+        .menu-item svg {
+            width: 20px;
+            height: 20px;
+        }
+
+        .participant-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .participant-item {
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .participant-info {
+            display: flex;
+            flex-direction: column;
+            gap: 4px;
+        }
+
+        .participant-name {
+            font-size: 15px;
+            font-weight: 600;
+            color: white;
+        }
+
+        .participant-status {
+            font-size: 13px;
+            color: rgba(255, 255, 255, 0.6);
+            display: flex;
+            gap: 8px;
+        }
+
+        .small-btn {
+            padding: 6px 16px;
+            background: rgba(239, 68, 68, 0.2);
+            border: 1px solid rgba(239, 68, 68, 0.3);
+            border-radius: 8px;
+            color: #fca5a5;
+            font-size: 13px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .small-btn:hover {
+            background: rgba(239, 68, 68, 0.3);
+            border-color: rgba(239, 68, 68, 0.5);
+        }
     </style>
 </head>
 <body>
@@ -754,13 +950,164 @@
 
                 if (isSharing) {
                     await callFrame.stopScreenShare();
+                    screenShareBtn.classList.remove('active');
                 } else {
                     await callFrame.startScreenShare();
+                    screenShareBtn.classList.add('active');
                 }
+            });
+
+            // More button - show participant controls & advanced features
+            const moreBtn = document.getElementById('moreBtn');
+            moreBtn.addEventListener('click', () => {
+                showMoreMenu();
             });
 
             // Start call timer
             startCallTimer();
+
+            // Setup speaking indicators
+            setupSpeakingIndicators();
+        }
+
+        // Speaking indicator functionality
+        function setupSpeakingIndicators() {
+            callFrame.on('active-speaker-change', (event) => {
+                console.log('[GROUP-CALL-DAILY] Active speaker:', event.activeSpeaker?.peerId);
+
+                // Add visual indicator to participant who is speaking
+                const participants = callFrame.participants();
+                Object.values(participants).forEach(p => {
+                    // Find participant video element and add speaking class
+                    const videoEl = document.querySelector(`[data-participant-id="${p.session_id}"]`);
+                    if (videoEl) {
+                        if (p.session_id === event.activeSpeaker?.peerId) {
+                            videoEl.classList.add('speaking');
+                        } else {
+                            videoEl.classList.remove('speaking');
+                        }
+                    }
+                });
+            });
+        }
+
+        // Show More menu with advanced controls
+        function showMoreMenu() {
+            const participants = callFrame.participants();
+            const isHost = actualIsHost;
+
+            let menuHTML = `
+                <div class="more-menu-overlay" onclick="hideMoreMenu()">
+                    <div class="more-menu" onclick="event.stopPropagation()">
+                        <div class="more-menu-header">
+                            <h3>Call Options</h3>
+                            <button class="close-btn" onclick="hideMoreMenu()">×</button>
+                        </div>
+                        <div class="more-menu-content">
+            `;
+
+            // Host controls
+            if (isHost) {
+                menuHTML += `
+                    <div class="menu-section">
+                        <h4>Host Controls</h4>
+                        <button class="menu-item" onclick="muteAllParticipants()">
+                            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                                <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/>
+                                <line x1="1" y1="1" x2="23" y2="23"/>
+                            </svg>
+                            Mute All Participants
+                        </button>
+                    </div>
+                `;
+            }
+
+            // Participant list with individual controls
+            menuHTML += `
+                <div class="menu-section">
+                    <h4>Participants (${Object.keys(participants).length})</h4>
+                    <div class="participant-list">
+            `;
+
+            Object.values(participants).forEach(p => {
+                const isSelf = p.local;
+                const name = p.user_name || 'Guest';
+                menuHTML += `
+                    <div class="participant-item">
+                        <div class="participant-info">
+                            <span class="participant-name">${name}${isSelf ? ' (You)' : ''}</span>
+                            <div class="participant-status">
+                                ${p.audio ? '🎤' : '🔇'}
+                                ${p.video ? '📹' : '📷'}
+                            </div>
+                        </div>
+                        ${!isSelf && isHost ? `
+                            <button class="small-btn" onclick="muteParticipant('${p.session_id}')">Mute</button>
+                        ` : ''}
+                    </div>
+                `;
+            });
+
+            menuHTML += `
+                    </div>
+                </div>
+            `;
+
+            // Recording controls (if available)
+            menuHTML += `
+                <div class="menu-section">
+                    <h4>Recording</h4>
+                    <button class="menu-item" onclick="toggleRecording()">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <circle cx="12" cy="12" r="10"/>
+                        </svg>
+                        Start Recording
+                    </button>
+                </div>
+            `;
+
+            menuHTML += `
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            document.body.insertAdjacentHTML('beforeend', menuHTML);
+        }
+
+        function hideMoreMenu() {
+            const overlay = document.querySelector('.more-menu-overlay');
+            if (overlay) overlay.remove();
+        }
+
+        async function muteAllParticipants() {
+            const participants = callFrame.participants();
+            for (const [id, p] of Object.entries(participants)) {
+                if (!p.local && p.audio) {
+                    // Note: Daily.co doesn't allow remote muting for privacy
+                    // This would need to be implemented via backend signaling
+                    console.log('[GROUP-CALL-DAILY] Cannot remotely mute participants (privacy)');
+                    alert('Remote muting requires participant consent. Please ask participants to mute themselves.');
+                    break;
+                }
+            }
+            hideMoreMenu();
+        }
+
+        async function muteParticipant(sessionId) {
+            console.log('[GROUP-CALL-DAILY] Cannot remotely mute participant (privacy)');
+            alert('Remote muting requires participant consent for privacy reasons.');
+        }
+
+        async function toggleRecording() {
+            try {
+                await callFrame.startRecording();
+                console.log('[GROUP-CALL-DAILY] Recording started');
+                hideMoreMenu();
+            } catch (error) {
+                console.error('[GROUP-CALL-DAILY] Recording error:', error);
+                alert('Recording requires a Daily.co paid plan.');
+            }
         }
 
         function updateControlButtons(participant) {

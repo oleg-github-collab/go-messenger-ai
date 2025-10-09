@@ -307,6 +307,7 @@ document.addEventListener('DOMContentLoaded', async () => {
 
             socket.onopen = async () => {
                 console.log('[CALL] ✅ WebSocket connected');
+                console.log('[CALL] 🔍 DEBUG: isHostSession =', isHostSession, 'guestName =', guestName);
 
                 // Reset reconnect counter
                 reconnectAttempts = 0;
@@ -320,40 +321,55 @@ document.addEventListener('DOMContentLoaded', async () => {
                 }, 30000); // Ping every 30 seconds
 
                 // Initialize WebRTC for EVERYONE immediately
-                console.log('[CALL] Initializing WebRTC...');
-                webrtc = new WebRTCManager(socket, roomId);
-                const initialized = await webrtc.initialize();
+                console.log('[CALL] 🚀 Initializing WebRTC...');
+                console.log('[CALL] 🔍 DEBUG: WebRTCManager exists?', typeof WebRTCManager !== 'undefined');
 
-                if (initialized) {
-                    console.log('[CALL] ✅ WebRTC initialized successfully');
+                try {
+                    webrtc = new WebRTCManager(socket, roomId);
+                    console.log('[CALL] 🔍 DEBUG: WebRTC instance created:', !!webrtc);
 
-                    // Update media health badge
-                    updateMediaHealthBadge('ok', 'Camera & microphone ready');
+                    const initialized = await webrtc.initialize();
+                    console.log('[CALL] 🔍 DEBUG: WebRTC initialized result:', initialized);
 
-                    // Initialize adaptive quality
-                    if (window.AdaptiveQuality) {
-                        adaptiveQuality = new window.AdaptiveQuality(webrtc);
-                        window.adaptiveQuality = adaptiveQuality;
-                    }
+                    if (initialized) {
+                        console.log('[CALL] ✅ WebRTC initialized successfully');
+                        console.log('[CALL] 🔍 DEBUG: Local stream:', webrtc.localStream ? 'YES' : 'NO');
+                        console.log('[CALL] 🔍 DEBUG: Video tracks:', webrtc.localStream?.getVideoTracks().length || 0);
+                        console.log('[CALL] 🔍 DEBUG: Audio tracks:', webrtc.localStream?.getAudioTracks().length || 0);
 
-                    window.webrtc = webrtc;
+                        // Update media health badge
+                        updateMediaHealthBadge('ok', 'Camera & microphone ready');
 
-                    // Send join message
-                    socket.send(JSON.stringify({
-                        type: 'join',
-                        room: roomId
-                    }));
-
-                    // Set initiator flag
-                    setTimeout(() => {
-                        if (!peerConnected && isHostSession) {
-                            isInitiator = true;
-                            console.log('[CALL] I am the initiator (host)');
+                        // Initialize adaptive quality
+                        if (window.AdaptiveQuality) {
+                            adaptiveQuality = new window.AdaptiveQuality(webrtc);
+                            window.adaptiveQuality = adaptiveQuality;
                         }
-                    }, 500);
-                } else {
-                    console.error('[CALL] ❌ Failed to initialize WebRTC');
-                    updateMediaHealthBadge('error', 'Failed to access camera');
+
+                        window.webrtc = webrtc;
+
+                        // Send join message
+                        console.log('[CALL] 📤 Sending join message...');
+                        socket.send(JSON.stringify({
+                            type: 'join',
+                            room: roomId
+                        }));
+
+                        // Set initiator flag
+                        setTimeout(() => {
+                            if (!peerConnected && isHostSession) {
+                                isInitiator = true;
+                                console.log('[CALL] 🎯 I am the initiator (host)');
+                            }
+                        }, 500);
+                    } else {
+                        console.error('[CALL] ❌ Failed to initialize WebRTC - initialize() returned false');
+                        updateMediaHealthBadge('error', 'Failed to access camera');
+                    }
+                } catch (error) {
+                    console.error('[CALL] ❌ WebRTC initialization error:', error);
+                    console.error('[CALL] ❌ Error stack:', error.stack);
+                    updateMediaHealthBadge('error', 'WebRTC error: ' + error.message);
                 }
             };
 
@@ -379,6 +395,8 @@ document.addEventListener('DOMContentLoaded', async () => {
 
                     case 'join':
                         console.log('[CALL] 🎯 Partner joined! isInitiator:', isInitiator, 'isHostSession:', isHostSession);
+                        console.log('[CALL] 🔍 DEBUG: webrtc exists?', !!webrtc);
+                        console.log('[CALL] 🔍 DEBUG: peerConnected?', peerConnected);
 
                         try {
                             const joinInfo = typeof message.data === 'string' ? JSON.parse(message.data) : message.data;
@@ -393,27 +411,54 @@ document.addEventListener('DOMContentLoaded', async () => {
                         // Host should always create offer when guest joins
                         if (isHostSession && webrtc) {
                             console.log('[CALL] 🎯 HOST creating offer for guest...');
-                            await webrtc.createOffer();
-                            peerConnected = true;
+                            console.log('[CALL] 🔍 DEBUG: About to call webrtc.createOffer()');
+                            try {
+                                await webrtc.createOffer();
+                                peerConnected = true;
+                                console.log('[CALL] ✅ Offer created successfully');
+                            } catch (error) {
+                                console.error('[CALL] ❌ Failed to create offer:', error);
+                            }
                         } else if (isInitiator && webrtc) {
                             console.log('[CALL] 🔄 Initiator creating offer...');
-                            await webrtc.createOffer();
-                            peerConnected = true;
+                            try {
+                                await webrtc.createOffer();
+                                peerConnected = true;
+                                console.log('[CALL] ✅ Offer created successfully');
+                            } catch (error) {
+                                console.error('[CALL] ❌ Failed to create offer:', error);
+                            }
                         } else {
                             console.log('[CALL] 👤 Waiting for offer from host...');
+                            console.log('[CALL] 🔍 DEBUG: isHostSession =', isHostSession, 'webrtc =', !!webrtc);
                         }
                         break;
 
                     case 'offer':
-                        const offer = JSON.parse(message.data);
-                        await webrtc.handleOffer(offer);
-                        peerConnected = true;
+                        console.log('[CALL] 📥 Received offer');
+                        console.log('[CALL] 🔍 DEBUG: webrtc exists?', !!webrtc);
+                        try {
+                            const offer = JSON.parse(message.data);
+                            console.log('[CALL] 🔍 DEBUG: Parsed offer:', offer);
+                            await webrtc.handleOffer(offer);
+                            peerConnected = true;
+                            console.log('[CALL] ✅ Offer handled, answer sent');
+                        } catch (error) {
+                            console.error('[CALL] ❌ Failed to handle offer:', error);
+                        }
                         break;
 
                     case 'answer':
-                        const answer = JSON.parse(message.data);
-                        await webrtc.handleAnswer(answer);
-                        peerConnected = true;
+                        console.log('[CALL] 📥 Received answer');
+                        try {
+                            const answer = JSON.parse(message.data);
+                            console.log('[CALL] 🔍 DEBUG: Parsed answer:', answer);
+                            await webrtc.handleAnswer(answer);
+                            peerConnected = true;
+                            console.log('[CALL] ✅ Answer handled');
+                        } catch (error) {
+                            console.error('[CALL] ❌ Failed to handle answer:', error);
+                        }
                         break;
 
                     case 'ice-candidate':
@@ -1099,7 +1144,9 @@ document.addEventListener('DOMContentLoaded', async () => {
     }
 
     if (cameraBtn) {
+        console.log('[CALL] 🎥 Camera button initialized');
         cameraBtn.addEventListener('click', () => {
+            console.log('[CALL] 🎥 Camera button clicked! Current state:', isCameraOn, '-> New state:', !isCameraOn);
             isCameraOn = !isCameraOn;
             cameraBtn.dataset.active = isCameraOn;
 
@@ -1108,12 +1155,22 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (iconOn) iconOn.style.display = isCameraOn ? 'block' : 'none';
             if (iconOff) iconOff.style.display = isCameraOn ? 'none' : 'block';
 
-            if (webrtc) webrtc.toggleVideo(isCameraOn);
+            console.log('[CALL] 🔍 DEBUG: webrtc exists?', !!webrtc);
+            if (webrtc) {
+                console.log('[CALL] 🎥 Calling webrtc.toggleVideo(' + isCameraOn + ')');
+                webrtc.toggleVideo(isCameraOn);
+            } else {
+                console.error('[CALL] ❌ Cannot toggle camera - webrtc not initialized!');
+            }
         });
+    } else {
+        console.error('[CALL] ❌ Camera button NOT FOUND!');
     }
 
     if (microphoneBtn) {
+        console.log('[CALL] 🎤 Microphone button initialized');
         microphoneBtn.addEventListener('click', () => {
+            console.log('[CALL] 🎤 Microphone button clicked! Current state:', isMicOn, '-> New state:', !isMicOn);
             isMicOn = !isMicOn;
             microphoneBtn.dataset.active = isMicOn;
 
@@ -1122,7 +1179,9 @@ document.addEventListener('DOMContentLoaded', async () => {
             if (iconOn) iconOn.style.display = isMicOn ? 'block' : 'none';
             if (iconOff) iconOff.style.display = isMicOn ? 'none' : 'block';
 
+            console.log('[CALL] 🔍 DEBUG: webrtc exists?', !!webrtc);
             if (webrtc) {
+                console.log('[CALL] 🎤 Calling webrtc.toggleAudio(' + isMicOn + ')');
                 webrtc.toggleAudio(isMicOn);
                 console.log('[CALL] 🎤 Microphone toggled:', isMicOn ? 'ON' : 'OFF');
             }
