@@ -149,9 +149,16 @@ var upgrader = websocket.Upgrader{
 func initRedis() {
 	redisURL := os.Getenv("REDIS_URL")
 	if redisURL == "" {
-		redisURL = "redis://localhost:6379"
-		log.Printf("[REDIS] ⚠️  Using default Redis URL (development)")
+		log.Printf("[REDIS] ❌ REDIS_URL environment variable not set!")
+		log.Printf("[REDIS] 💡 Please add Redis service in Railway dashboard:")
+		log.Printf("[REDIS] 💡 1. Click '+ New' → Database → Add Redis")
+		log.Printf("[REDIS] 💡 2. Railway will automatically set REDIS_URL")
+		log.Printf("[REDIS] 💡 3. Redeploy your application")
+		log.Fatalf("[REDIS] ❌ Cannot start without Redis")
 	}
+
+	log.Printf("[REDIS] 🔗 Connecting to Redis...")
+	log.Printf("[REDIS] 📍 URL: %s", maskURL(redisURL))
 
 	opt, err := redis.ParseURL(redisURL)
 	if err != nil {
@@ -160,12 +167,34 @@ func initRedis() {
 
 	rdb = redis.NewClient(opt)
 
-	// Test connection
-	if err := rdb.Ping(ctx).Err(); err != nil {
-		log.Fatalf("[REDIS] ❌ Failed to connect: %v", err)
+	// Test connection with retries
+	maxRetries := 5
+	for i := 0; i < maxRetries; i++ {
+		if err := rdb.Ping(ctx).Err(); err != nil {
+			log.Printf("[REDIS] ⚠️  Connection attempt %d/%d failed: %v", i+1, maxRetries, err)
+			if i < maxRetries-1 {
+				time.Sleep(time.Second * 2)
+				continue
+			}
+			log.Fatalf("[REDIS] ❌ Failed to connect after %d attempts. Please check Redis service is running.", maxRetries)
+		}
+		break
 	}
 
 	log.Printf("[REDIS] ✅ Connected successfully")
+}
+
+// maskURL masks sensitive parts of URL for logging
+func maskURL(url string) string {
+	if len(url) < 20 {
+		return "***"
+	}
+	// Show protocol and last part of host
+	parts := strings.Split(url, "@")
+	if len(parts) == 2 {
+		return "redis://***@" + parts[1]
+	}
+	return "redis://***"
 }
 
 func initTURN() {
