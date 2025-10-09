@@ -49,15 +49,26 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
-    // Check if this user is the host
-    const isHost = sessionStorage.getItem('isHost_' + roomID) === 'true';
-    const hostName = sessionStorage.getItem('hostName_' + roomID);
+    // Check if this user is the host - from URL params OR sessionStorage
+    const urlParams = new URLSearchParams(window.location.search);
+    const isHostFromURL = urlParams.get('host') === 'true';
+    const hostNameFromURL = urlParams.get('name');
+    const isHostFromStorage = sessionStorage.getItem('isHost_' + roomID) === 'true';
+    const hostNameFromStorage = sessionStorage.getItem('hostName_' + roomID);
+
+    const isHost = isHostFromURL || isHostFromStorage;
+    const hostName = hostNameFromURL || hostNameFromStorage;
 
     if (isHost) {
         console.log('[GUEST] 🔑 Host detected, bypassing guest page');
+        console.log('[GUEST] Host name:', hostName, 'From URL:', isHostFromURL, 'From Storage:', isHostFromStorage);
+
         // Store host name and redirect directly to room
-        sessionStorage.setItem('guestName', hostName || 'Host');
+        sessionStorage.setItem('guestName', hostName || 'Oleh');
         sessionStorage.setItem('isHost', 'true');
+        sessionStorage.setItem('isHost_' + roomID, 'true');
+        sessionStorage.setItem('hostName_' + roomID, hostName || 'Oleh');
+
         window.location.href = `/room/${roomID}`;
         return;
     }
