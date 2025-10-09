@@ -1833,9 +1833,17 @@ func main() {
 	// Home (host only)
 	http.HandleFunc("/home", authMiddleware(serveFile("home.html")))
 
+	// Modular testing hub (for development)
+	http.HandleFunc("/test-modular", serveFile("test-modular.html"))
+
 	// Guest join page
 	http.HandleFunc("/join/", func(w http.ResponseWriter, r *http.Request) {
 		serveFile("guest.html")(w, r)
+	})
+
+	// Modular guest page (for testing new structure)
+	http.HandleFunc("/join-modular/", func(w http.ResponseWriter, r *http.Request) {
+		serveFile("guest-modular.html")(w, r)
 	})
 
 	// Meeting room - route based on meeting mode
