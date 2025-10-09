@@ -49,42 +49,73 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
-    // Check if this user is the host - from URL params OR sessionStorage
+    // CRITICAL: Check authentication - auth_token cookie = YOU ARE ALWAYS HOST
+    function getCookie(name) {
+        const value = `; ${document.cookie}`;
+        const parts = value.split(`; ${name}=`);
+        if (parts.length === 2) return parts.pop().split(';').shift();
+        return null;
+    }
+
+    const authToken = getCookie('auth_token');
+    const isAuthenticatedUser = authToken !== null;
+
+    console.log('[GUEST] 🔐 Auth check - Cookie:', authToken ? 'Present' : 'None', 'Authenticated:', isAuthenticatedUser);
+
+    // Check if this user is the host
+    // PRIORITY: auth_token (authenticated) > URL params > sessionStorage
     const urlParams = new URLSearchParams(window.location.search);
     const isHostFromURL = urlParams.get('host') === 'true';
     const hostNameFromURL = urlParams.get('name');
     const isHostFromStorage = sessionStorage.getItem('isHost_' + roomID) === 'true';
     const hostNameFromStorage = sessionStorage.getItem('hostName_' + roomID);
 
-    const isHost = isHostFromURL || isHostFromStorage;
-    const hostName = hostNameFromURL || hostNameFromStorage;
+    // CRITICAL: If you have auth_token cookie, YOU ARE ALWAYS HOST (Oleh)
+    const isHost = isAuthenticatedUser || isHostFromURL || isHostFromStorage;
+    const hostName = isAuthenticatedUser ? 'Oleh' : (hostNameFromURL || hostNameFromStorage);
 
     if (isHost) {
-        console.log('[GUEST] 🔑 Host detected, bypassing guest page');
-        console.log('[GUEST] Host name:', hostName, 'From URL:', isHostFromURL, 'From Storage:', isHostFromStorage);
+        console.log('[GUEST] 🔑 HOST DETECTED - Bypassing guest page');
+        console.log('[GUEST] Source: Auth=' + isAuthenticatedUser + ' URL=' + isHostFromURL + ' Storage=' + isHostFromStorage);
+        console.log('[GUEST] Host name:', hostName);
 
-        // Store host name and redirect directly to room
+        // Store host info in sessionStorage
         sessionStorage.setItem('guestName', hostName || 'Oleh');
         sessionStorage.setItem('isHost', 'true');
         sessionStorage.setItem('isHost_' + roomID, 'true');
         sessionStorage.setItem('hostName_' + roomID, hostName || 'Oleh');
 
+        console.log('[GUEST] ✅ Redirecting to /room/' + roomID + ' as HOST');
         window.location.href = `/room/${roomID}`;
         return;
     }
 
+    console.log('[GUEST] 👤 Guest detected - showing guest page');
+
     // Fetch meeting details
     try {
+        console.log('[GUEST] Fetching meeting details for:', roomID);
         const response = await fetch(`/api/meeting/${roomID}`);
-        const meeting = await response.json();
 
-        if (meeting.host_name) {
-            document.getElementById('hostName').textContent = meeting.host_name;
+        if (!response.ok) {
+            console.warn('[GUEST] ⚠️  Meeting not found in database (may not exist yet)');
+            console.warn('[GUEST] Response status:', response.status);
+            // Don't show error to user - meeting might not be created yet
+            // Just show default "Host" text
+            document.getElementById('hostName').textContent = 'Host';
+        } else {
+            const meeting = await response.json();
+
+            if (meeting.host_name) {
+                document.getElementById('hostName').textContent = meeting.host_name;
+            }
+
+            console.log('[GUEST] ✅ Meeting details loaded:', meeting);
         }
-
-        console.log('[GUEST] Meeting details loaded:', meeting);
     } catch (error) {
-        console.error('[GUEST] Failed to load meeting details:', error);
+        console.error('[GUEST] ❌ Failed to load meeting details:', error);
+        // Don't block user - just show default
+        document.getElementById('hostName').textContent = 'Host';
     }
 
     // Step 1: Name form submission

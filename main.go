@@ -1895,6 +1895,12 @@ func main() {
 
 	// Guest join page
 	http.HandleFunc("/join/", func(w http.ResponseWriter, r *http.Request) {
+		pathParts := strings.Split(r.URL.Path, "/")
+		roomID := ""
+		if len(pathParts) >= 3 {
+			roomID = pathParts[2]
+		}
+		log.Printf("[JOIN] 👋 Guest accessing: %s (Room: %s)", r.URL.Path, roomID)
 		serveFile("guest.html")(w, r)
 	})
 
@@ -2139,16 +2145,22 @@ func main() {
 			roomID = pathParts[3]
 		}
 
+		log.Printf("[API-MEETING] 📋 Request for room: %s", roomID)
+
 		if roomID == "" {
+			log.Printf("[API-MEETING] ❌ Room ID missing")
 			http.Error(w, "room ID missing", http.StatusBadRequest)
 			return
 		}
 
 		meetingData, err := getMeeting(roomID)
 		if err != nil {
+			log.Printf("[API-MEETING] ❌ Meeting not found in Redis: %v", err)
 			http.Error(w, "meeting not found", http.StatusNotFound)
 			return
 		}
+
+		log.Printf("[API-MEETING] ✅ Meeting found: %+v", meetingData)
 
 		w.Header().Set("Content-Type", "application/json")
 		json.NewEncoder(w).Encode(meetingData)
