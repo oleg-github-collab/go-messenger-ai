@@ -14,6 +14,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
     // Meeting type selection elements
     const meetingTypeModal = document.getElementById('meetingTypeModal');
+    const audioCallBtn = document.getElementById('audioCallBtn');
     const oneOnOneBtn = document.getElementById('oneOnOneBtn');
     const groupCallBtn = document.getElementById('groupCallBtn');
     const cancelMeetingType = document.getElementById('cancelMeetingType');
@@ -23,6 +24,11 @@ document.addEventListener('DOMContentLoaded', () => {
     // Show meeting type selection modal
     createMeetingBtn.addEventListener('click', () => {
         meetingTypeModal.style.display = 'flex';
+    });
+
+    // Handle audio call selection
+    audioCallBtn.addEventListener('click', () => {
+        createMeeting('audio');
     });
 
     // Handle 1-on-1 selection

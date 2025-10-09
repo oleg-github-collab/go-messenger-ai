@@ -1903,6 +1903,11 @@ func main() {
 		serveFile("guest-modular.html")(w, r)
 	})
 
+	// Audio call page (audio-only, own WebRTC)
+	http.HandleFunc("/audio/", func(w http.ResponseWriter, r *http.Request) {
+		serveFile("audio-call.html")(w, r)
+	})
+
 	// Meeting room - route based on meeting mode
 	http.HandleFunc("/room/", func(w http.ResponseWriter, r *http.Request) {
 		// Extract room ID from URL
@@ -2072,7 +2077,13 @@ func main() {
 			}
 		}
 
-		url := fmt.Sprintf("%s://%s/join/%s", scheme, host, roomID)
+		// Choose URL path based on mode
+		var url string
+		if mode == "audio" {
+			url = fmt.Sprintf("%s://%s/audio/%s?host=true&name=%s", scheme, host, roomID, hostName)
+		} else {
+			url = fmt.Sprintf("%s://%s/join/%s", scheme, host, roomID)
+		}
 
 		log.Printf("[CREATE] ✅ %s meeting URL: %s (Host: %s)", mode, url, hostName)
 
@@ -2155,6 +2166,9 @@ func main() {
 
 	// WebSocket for 1-on-1 calls
 	http.HandleFunc("/ws", wsHandler)
+
+	// WebSocket for audio-only calls (own WebRTC)
+	http.HandleFunc("/ws-audio", wsHandler) // Reuse same handler, works for audio too
 
 	// WebSocket for group calls (SFU)
 	http.HandleFunc("/ws-sfu", sfuWSHandler)

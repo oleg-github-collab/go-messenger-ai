@@ -1,0 +1,466 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Audio Call - Kaminskyi Messenger</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, 'Helvetica Neue', Arial, sans-serif;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            color: white;
+        }
+
+        .audio-container {
+            width: 90%;
+            max-width: 600px;
+            background: rgba(255, 255, 255, 0.1);
+            backdrop-filter: blur(10px);
+            border-radius: 24px;
+            padding: 40px;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.2);
+            text-align: center;
+        }
+
+        .call-icon {
+            font-size: 120px;
+            margin-bottom: 20px;
+            animation: pulse 2s infinite;
+        }
+
+        @keyframes pulse {
+            0%, 100% { transform: scale(1); opacity: 1; }
+            50% { transform: scale(1.05); opacity: 0.8; }
+        }
+
+        h1 {
+            font-size: 28px;
+            margin-bottom: 10px;
+        }
+
+        .status {
+            font-size: 16px;
+            color: rgba(255, 255, 255, 0.8);
+            margin-bottom: 30px;
+        }
+
+        .participants {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-bottom: 40px;
+        }
+
+        .participant {
+            background: rgba(255, 255, 255, 0.15);
+            padding: 20px;
+            border-radius: 16px;
+            min-width: 150px;
+        }
+
+        .participant-name {
+            font-size: 18px;
+            font-weight: 600;
+            margin-bottom: 10px;
+        }
+
+        .participant-status {
+            font-size: 14px;
+            color: rgba(255, 255, 255, 0.7);
+        }
+
+        .audio-visualizer {
+            width: 100%;
+            height: 60px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            margin-bottom: 30px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 4px;
+            padding: 10px;
+        }
+
+        .bar {
+            width: 4px;
+            background: rgba(255, 255, 255, 0.6);
+            border-radius: 2px;
+            transition: height 0.1s;
+        }
+
+        .controls {
+            display: flex;
+            justify-content: center;
+            gap: 20px;
+            margin-top: 30px;
+        }
+
+        .control-btn {
+            width: 60px;
+            height: 60px;
+            border-radius: 50%;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .control-btn:hover {
+            transform: scale(1.1);
+        }
+
+        .mute-btn {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .mute-btn.muted {
+            background: #ef4444;
+        }
+
+        .end-btn {
+            background: #ef4444;
+        }
+
+        .end-btn:hover {
+            background: #dc2626;
+        }
+
+        #waitingMessage {
+            font-size: 18px;
+            color: rgba(255, 255, 255, 0.9);
+            margin-top: 20px;
+        }
+
+        .error {
+            background: rgba(239, 68, 68, 0.2);
+            padding: 15px;
+            border-radius: 12px;
+            margin-top: 20px;
+            border: 1px solid rgba(239, 68, 68, 0.5);
+        }
+    </style>
+</head>
+<body>
+    <div class="audio-container">
+        <div class="call-icon">🎙️</div>
+        <h1>Audio Call</h1>
+        <div class="status" id="status">Connecting...</div>
+
+        <div class="audio-visualizer" id="visualizer"></div>
+
+        <div class="participants" id="participants"></div>
+
+        <div class="controls">
+            <button class="control-btn mute-btn" id="muteBtn" title="Mute/Unmute">
+                🎤
+            </button>
+            <button class="control-btn end-btn" id="endBtn" title="End Call">
+                📞
+            </button>
+        </div>
+
+        <div id="waitingMessage" style="display: none;">
+            Waiting for other participant to join...
+        </div>
+
+        <div id="errorMessage" class="error" style="display: none;"></div>
+    </div>
+
+    <!-- Remote audio element -->
+    <audio id="remoteAudio" autoplay></audio>
+
+    <script>
+        // Get room ID from URL
+        const roomID = window.location.pathname.split('/')[2];
+        const isHost = new URLSearchParams(window.location.search).get('host') === 'true';
+        const userName = new URLSearchParams(window.location.search).get('name') || 'Guest';
+
+        console.log('[AUDIO] Room:', roomID, 'Host:', isHost, 'Name:', userName);
+
+        // WebRTC configuration with STUN servers
+        const config = {
+            iceServers: [
+                { urls: 'stun:stun.l.google.com:19302' },
+                { urls: 'stun:stun1.l.google.com:19302' }
+            ]
+        };
+
+        let peerConnection = null;
+        let localStream = null;
+        let ws = null;
+        let isMuted = false;
+
+        // Initialize
+        init();
+
+        async function init() {
+            try {
+                // Get microphone access
+                updateStatus('Getting microphone access...');
+                localStream = await navigator.mediaDevices.getUserMedia({
+                    audio: {
+                        echoCancellation: true,
+                        noiseSuppression: true,
+                        autoGainControl: true
+                    },
+                    video: false
+                });
+
+                console.log('[AUDIO] ✅ Got microphone access');
+                updateStatus('Connected - Audio only');
+
+                // Create visualizer bars
+                createVisualizer();
+
+                // Connect to signaling server
+                connectWebSocket();
+
+                // Setup controls
+                document.getElementById('muteBtn').addEventListener('click', toggleMute);
+                document.getElementById('endBtn').addEventListener('click', endCall);
+
+            } catch (error) {
+                console.error('[AUDIO] ❌ Failed to get microphone:', error);
+                showError('Failed to access microphone. Please allow microphone access.');
+                updateStatus('Microphone access denied');
+            }
+        }
+
+        function connectWebSocket() {
+            const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+            const wsURL = `${protocol}//${window.location.host}/ws-audio?room=${roomID}&name=${userName}&isHost=${isHost}`;
+
+            console.log('[AUDIO] Connecting to:', wsURL);
+            ws = new WebSocket(wsURL);
+
+            ws.onopen = () => {
+                console.log('[AUDIO] ✅ WebSocket connected');
+                document.getElementById('waitingMessage').style.display = 'block';
+            };
+
+            ws.onmessage = async (event) => {
+                const message = JSON.parse(event.data);
+                console.log('[AUDIO] Message:', message.type);
+
+                switch (message.type) {
+                    case 'offer':
+                        await handleOffer(message.offer);
+                        break;
+                    case 'answer':
+                        await handleAnswer(message.answer);
+                        break;
+                    case 'ice-candidate':
+                        await handleIceCandidate(message.candidate);
+                        break;
+                    case 'user-joined':
+                        console.log('[AUDIO] 🎉 User joined:', message.userName);
+                        document.getElementById('waitingMessage').style.display = 'none';
+                        if (isHost) {
+                            createOffer();
+                        }
+                        break;
+                    case 'user-left':
+                        console.log('[AUDIO] 👋 User left');
+                        updateStatus('Other participant left');
+                        break;
+                }
+            };
+
+            ws.onerror = (error) => {
+                console.error('[AUDIO] ❌ WebSocket error:', error);
+                showError('Connection error');
+            };
+
+            ws.onclose = () => {
+                console.log('[AUDIO] WebSocket closed');
+                updateStatus('Disconnected');
+            };
+        }
+
+        async function createOffer() {
+            try {
+                peerConnection = new RTCPeerConnection(config);
+                setupPeerConnection();
+
+                // Add local audio track
+                localStream.getTracks().forEach(track => {
+                    peerConnection.addTrack(track, localStream);
+                });
+
+                const offer = await peerConnection.createOffer();
+                await peerConnection.setLocalDescription(offer);
+
+                ws.send(JSON.stringify({
+                    type: 'offer',
+                    offer: offer
+                }));
+
+                console.log('[AUDIO] 📤 Sent offer');
+            } catch (error) {
+                console.error('[AUDIO] ❌ Create offer failed:', error);
+                showError('Failed to create call connection');
+            }
+        }
+
+        async function handleOffer(offer) {
+            try {
+                peerConnection = new RTCPeerConnection(config);
+                setupPeerConnection();
+
+                // Add local audio track
+                localStream.getTracks().forEach(track => {
+                    peerConnection.addTrack(track, localStream);
+                });
+
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+                const answer = await peerConnection.createAnswer();
+                await peerConnection.setLocalDescription(answer);
+
+                ws.send(JSON.stringify({
+                    type: 'answer',
+                    answer: answer
+                }));
+
+                console.log('[AUDIO] 📤 Sent answer');
+            } catch (error) {
+                console.error('[AUDIO] ❌ Handle offer failed:', error);
+                showError('Failed to establish connection');
+            }
+        }
+
+        async function handleAnswer(answer) {
+            try {
+                await peerConnection.setRemoteDescription(new RTCSessionDescription(answer));
+                console.log('[AUDIO] ✅ Connection established');
+                updateStatus('Call connected');
+            } catch (error) {
+                console.error('[AUDIO] ❌ Handle answer failed:', error);
+            }
+        }
+
+        async function handleIceCandidate(candidate) {
+            try {
+                await peerConnection.addIceCandidate(new RTCIceCandidate(candidate));
+            } catch (error) {
+                console.error('[AUDIO] ❌ Add ICE candidate failed:', error);
+            }
+        }
+
+        function setupPeerConnection() {
+            peerConnection.onicecandidate = (event) => {
+                if (event.candidate) {
+                    ws.send(JSON.stringify({
+                        type: 'ice-candidate',
+                        candidate: event.candidate
+                    }));
+                }
+            };
+
+            peerConnection.ontrack = (event) => {
+                console.log('[AUDIO] 🎵 Received remote audio track');
+                const remoteAudio = document.getElementById('remoteAudio');
+                remoteAudio.srcObject = event.streams[0];
+                updateStatus('Call in progress');
+                document.getElementById('waitingMessage').style.display = 'none';
+            };
+
+            peerConnection.onconnectionstatechange = () => {
+                console.log('[AUDIO] Connection state:', peerConnection.connectionState);
+                updateStatus(`Connection: ${peerConnection.connectionState}`);
+            };
+        }
+
+        function toggleMute() {
+            isMuted = !isMuted;
+            const muteBtn = document.getElementById('muteBtn');
+
+            if (localStream) {
+                localStream.getAudioTracks().forEach(track => {
+                    track.enabled = !isMuted;
+                });
+            }
+
+            muteBtn.classList.toggle('muted', isMuted);
+            muteBtn.textContent = isMuted ? '🔇' : '🎤';
+            console.log('[AUDIO] Muted:', isMuted);
+        }
+
+        function endCall() {
+            console.log('[AUDIO] Ending call...');
+
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+            }
+
+            if (peerConnection) {
+                peerConnection.close();
+            }
+
+            if (ws) {
+                ws.close();
+            }
+
+            updateStatus('Call ended');
+            setTimeout(() => {
+                window.location.href = '/home';
+            }, 1000);
+        }
+
+        function updateStatus(text) {
+            document.getElementById('status').textContent = text;
+        }
+
+        function showError(text) {
+            const errorDiv = document.getElementById('errorMessage');
+            errorDiv.textContent = text;
+            errorDiv.style.display = 'block';
+        }
+
+        function createVisualizer() {
+            const visualizer = document.getElementById('visualizer');
+            for (let i = 0; i < 20; i++) {
+                const bar = document.createElement('div');
+                bar.className = 'bar';
+                bar.style.height = `${Math.random() * 40 + 10}px`;
+                visualizer.appendChild(bar);
+
+                // Animate bars randomly
+                setInterval(() => {
+                    if (!isMuted && localStream) {
+                        bar.style.height = `${Math.random() * 40 + 10}px`;
+                    } else {
+                        bar.style.height = '10px';
+                    }
+                }, 200 + Math.random() * 200);
+            }
+        }
+
+        // Handle page unload
+        window.addEventListener('beforeunload', () => {
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+            }
+            if (peerConnection) {
+                peerConnection.close();
+            }
+            if (ws) {
+                ws.close();
+            }
+        });
+    </script>
+</body>
+</html>
