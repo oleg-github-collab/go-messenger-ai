@@ -2077,12 +2077,12 @@ func main() {
 			}
 		}
 
-		// Choose URL path based on mode
+		// Choose URL path based on mode (always include host=true and name for creator)
 		var url string
 		if mode == "audio" {
 			url = fmt.Sprintf("%s://%s/audio/%s?host=true&name=%s", scheme, host, roomID, hostName)
 		} else {
-			url = fmt.Sprintf("%s://%s/join/%s", scheme, host, roomID)
+			url = fmt.Sprintf("%s://%s/join/%s?host=true&name=%s", scheme, host, roomID, hostName)
 		}
 
 		log.Printf("[CREATE] ✅ %s meeting URL: %s (Host: %s)", mode, url, hostName)
