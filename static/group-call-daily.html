@@ -426,6 +426,233 @@
                 font-size: 10px;
             }
         }
+
+        /* ============================================ */
+        /* BEAUTIFUL MODAL STYLES */
+        /* ============================================ */
+
+        .daily-modal-overlay {
+            position: fixed;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: rgba(0, 0, 0, 0.85);
+            backdrop-filter: blur(10px);
+            z-index: 10000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            opacity: 0;
+            transition: opacity 0.3s ease;
+        }
+
+        .daily-modal-overlay.show {
+            opacity: 1;
+        }
+
+        .daily-modal {
+            background: linear-gradient(135deg, rgba(26, 26, 26, 0.98) 0%, rgba(40, 40, 40, 0.95) 100%);
+            backdrop-filter: blur(40px);
+            border: 1.5px solid rgba(255, 255, 255, 0.1);
+            border-radius: 24px;
+            max-width: 700px;
+            width: 90%;
+            max-height: 85vh;
+            overflow: hidden;
+            box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+        }
+
+        .daily-modal-header {
+            padding: 20px 24px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .daily-modal-header h2 {
+            margin: 0;
+            font-size: 24px;
+            font-weight: 700;
+            color: white;
+        }
+
+        .daily-close-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: white;
+            font-size: 28px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            line-height: 1;
+        }
+
+        .daily-close-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.1);
+        }
+
+        .daily-modal-content {
+            padding: 24px;
+            max-height: calc(85vh - 80px);
+            overflow-y: auto;
+        }
+
+        .daily-section {
+            margin-bottom: 32px;
+        }
+
+        .daily-section:last-child {
+            margin-bottom: 0;
+        }
+
+        .daily-section h3 {
+            margin: 0 0 16px 0;
+            font-size: 16px;
+            font-weight: 600;
+            color: white;
+        }
+
+        /* Background Grid */
+        .bg-grid {
+            display: grid;
+            grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+            gap: 12px;
+        }
+
+        .bg-tile {
+            background: rgba(255, 255, 255, 0.05);
+            border: 2px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            padding: 8px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .bg-tile:hover {
+            background: rgba(255, 255, 255, 0.08);
+            border-color: rgba(102, 126, 234, 0.5);
+            transform: translateY(-2px);
+        }
+
+        .bg-tile.active {
+            background: rgba(102, 126, 234, 0.2);
+            border-color: #667eea;
+            box-shadow: 0 0 20px rgba(102, 126, 234, 0.3);
+        }
+
+        .bg-preview {
+            width: 100%;
+            aspect-ratio: 16/9;
+            border-radius: 8px;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            overflow: hidden;
+        }
+
+        .bg-icon {
+            font-size: 32px;
+        }
+
+        .bg-label {
+            font-size: 12px;
+            font-weight: 500;
+            color: white;
+            text-align: center;
+        }
+
+        /* Buttons */
+        .daily-btn-secondary {
+            width: 100%;
+            padding: 14px 20px;
+            background: rgba(255, 255, 255, 0.1);
+            border: 1px solid rgba(255, 255, 255, 0.2);
+            border-radius: 12px;
+            color: white;
+            font-size: 15px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .daily-btn-secondary:hover {
+            background: rgba(255, 255, 255, 0.15);
+            border-color: rgba(255, 255, 255, 0.3);
+            transform: translateY(-1px);
+        }
+
+        .quality-buttons {
+            display: grid;
+            grid-template-columns: 1fr 1fr;
+            gap: 12px;
+        }
+
+        /* Participants */
+        .participant-list {
+            display: flex;
+            flex-direction: column;
+            gap: 8px;
+        }
+
+        .participant-card {
+            padding: 12px 16px;
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+        }
+
+        .participant-info {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+        }
+
+        .participant-name {
+            font-size: 15px;
+            font-weight: 500;
+            color: white;
+        }
+
+        .you-badge {
+            font-size: 12px;
+            color: #667eea;
+            font-weight: 600;
+        }
+
+        .participant-icons {
+            display: flex;
+            gap: 12px;
+            font-size: 16px;
+        }
+
+        .icon-active {
+            opacity: 1;
+        }
+
+        .icon-muted {
+            opacity: 0.4;
+        }
+
+        @media (max-width: 768px) {
+            .bg-grid {
+                grid-template-columns: repeat(auto-fill, minmax(90px, 1fr));
+            }
+
+            .quality-buttons {
+                grid-template-columns: 1fr;
+            }
+        }
     </style>
 </head>
 <body>
@@ -603,23 +830,8 @@
                     showBackgroundBlurButton: false,
 
                     // Minimal chrome for clean custom UI
-                    customTrayButtons: {},
-
-                    // Custom theme matching your app design
-                    theme: {
-                        colors: {
-                            accent: '#667eea',
-                            accentText: '#FFFFFF',
-                            background: '#000000',
-                            backgroundAccent: '#0f172a',
-                            baseText: '#FFFFFF',
-                            border: 'transparent',
-                            mainAreaBg: '#000000',
-                            mainAreaBgAccent: '#000000',
-                            mainAreaText: '#FFFFFF',
-                            supportiveText: '#94a3b8'
-                        }
-                    }
+                    customTrayButtons: {}
+                    // Theme removed - causes errors with 'transparent' border
                 });
 
                 // Hide loading immediately to show Daily.co prejoin UI
@@ -842,94 +1054,197 @@
         });
 
         // ============================================
-        // MORE BUTTON - FREE FEATURES ONLY
+        // MORE BUTTON - BEAUTIFUL FREE FEATURES
         // ============================================
+
+        // Background presets
+        const bgPresets = [
+            { name: 'Gradient Blue', url: 'https://images.unsplash.com/photo-1557683316-973673baf926?w=1920&q=80' },
+            { name: 'Gradient Purple', url: 'https://images.unsplash.com/photo-1620121692029-d088224ddc74?w=1920&q=80' },
+            { name: 'Abstract Art', url: 'https://images.unsplash.com/photo-1579546929518-9e396f3cc809?w=1920&q=80' },
+            { name: 'Office Space', url: 'https://images.unsplash.com/photo-1497366216548-37526070297c?w=1920&q=80' },
+            { name: 'Modern Room', url: 'https://images.unsplash.com/photo-1497366811353-6870744d04b2?w=1920&q=80' },
+            { name: 'Bookshelf', url: 'https://images.unsplash.com/photo-1525268771113-32d9e9021a97?w=1920&q=80' },
+            { name: 'Mountains', url: 'https://images.unsplash.com/photo-1519681393784-d120267933ba?w=1920&q=80' },
+            { name: 'City View', url: 'https://images.unsplash.com/photo-1480714378408-67cf0d13bc1b?w=1920&q=80' }
+        ];
+
+        let currentBgType = 'none';
+        let currentBgImage = null;
 
         const moreBtn = document.getElementById('moreBtn');
         if (moreBtn) {
             moreBtn.addEventListener('click', () => {
-                const participants = callFrame.participants();
-
-                // Create simple modal with free features
-                const modal = document.createElement('div');
-                modal.style.cssText = 'position:fixed;top:0;left:0;right:0;bottom:0;background:rgba(0,0,0,0.8);z-index:10000;display:flex;align-items:center;justify-content:center;';
-                modal.onclick = () => modal.remove();
-
-                const content = document.createElement('div');
-                content.style.cssText = 'background:#1a1a1a;border-radius:20px;padding:24px;max-width:500px;width:90%;max-height:80vh;overflow-y:auto;';
-                content.onclick = (e) => e.stopPropagation();
-
-                content.innerHTML = `
-                    <h2 style="margin:0 0 20px;color:white;">Call Options</h2>
-
-                    <div style="margin-bottom:20px;">
-                        <h3 style="color:#999;font-size:14px;margin:0 0 12px;">Background</h3>
-                        <button onclick="toggleBackgroundBlur()" style="width:100%;padding:14px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:12px;color:white;cursor:pointer;font-size:15px;margin-bottom:8px;">
-                            Toggle Background Blur
-                        </button>
-                    </div>
-
-                    <div style="margin-bottom:20px;">
-                        <h3 style="color:#999;font-size:14px;margin:0 0 12px;">Video Quality</h3>
-                        <button onclick="setQuality('high')" style="width:100%;padding:14px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:12px;color:white;cursor:pointer;font-size:15px;margin-bottom:8px;">
-                            HD Quality (720p)
-                        </button>
-                        <button onclick="setQuality('low')" style="width:100%;padding:14px;background:rgba(255,255,255,0.1);border:1px solid rgba(255,255,255,0.2);border-radius:12px;color:white;cursor:pointer;font-size:15px;">
-                            Low Quality (Save Data)
-                        </button>
-                    </div>
-
-                    <div>
-                        <h3 style="color:#999;font-size:14px;margin:0 0 12px;">Participants (${Object.keys(participants).length})</h3>
-                        ${Object.values(participants).map(p => `
-                            <div style="padding:12px;background:rgba(255,255,255,0.05);border-radius:8px;margin-bottom:8px;display:flex;justify-content:space-between;align-items:center;">
-                                <span style="color:white;">${p.user_name || 'Guest'}${p.local ? ' (You)' : ''}</span>
-                                <span style="color:#999;font-size:13px;">${p.audio ? '🎤' : '🔇'} ${p.video ? '📹' : '📷'}</span>
-                            </div>
-                        `).join('')}
-                    </div>
-
-                    <button onclick="this.closest('[style*=fixed]').remove()" style="width:100%;padding:14px;background:#667eea;border:none;border-radius:12px;color:white;cursor:pointer;font-size:15px;margin-top:20px;">
-                        Close
-                    </button>
-                `;
-
-                modal.appendChild(content);
-                document.body.appendChild(modal);
+                showMoreModal();
             });
         }
 
-        // Background blur toggle
-        let blurEnabled = false;
-        window.toggleBackgroundBlur = async () => {
-            try {
-                if (blurEnabled) {
-                    await callFrame.updateInputSettings({ video: { processor: { type: 'none' } } });
-                    blurEnabled = false;
-                    console.log('[DAILY] Background blur OFF');
-                } else {
-                    await callFrame.updateInputSettings({ video: { processor: { type: 'background-blur', config: { strength: 0.9 } } } });
-                    blurEnabled = true;
-                    console.log('[DAILY] Background blur ON');
-                }
-                document.querySelector('[style*="fixed"]')?.remove();
-            } catch (e) {
-                console.error('[DAILY] Blur error:', e);
-                alert('Background blur not available');
+        function showMoreModal() {
+            const participants = callFrame.participants();
+
+            const modal = document.createElement('div');
+            modal.className = 'daily-modal-overlay';
+            modal.innerHTML = `
+                <div class="daily-modal">
+                    <div class="daily-modal-header">
+                        <h2>🎬 Call Options</h2>
+                        <button class="daily-close-btn" onclick="closeModal()">×</button>
+                    </div>
+                    <div class="daily-modal-content">
+                        <!-- Background Section -->
+                        <div class="daily-section">
+                            <h3>🎨 Background</h3>
+                            <div class="bg-grid">
+                                <button class="bg-tile ${currentBgType === 'none' ? 'active' : ''}" onclick="applyBackground('none')">
+                                    <div class="bg-preview" style="background: linear-gradient(135deg, #1a1a1a 0%, #2d2d2d 100%);">
+                                        <span class="bg-icon">❌</span>
+                                    </div>
+                                    <span class="bg-label">None</span>
+                                </button>
+                                <button class="bg-tile ${currentBgType === 'blur' ? 'active' : ''}" onclick="applyBackground('blur')">
+                                    <div class="bg-preview" style="background: radial-gradient(circle, rgba(102,126,234,0.6) 0%, rgba(118,75,162,0.6) 100%); backdrop-filter: blur(20px);">
+                                        <span class="bg-icon">💫</span>
+                                    </div>
+                                    <span class="bg-label">Blur</span>
+                                </button>
+                                ${bgPresets.map((bg, i) => `
+                                    <button class="bg-tile ${currentBgImage === bg.url ? 'active' : ''}" onclick="applyBackground('image', ${i})">
+                                        <div class="bg-preview" style="background-image: url('${bg.url}'); background-size: cover; background-position: center;"></div>
+                                        <span class="bg-label">${bg.name}</span>
+                                    </button>
+                                `).join('')}
+                            </div>
+                            <button class="daily-btn-secondary" onclick="uploadCustomBg()" style="margin-top: 12px;">
+                                📁 Upload Your Image
+                            </button>
+                        </div>
+
+                        <!-- Quality Section -->
+                        <div class="daily-section">
+                            <h3>🎥 Video Quality</h3>
+                            <div class="quality-buttons">
+                                <button class="daily-btn-secondary" onclick="applyQuality('high')">
+                                    HD (720p)
+                                </button>
+                                <button class="daily-btn-secondary" onclick="applyQuality('low')">
+                                    Low (360p)
+                                </button>
+                            </div>
+                        </div>
+
+                        <!-- Participants Section -->
+                        <div class="daily-section">
+                            <h3>👥 Participants (${Object.keys(participants).length})</h3>
+                            <div class="participant-list">
+                                ${Object.values(participants).map(p => `
+                                    <div class="participant-card">
+                                        <div class="participant-info">
+                                            <span class="participant-name">${p.user_name || 'Guest'}${p.local ? ' <span class="you-badge">(You)</span>' : ''}</span>
+                                            <div class="participant-icons">
+                                                <span class="${p.audio ? 'icon-active' : 'icon-muted'}">${p.audio ? '🎤' : '🔇'}</span>
+                                                <span class="${p.video ? 'icon-active' : 'icon-muted'}">${p.video ? '📹' : '📷'}</span>
+                                            </div>
+                                        </div>
+                                    </div>
+                                `).join('')}
+                            </div>
+                        </div>
+                    </div>
+                </div>
+            `;
+
+            document.body.appendChild(modal);
+            setTimeout(() => modal.classList.add('show'), 10);
+        }
+
+        window.closeModal = () => {
+            const modal = document.querySelector('.daily-modal-overlay');
+            if (modal) {
+                modal.classList.remove('show');
+                setTimeout(() => modal.remove(), 300);
             }
         };
 
-        // Video quality
-        window.setQuality = async (level) => {
+        // Apply background
+        window.applyBackground = async (type, presetIndex) => {
+            try {
+                if (type === 'none') {
+                    await callFrame.updateInputSettings({ video: { processor: { type: 'none' } } });
+                    currentBgType = 'none';
+                    currentBgImage = null;
+                    console.log('[DAILY] Background removed');
+
+                } else if (type === 'blur') {
+                    await callFrame.updateInputSettings({ video: { processor: { type: 'background-blur', config: { strength: 0.9 } } } });
+                    currentBgType = 'blur';
+                    currentBgImage = null;
+                    console.log('[DAILY] Background blur applied');
+
+                } else if (type === 'image' && presetIndex !== undefined) {
+                    const bgUrl = bgPresets[presetIndex].url;
+                    await callFrame.updateInputSettings({
+                        video: {
+                            processor: {
+                                type: 'background-image',
+                                config: { source: bgUrl }
+                            }
+                        }
+                    });
+                    currentBgType = 'image';
+                    currentBgImage = bgUrl;
+                    console.log('[DAILY] Background image applied:', bgPresets[presetIndex].name);
+                }
+
+                // Update UI
+                showMoreModal(); // Refresh to show active state
+            } catch (e) {
+                console.error('[DAILY] Background error:', e);
+                alert('Failed to apply background. Feature may not be available on free plan.');
+            }
+        };
+
+        // Upload custom background
+        window.uploadCustomBg = () => {
+            const input = document.createElement('input');
+            input.type = 'file';
+            input.accept = 'image/*';
+            input.onchange = async (e) => {
+                const file = e.target.files[0];
+                if (!file) return;
+
+                try {
+                    const imageUrl = URL.createObjectURL(file);
+                    await callFrame.updateInputSettings({
+                        video: {
+                            processor: {
+                                type: 'background-image',
+                                config: { source: imageUrl }
+                            }
+                        }
+                    });
+                    currentBgType = 'image';
+                    currentBgImage = imageUrl;
+                    console.log('[DAILY] Custom background uploaded');
+                    closeModal();
+                } catch (e) {
+                    console.error('[DAILY] Upload error:', e);
+                    alert('Failed to upload background');
+                }
+            };
+            input.click();
+        };
+
+        // Apply quality
+        window.applyQuality = async (level) => {
             try {
                 const settings = level === 'high'
                     ? { bandwidth: { trackConstraints: { width: 1280, height: 720 } } }
                     : { bandwidth: { trackConstraints: { width: 640, height: 360 } } };
                 await callFrame.setBandwidth(settings);
                 console.log('[DAILY] Quality set to', level);
-                document.querySelector('[style*="fixed"]')?.remove();
             } catch (e) {
                 console.error('[DAILY] Quality error:', e);
+                alert('Failed to change quality');
             }
         };
     </script>
