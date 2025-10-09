@@ -235,21 +235,281 @@
             stroke: white;
             stroke-width: 2.5;
         }
+
+        /* ============================================
+           CUSTOM UI OVERLAY - GLASSMORPHISM DESIGN
+           ============================================ */
+        .custom-ui-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            pointer-events: none;
+            z-index: 1000;
+        }
+
+        .top-bar {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            padding: 20px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            background: linear-gradient(180deg, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.4) 60%, rgba(0,0,0,0) 100%);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            pointer-events: auto;
+        }
+
+        .call-info {
+            flex: 1;
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            gap: 4px;
+        }
+
+        .participant-count {
+            font-size: 15px;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+            color: #ffffff;
+            text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+        }
+
+        .call-timer {
+            font-size: 13px;
+            font-weight: 500;
+            color: rgba(255, 255, 255, 0.8);
+            letter-spacing: 0.5px;
+            font-variant-numeric: tabular-nums;
+            text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
+            padding: 4px 12px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 20px;
+            backdrop-filter: blur(10px);
+        }
+
+        .status-indicator {
+            display: flex;
+            align-items: center;
+            gap: 8px;
+            padding: 8px 16px;
+            background: rgba(255, 255, 255, 0.15);
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            border: 1.5px solid rgba(255, 255, 255, 0.25);
+            border-radius: 24px;
+            font-size: 13px;
+            font-weight: 600;
+            color: #ffffff;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+        }
+
+        .status-dot {
+            width: 8px;
+            height: 8px;
+            border-radius: 50%;
+            background: #10b981;
+            box-shadow: 0 0 12px rgba(16, 185, 129, 0.6);
+            animation: pulse 2s ease-in-out infinite;
+        }
+
+        .bottom-controls {
+            position: absolute;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            padding: 24px 20px;
+            padding-bottom: calc(24px + env(safe-area-inset-bottom));
+            display: flex;
+            justify-content: center;
+            background: linear-gradient(0deg, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.4) 40%, rgba(0,0,0,0) 100%);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            pointer-events: auto;
+        }
+
+        .controls-wrapper {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            max-width: 600px;
+        }
+
+        .control-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            min-width: 70px;
+            padding: 14px 18px;
+            background: rgba(255, 255, 255, 0.15);
+            border: 1.5px solid rgba(255, 255, 255, 0.15);
+            border-radius: 16px;
+            color: white;
+            cursor: pointer;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+        }
+
+        .control-btn:hover {
+            background: rgba(255, 255, 255, 0.25);
+            border-color: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
+        }
+
+        .control-btn:active {
+            transform: translateY(0);
+        }
+
+        .control-btn svg {
+            width: 24px;
+            height: 24px;
+        }
+
+        .btn-label {
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+        }
+
+        .end-call-btn {
+            background: linear-gradient(135deg, #FF3B30 0%, #D32F2F 100%);
+            border-color: rgba(255, 59, 48, 0.3);
+            box-shadow: 0 6px 20px rgba(255, 59, 48, 0.5);
+        }
+
+        .end-call-btn:hover {
+            transform: scale(1.08);
+            box-shadow: 0 8px 24px rgba(255, 59, 48, 0.6);
+        }
+
+        .control-btn.disabled {
+            background: rgba(255, 59, 48, 0.85);
+            border-color: rgba(255, 59, 48, 0.4);
+        }
+
+        .control-btn.disabled .icon-mic-on,
+        .control-btn.disabled .icon-camera-on {
+            display: none;
+        }
+
+        .control-btn.disabled .icon-mic-off,
+        .control-btn.disabled .icon-camera-off {
+            display: block !important;
+        }
+
+        @media (max-width: 768px) {
+            .controls-wrapper {
+                gap: 8px;
+            }
+
+            .control-btn {
+                min-width: 60px;
+                padding: 12px 14px;
+            }
+
+            .control-btn svg {
+                width: 20px;
+                height: 20px;
+            }
+
+            .btn-label {
+                font-size: 10px;
+            }
+        }
     </style>
 </head>
 <body>
     <div id="callContainer">
-        <!-- Back Button -->
-        <button class="back-button" onclick="window.location.href='/home'" title="Back to Home">
-            <svg viewBox="0 0 24 24" fill="none">
-                <path d="M15 18L9 12L15 6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"/>
-            </svg>
-        </button>
+        <!-- Daily.co Frame (video only, no UI) -->
+        <div id="dailyFrame"></div>
 
-        <!-- Status Bar -->
-        <div class="status-bar" id="statusBar" style="display: none;">
-            <div class="status-dot"></div>
-            <span class="status-text" id="statusText">Connected</span>
+        <!-- Custom UI Overlay -->
+        <div class="custom-ui-overlay">
+            <!-- Top Bar -->
+            <div class="top-bar">
+                <button class="back-button" id="backBtn" title="Leave Call">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
+                        <path d="M15 18L9 12L15 6" stroke-linecap="round" stroke-linejoin="round"/>
+                    </svg>
+                </button>
+
+                <div class="call-info">
+                    <div class="participant-count" id="participantCount">1 participant</div>
+                    <div class="call-timer" id="callTimer">00:00</div>
+                </div>
+
+                <div class="status-indicator" id="statusIndicator">
+                    <div class="status-dot"></div>
+                    <span id="statusText">Connected</span>
+                </div>
+            </div>
+
+            <!-- Bottom Controls -->
+            <div class="bottom-controls">
+                <div class="controls-wrapper">
+                    <button class="control-btn" id="micBtn" title="Microphone">
+                        <svg class="icon-mic-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                            <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8"/>
+                        </svg>
+                        <svg class="icon-mic-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none">
+                            <line x1="1" y1="1" x2="23" y2="23"/>
+                            <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/>
+                            <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/>
+                            <line x1="12" y1="19" x2="12" y2="23"/>
+                            <line x1="8" y1="23" x2="16" y2="23"/>
+                        </svg>
+                        <span class="btn-label">Mic</span>
+                    </button>
+
+                    <button class="control-btn" id="cameraBtn" title="Camera">
+                        <svg class="icon-camera-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M23 7l-7 5 7 5V7z"/>
+                            <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                        </svg>
+                        <svg class="icon-camera-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2" style="display:none">
+                            <line x1="1" y1="1" x2="23" y2="23"/>
+                            <path d="M21 21V8a1 1 0 0 0-1-1h-3M3 16v3a1 1 0 0 0 1 1h12"/>
+                        </svg>
+                        <span class="btn-label">Camera</span>
+                    </button>
+
+                    <button class="control-btn end-call-btn" id="endCallBtn" title="End Call">
+                        <svg viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08c-.18-.17-.29-.42-.29-.7 0-.28.11-.53.29-.71C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28-.79-.74-1.68-1.36-2.66-1.85-.33-.16-.56-.5-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/>
+                        </svg>
+                        <span class="btn-label">End</span>
+                    </button>
+
+                    <button class="control-btn" id="screenShareBtn" title="Share Screen">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                            <line x1="8" y1="21" x2="16" y2="21"/>
+                            <line x1="12" y1="17" x2="12" y2="21"/>
+                        </svg>
+                        <span class="btn-label">Share</span>
+                    </button>
+
+                    <button class="control-btn" id="moreBtn" title="More Options">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="1"/>
+                            <circle cx="19" cy="12" r="1"/>
+                            <circle cx="5" cy="12" r="1"/>
+                        </svg>
+                        <span class="btn-label">More</span>
+                    </button>
+                </div>
+            </div>
         </div>
 
         <!-- Loading State -->
@@ -258,9 +518,6 @@
             <div class="spinner"></div>
             <p>Setting up your meeting</p>
         </div>
-
-        <!-- Daily.co Frame -->
-        <div id="dailyFrame"></div>
 
         <!-- Error State -->
         <div id="errorMessage" class="error" style="display: none;">
@@ -326,7 +583,7 @@
                 const actualIsHost = data.isHost !== undefined ? data.isHost : isHost;
                 console.log('[GROUP-CALL-DAILY] Joining as:', actualUserName, '(Host:', actualIsHost + ')');
 
-                // Step 2: Create Daily iframe with custom branding
+                // Step 2: Create Daily iframe with MINIMAL UI (we use custom controls)
                 callFrame = window.DailyIframe.createFrame(document.getElementById('dailyFrame'), {
                     iframeStyle: {
                         position: 'absolute',
@@ -335,29 +592,32 @@
                         border: '0'
                     },
 
-                    // UI Controls
-                    showLeaveButton: true,
-                    showFullscreenButton: true,
+                    // HIDE ALL DAILY.CO UI - we build our own!
+                    showLeaveButton: false,
+                    showFullscreenButton: false,
                     showLocalVideo: true,
-                    showParticipantsBar: true,
-                    showRecordingButton: false,        // No recording on free plan
-                    showChatButton: false,             // We have our own chat
-                    showUserNameChangeButton: false,   // Prevent name changes
-                    showBackgroundBlurButton: false,   // Not available on free plan
+                    showParticipantsBar: false,
+                    showRecordingButton: false,
+                    showChatButton: false,
+                    showUserNameChangeButton: false,
+                    showBackgroundBlurButton: false,
+
+                    // Minimal chrome for clean custom UI
+                    customTrayButtons: {},
 
                     // Custom theme matching your app design
                     theme: {
                         colors: {
-                            accent: '#667eea',           // Purple from your gradient
+                            accent: '#667eea',
                             accentText: '#FFFFFF',
-                            background: '#0a0a0a',       // Darker background
-                            backgroundAccent: '#1a1a1a',
+                            background: '#000000',
+                            backgroundAccent: '#0f172a',
                             baseText: '#FFFFFF',
-                            border: '#667eea',           // Purple borders
-                            mainAreaBg: '#000000',       // Pure black video area
-                            mainAreaBgAccent: '#1a1a1a',
+                            border: 'transparent',
+                            mainAreaBg: '#000000',
+                            mainAreaBgAccent: '#000000',
                             mainAreaText: '#FFFFFF',
-                            supportiveText: '#888888'
+                            supportiveText: '#94a3b8'
                         }
                     }
                 });
@@ -386,6 +646,9 @@
 
                 // Setup event listeners
                 setupEventListeners();
+
+                // Setup custom UI controls
+                setupCustomControls();
 
                 // ============================================
                 // FUTURE ENHANCEMENTS (Daily.co API Features)
@@ -426,12 +689,14 @@
             callFrame.on('participant-joined', (event) => {
                 console.log('[GROUP-CALL-DAILY] 👤 Participant joined:', event.participant.user_name);
                 updateStatus(`${event.participant.user_name} joined`);
+                updateParticipantCount();
                 setTimeout(() => updateStatus('Connected'), 3000);
             });
 
             callFrame.on('participant-left', (event) => {
                 console.log('[GROUP-CALL-DAILY] 👋 Participant left:', event.participant.user_name);
                 updateStatus(`${event.participant.user_name} left`);
+                updateParticipantCount();
                 setTimeout(() => updateStatus('Connected'), 3000);
             });
 
@@ -454,6 +719,104 @@
             callFrame.on('recording-stopped', () => {
                 console.log('[GROUP-CALL-DAILY] ⏹️ Recording stopped');
             });
+
+            // Track local participant state
+            callFrame.on('participant-updated', (event) => {
+                if (event.participant.local) {
+                    updateControlButtons(event.participant);
+                }
+            });
+        }
+
+        function setupCustomControls() {
+            const micBtn = document.getElementById('micBtn');
+            const cameraBtn = document.getElementById('cameraBtn');
+            const endCallBtn = document.getElementById('endCallBtn');
+            const screenShareBtn = document.getElementById('screenShareBtn');
+            const backBtn = document.getElementById('backBtn');
+
+            // Microphone toggle
+            micBtn.addEventListener('click', async () => {
+                const localParticipant = callFrame.participants().local;
+                const newState = !localParticipant.audio;
+                await callFrame.setLocalAudio(newState);
+                micBtn.classList.toggle('disabled', !newState);
+            });
+
+            // Camera toggle
+            cameraBtn.addEventListener('click', async () => {
+                const localParticipant = callFrame.participants().local;
+                const newState = !localParticipant.video;
+                await callFrame.setLocalVideo(newState);
+                cameraBtn.classList.toggle('disabled', !newState);
+            });
+
+            // End call
+            endCallBtn.addEventListener('click', async () => {
+                await callFrame.leave();
+                window.location.href = '/home';
+            });
+
+            // Back button
+            backBtn.addEventListener('click', async () => {
+                await callFrame.leave();
+                window.location.href = '/home';
+            });
+
+            // Screen share
+            screenShareBtn.addEventListener('click', async () => {
+                const participants = callFrame.participants();
+                const isSharing = participants.local?.screen;
+
+                if (isSharing) {
+                    await callFrame.stopScreenShare();
+                } else {
+                    await callFrame.startScreenShare();
+                }
+            });
+
+            // Start call timer
+            startCallTimer();
+        }
+
+        function updateControlButtons(participant) {
+            const micBtn = document.getElementById('micBtn');
+            const cameraBtn = document.getElementById('cameraBtn');
+
+            if (micBtn) {
+                micBtn.classList.toggle('disabled', !participant.audio);
+            }
+            if (cameraBtn) {
+                cameraBtn.classList.toggle('disabled', !participant.video);
+            }
+        }
+
+        function updateParticipantCount() {
+            const participants = callFrame.participants();
+            const count = Object.keys(participants).length;
+            const countElement = document.getElementById('participantCount');
+            if (countElement) {
+                countElement.textContent = count === 1
+                    ? '1 participant'
+                    : `${count} participants`;
+            }
+        }
+
+        let timerInterval;
+        let startTime;
+
+        function startCallTimer() {
+            startTime = Date.now();
+            const timerElement = document.getElementById('callTimer');
+
+            timerInterval = setInterval(() => {
+                const elapsed = Math.floor((Date.now() - startTime) / 1000);
+                const mins = Math.floor(elapsed / 60);
+                const secs = elapsed % 60;
+                if (timerElement) {
+                    timerElement.textContent = `${mins.toString().padStart(2, '0')}:${secs.toString().padStart(2, '0')}`;
+                }
+            }, 1000);
         }
 
         function showError(message) {
