@@ -139,6 +139,25 @@
             background: #dc2626;
         }
 
+        .share-btn {
+            background: rgba(255, 255, 255, 0.2);
+        }
+
+        .share-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+        }
+
+        .share-btn.copied {
+            background: #10b981;
+            animation: successPulse 0.5s;
+        }
+
+        @keyframes successPulse {
+            0% { transform: scale(1); }
+            50% { transform: scale(1.2); }
+            100% { transform: scale(1); }
+        }
+
         #waitingMessage {
             font-size: 18px;
             color: rgba(255, 255, 255, 0.9);
@@ -165,6 +184,9 @@
         <div class="participants" id="participants"></div>
 
         <div class="controls">
+            <button class="control-btn share-btn" id="shareBtn" title="Share Link">
+                🔗
+            </button>
             <button class="control-btn mute-btn" id="muteBtn" title="Mute/Unmute">
                 🎤
             </button>
@@ -230,6 +252,7 @@
                 connectWebSocket();
 
                 // Setup controls
+                document.getElementById('shareBtn').addEventListener('click', shareLink);
                 document.getElementById('muteBtn').addEventListener('click', toggleMute);
                 document.getElementById('endBtn').addEventListener('click', endCall);
 
@@ -382,6 +405,31 @@
                 console.log('[AUDIO] Connection state:', peerConnection.connectionState);
                 updateStatus(`Connection: ${peerConnection.connectionState}`);
             };
+        }
+
+        function shareLink() {
+            // Generate guest link (remove host=true parameter)
+            const currentUrl = new URL(window.location.href);
+            currentUrl.searchParams.delete('host');
+            currentUrl.searchParams.delete('name');
+            const shareUrl = currentUrl.toString();
+
+            // Copy to clipboard
+            navigator.clipboard.writeText(shareUrl).then(() => {
+                console.log('[AUDIO] 📋 Link copied to clipboard');
+                const shareBtn = document.getElementById('shareBtn');
+                shareBtn.classList.add('copied');
+                shareBtn.textContent = '✓';
+
+                setTimeout(() => {
+                    shareBtn.classList.remove('copied');
+                    shareBtn.textContent = '🔗';
+                }, 2000);
+            }).catch(err => {
+                console.error('[AUDIO] ❌ Failed to copy link:', err);
+                // Fallback: show link in prompt
+                prompt('Copy this link to share:', shareUrl);
+            });
         }
 
         function toggleMute() {
