@@ -24,6 +24,7 @@ import (
 	"github.com/gorilla/websocket"
 	"github.com/redis/go-redis/v9"
 	"messenger/internal/daily"
+	"messenger/internal/models"
 	"messenger/internal/transcript"
 	"messenger/sfu"
 )
@@ -2233,14 +2234,14 @@ func main() {
 		// Try to get existing room first (Daily.co creates rooms on first join anyway)
 		// Or create new one if needed
 		var room *models.DailyRoom
-		var err error
 
 		// Try to get existing room
 		existingRoom, getErr := dailyClient.GetRoom(roomID)
 		if getErr != nil {
 			// Room doesn't exist - create it (only if host or doesn't matter for public rooms)
 			log.Printf("[DAILY-API] Room doesn't exist, creating new one...")
-			room, err = dailyClient.CreateRoom(daily.CreateRoomRequest{
+			var roomErr error
+			room, roomErr = dailyClient.CreateRoom(daily.CreateRoomRequest{
 				Name:            roomID,
 				Privacy:         "public",
 				EnableRecording: false, // Requires paid plan
@@ -2248,9 +2249,9 @@ func main() {
 				MaxParticipants: 20,    // Available on free plan
 			})
 
-			if err != nil {
-				log.Printf("[DAILY-API] ❌ Failed to create room: %v", err)
-				http.Error(w, fmt.Sprintf("Failed to create room: %v", err), http.StatusInternalServerError)
+			if roomErr != nil {
+				log.Printf("[DAILY-API] ❌ Failed to create room: %v", roomErr)
+				http.Error(w, fmt.Sprintf("Failed to create room: %v", roomErr), http.StatusInternalServerError)
 				return
 			}
 			log.Printf("[DAILY-API] ✅ New room created")
