@@ -985,7 +985,7 @@
         <div id="dailyFrame"></div>
 
         <!-- Draggable Self-View -->
-        <div class="draggable-self-view" id="draggableSelfView" style="display: none;">
+        <div class="draggable-self-view ui-element" id="draggableSelfView" style="display: none;">
             <canvas id="selfViewCanvas" class="self-view-video"></canvas>
             <div class="self-view-overlay">
                 <span class="self-view-label">You</span>
@@ -993,10 +993,10 @@
         </div>
 
         <!-- Raise Hand Button -->
-        <button class="raise-hand-btn" id="raiseHandBtn" style="display: none;">✋</button>
+        <button class="raise-hand-btn ui-element" id="raiseHandBtn" style="display: none;">✋</button>
 
         <!-- Host Controls Button -->
-        <button class="host-controls-btn" id="hostControlsBtn" style="display: none;">👑</button>
+        <button class="host-controls-btn ui-element" id="hostControlsBtn" style="display: none;">👑</button>
 
         <!-- Host Controls Panel -->
         <div class="host-controls-panel" id="hostControlsPanel">
@@ -1035,7 +1035,7 @@
             </div>
 
             <!-- Bottom Controls -->
-            <div class="bottom-controls">
+            <div class="bottom-controls ui-element">
                 <div class="controls-wrapper">
                     <button class="control-btn" id="micBtn" title="Microphone">
                         <svg class="icon-mic-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -1183,12 +1183,15 @@
                     // HIDE ALL DAILY.CO UI - we build our own!
                     showLeaveButton: false,
                     showFullscreenButton: false,
-                    showLocalVideo: true,
+                    showLocalVideo: false, // Hide Daily.co local video - we use draggable self-view
                     showParticipantsBar: false,
                     showRecordingButton: false,
                     showChatButton: false,
                     showUserNameChangeButton: false,
                     showBackgroundBlurButton: false,
+
+                    // Additional UI hiding
+                    activeSpeakerMode: false, // Don't auto-switch to speaker
 
                     // Minimal chrome for clean custom UI
                     customTrayButtons: {}
@@ -1376,20 +1379,7 @@
                 });
             }
 
-            // Chat button
-            const chatBtn = document.getElementById('chatBtn');
-            if (chatBtn) {
-                chatBtn.addEventListener('click', () => {
-                    console.log('[CHAT] Chat button clicked, groupChat:', window.groupChat);
-                    if (window.groupChat && typeof window.groupChat.toggleChat === 'function') {
-                        window.groupChat.toggleChat();
-                        console.log('[CHAT] ✅ Chat toggled');
-                    } else {
-                        console.error('[CHAT] ❌ Chat not initialized yet. Please wait for call to connect.');
-                        alert('Chat is loading... Please wait a moment and try again.');
-                    }
-                });
-            }
+            // Chat button will be setup after chat initializes in joined-meeting
 
             // Start call timer
             startCallTimer();
@@ -2193,14 +2183,29 @@
             // Request wake lock
             requestWakeLock();
 
-            // UI auto-hide disabled - causes issues with Daily.co controls
-            // setupUIAutoHide();
+            // Setup UI auto-hide (now that Daily.co UI is hidden)
+            setupUIAutoHide();
 
             // Initialize group chat
             if (window.GroupChatAdvanced) {
                 try {
                     window.groupChat = new window.GroupChatAdvanced(callFrame);
                     console.log('[GROUP-CALL-DAILY] ✅ Group chat initialized');
+
+                    // Setup chat button IMMEDIATELY after chat is created
+                    const chatBtn = document.getElementById('chatBtn');
+                    if (chatBtn) {
+                        chatBtn.addEventListener('click', () => {
+                            console.log('[CHAT] 💬 Chat button clicked');
+                            if (window.groupChat && typeof window.groupChat.toggleChat === 'function') {
+                                window.groupChat.toggleChat();
+                                console.log('[CHAT] ✅ Chat toggled');
+                            } else {
+                                console.error('[CHAT] ❌ Chat not ready');
+                            }
+                        });
+                        console.log('[CHAT] ✅ Chat button listener added');
+                    }
 
                     // Initialize extensions after chat is ready
                     if (window.GroupChatExtensions) {
