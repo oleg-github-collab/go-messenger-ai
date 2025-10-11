@@ -70,14 +70,16 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
-    // Check if audio-only mode
+    // Check if audio-only mode (from URL param or /audio/ path)
     const urlParams = new URLSearchParams(window.location.search);
-    const isAudioOnly = urlParams.get('audioOnly') === 'true';
+    const isAudioPath = window.location.pathname.startsWith('/audio/');
+    const isAudioOnly = urlParams.get('audioOnly') === 'true' || isAudioPath;
 
     if (isAudioOnly) {
-        console.log('[CALL] 🎙️ Audio-only mode enabled');
+        console.log('[CALL] 🎙️ Audio-only mode enabled (path:', window.location.pathname, 'param:', urlParams.get('audioOnly'), ')');
         sessionStorage.setItem('enableVideo', 'false');
         sessionStorage.setItem('enableAudio', 'true');
+        console.log('[CALL] 📝 sessionStorage set: enableVideo=false, enableAudio=true');
 
         // Hide video-related UI elements
         if (localVideo) localVideo.style.display = 'none';
