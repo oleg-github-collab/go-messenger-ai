@@ -604,19 +604,23 @@
                 setupPeerConnection();
 
                 // Add local audio track
+                console.log('[AUDIO] Adding local tracks:', localStream.getTracks().length);
                 localStream.getTracks().forEach(track => {
-                    peerConnection.addTrack(track, localStream);
+                    console.log('[AUDIO] Adding track:', track.kind, track.enabled);
+                    const sender = peerConnection.addTrack(track, localStream);
+                    console.log('[AUDIO] Track added, sender:', sender);
                 });
 
                 const offer = await peerConnection.createOffer();
                 await peerConnection.setLocalDescription(offer);
 
+                console.log('[AUDIO] 📤 Sending offer:', offer);
                 ws.send(JSON.stringify({
                     type: 'offer',
                     offer: offer
                 }));
 
-                console.log('[AUDIO] 📤 Sent offer');
+                console.log('[AUDIO] ✅ Offer sent');
             } catch (error) {
                 console.error('[AUDIO] ❌ Create offer failed:', error);
                 showError('Failed to create call connection');
@@ -625,24 +629,32 @@
 
         async function handleOffer(offer) {
             try {
+                console.log('[AUDIO] 📥 Received offer:', offer);
                 peerConnection = new RTCPeerConnection(config);
                 setupPeerConnection();
 
                 // Add local audio track
+                console.log('[AUDIO] Adding local tracks:', localStream.getTracks().length);
                 localStream.getTracks().forEach(track => {
-                    peerConnection.addTrack(track, localStream);
+                    console.log('[AUDIO] Adding track:', track.kind, track.enabled);
+                    const sender = peerConnection.addTrack(track, localStream);
+                    console.log('[AUDIO] Track added, sender:', sender);
                 });
 
                 await peerConnection.setRemoteDescription(new RTCSessionDescription(offer));
+                console.log('[AUDIO] ✅ Remote description set');
+
                 const answer = await peerConnection.createAnswer();
                 await peerConnection.setLocalDescription(answer);
+                console.log('[AUDIO] ✅ Local description set (answer)');
 
+                console.log('[AUDIO] 📤 Sending answer:', answer);
                 ws.send(JSON.stringify({
                     type: 'answer',
                     answer: answer
                 }));
 
-                console.log('[AUDIO] 📤 Sent answer');
+                console.log('[AUDIO] ✅ Answer sent');
             } catch (error) {
                 console.error('[AUDIO] ❌ Handle offer failed:', error);
                 showError('Failed to establish connection');
@@ -680,8 +692,31 @@
             peerConnection.ontrack = (event) => {
                 console.log('[AUDIO] 🎵 Received remote audio track');
                 const remoteAudio = document.getElementById('remoteAudio');
-                remoteAudio.srcObject = event.streams[0];
-                updateStatus('Call in progress');
+                if (event.streams && event.streams[0]) {
+                    remoteAudio.srcObject = event.streams[0];
+
+                    // Ensure audio plays (browser might block autoplay)
+                    remoteAudio.play().then(() => {
+                        console.log('[AUDIO] ✅ Remote audio playing');
+                        updateStatus('Call in progress - Audio connected');
+                    }).catch(err => {
+                        console.error('[AUDIO] ❌ Audio play failed:', err);
+                        updateStatus('Call connected - Click to enable audio');
+
+                        // Add click handler to enable audio on user interaction
+                        const enableAudio = () => {
+                            remoteAudio.play().then(() => {
+                                console.log('[AUDIO] ✅ Audio enabled after user interaction');
+                                updateStatus('Call in progress');
+                                document.removeEventListener('click', enableAudio);
+                            });
+                        };
+                        document.addEventListener('click', enableAudio, { once: true });
+                    });
+                } else {
+                    console.error('[AUDIO] ❌ No stream in ontrack event');
+                }
+
                 document.getElementById('waitingMessage').style.display = 'none';
             };
 
