@@ -1124,7 +1124,7 @@
         }
 
         const authToken = getCookie('auth_token');
-        const isHost = authToken !== null; // If has auth cookie = authenticated host
+        let isHost = authToken !== null; // If has auth cookie = authenticated host (will be updated by Daily.co)
 
         // Get username - authenticated user is "Oleh", guests use URL param or default
         let userName;
@@ -1737,7 +1737,7 @@
         let isDragging = false;
         let dragOffset = { x: 0, y: 0 };
         let raisedHands = new Set();
-        let isHost = false;
+        // Note: isHost is already declared above (line ~1127)
 
         function initDraggableSelfView() {
             selfViewElement = document.getElementById('draggableSelfView');
