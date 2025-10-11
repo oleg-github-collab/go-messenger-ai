@@ -1115,10 +1115,6 @@
         </div>
     </div>
 
-    <!-- Daily Chat & Raise Hand Scripts -->
-    <script src="/static/daily-chat.js"></script>
-    <script src="/static/daily-raise-hand.js"></script>
-
     <script>
         console.log('[GROUP-CALL-DAILY] Starting Daily.co integration...');
 
@@ -1184,13 +1180,13 @@
                         border: '0'
                     },
 
-                    // HIDE ALL DAILY.CO UI - we build our own!
+                    // HIDE MOST DAILY.CO UI - but keep chat available via API
                     showLeaveButton: false,
                     showFullscreenButton: false,
                     showLocalVideo: false, // Hide Daily.co local video - we use draggable self-view
                     showParticipantsBar: false,
                     showRecordingButton: false,
-                    showChatButton: false,
+                    showChatButton: false, // We use custom button but Daily chat API
                     showUserNameChangeButton: false,
                     showBackgroundBlurButton: false,
 
@@ -1313,33 +1309,16 @@
                 // Setup UI auto-hide
                 setupUIAutoHide();
 
-                // Initialize Daily Chat (using sendAppMessage)
-                if (window.DailyChat) {
-                    try {
-                        window.dailyChat = new window.DailyChat(callFrame);
-                        console.log('[DAILY] ✅ Chat initialized');
-
-                        // Setup chat button
-                        const chatBtn = document.getElementById('chatBtn');
-                        if (chatBtn) {
-                            chatBtn.addEventListener('click', () => {
-                                window.dailyChat.toggleChat();
-                            });
-                            console.log('[DAILY] ✅ Chat button connected');
-                        }
-                    } catch (err) {
-                        console.error('[DAILY] ❌ Failed to initialize chat:', err);
-                    }
-                }
-
-                // Initialize Raise Hand (using sendAppMessage)
-                if (window.DailyRaiseHand) {
-                    try {
-                        window.dailyRaiseHand = new window.DailyRaiseHand(callFrame);
-                        console.log('[DAILY] ✅ Raise hand initialized');
-                    } catch (err) {
-                        console.error('[DAILY] ❌ Failed to initialize raise hand:', err);
-                    }
+                // Setup chat button - opens Daily native chat
+                const chatBtn = document.getElementById('chatBtn');
+                if (chatBtn) {
+                    chatBtn.addEventListener('click', () => {
+                        // Toggle Daily.co native chat UI
+                        const currentSettings = callFrame.meetingState();
+                        callFrame.setShowChat(!currentSettings.showChat);
+                        console.log('[DAILY] 💬 Chat toggled');
+                    });
+                    console.log('[DAILY] ✅ Chat button connected to Daily API');
                 }
 
                 // Check if host and show controls
@@ -1354,16 +1333,47 @@
                     }
                 }
 
-                // Show raise hand button for ALL participants
+                // Setup raise hand button - uses Daily API setLocalParticipant
                 const raiseHandBtn = document.getElementById('raiseHandBtn');
                 if (raiseHandBtn) {
                     raiseHandBtn.style.display = 'flex';
                     raiseHandBtn.style.visibility = 'visible';
                     raiseHandBtn.style.opacity = '1';
-                    console.log('[DAILY] ✋ Raise hand button shown');
+
+                    let handRaised = false;
+                    raiseHandBtn.addEventListener('click', async () => {
+                        handRaised = !handRaised;
+
+                        // Use Daily.co API to set raised hand state
+                        await callFrame.setLocalParticipant({
+                            setUserData: { raisedHand: handRaised }
+                        });
+
+                        // Update button appearance
+                        if (handRaised) {
+                            raiseHandBtn.style.background = 'rgba(16, 185, 129, 0.9)';
+                            raiseHandBtn.classList.add('active');
+                        } else {
+                            raiseHandBtn.style.background = 'rgba(255, 193, 7, 0.9)';
+                            raiseHandBtn.classList.remove('active');
+                        }
+
+                        console.log('[DAILY] ✋ Hand raised:', handRaised);
+                    });
+
+                    console.log('[DAILY] ✅ Raise hand button connected to Daily API');
                 } else {
                     console.error('[DAILY] ❌ Raise hand button not found!');
                 }
+
+                // Listen for participant updates to show raised hands
+                callFrame.on('participant-updated', (event) => {
+                    const userData = event.participant.userData;
+                    if (userData && userData.raisedHand !== undefined) {
+                        console.log('[DAILY] 🖐️', event.participant.user_name,
+                            userData.raisedHand ? 'raised hand' : 'lowered hand');
+                    }
+                });
 
                 // Initialize self-view
                 setTimeout(() => initDraggableSelfView(), 1000);
@@ -1941,19 +1951,7 @@
             }
         }
 
-        // ============================================
-        // RAISE HAND FEATURE - Connect button after initialization
-        // ============================================
-        const raiseHandBtn = document.getElementById('raiseHandBtn');
-        if (raiseHandBtn) {
-            raiseHandBtn.addEventListener('click', () => {
-                if (window.dailyRaiseHand) {
-                    window.dailyRaiseHand.toggleRaiseHand();
-                } else {
-                    console.error('[DAILY] ❌ Raise hand not initialized');
-                }
-            });
-        }
+        // Raise hand button is now initialized in joined-meeting event above
 
         function showToast(message) {
             const toast = document.createElement('div');
