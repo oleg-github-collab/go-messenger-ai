@@ -1287,6 +1287,90 @@
                 showError(error.errorMsg || 'Unknown error occurred');
             });
 
+            // App messages (reactions, raise hand, chat)
+            callFrame.on('app-message', (event) => {
+                console.log('[DAILY] 📨 Received app-message:', event.data);
+                if (event.data?.type === 'reaction') {
+                    console.log('[DAILY] 😊 Showing reaction:', event.data.emoji);
+                    showReactionAnimation(event.data.emoji);
+                } else if (event.data?.type === 'raise-hand') {
+                    console.log('[DAILY] ✋ Raise hand event:', event.data);
+                    updateRaisedHands(event.data);
+                }
+            });
+
+            // Joined meeting - initialize chat, controls, etc
+            callFrame.on('joined-meeting', () => {
+                console.log('[DAILY] ✅ Joined meeting');
+
+                // Request wake lock
+                requestWakeLock();
+
+                // Setup UI auto-hide
+                setupUIAutoHide();
+
+                // Initialize group chat
+                if (window.GroupChatAdvanced) {
+                    try {
+                        window.groupChat = new window.GroupChatAdvanced(callFrame);
+                        console.log('[GROUP-CALL-DAILY] ✅ Group chat initialized');
+
+                        // Setup chat button
+                        const chatBtn = document.getElementById('chatBtn');
+                        if (chatBtn) {
+                            chatBtn.addEventListener('click', () => {
+                                console.log('[CHAT] 💬 Chat button clicked');
+                                if (window.groupChat && typeof window.groupChat.toggleChat === 'function') {
+                                    window.groupChat.toggleChat();
+                                    console.log('[CHAT] ✅ Chat toggled');
+                                } else {
+                                    console.error('[CHAT] ❌ Chat not ready');
+                                }
+                            });
+                            console.log('[CHAT] ✅ Chat button listener added');
+                        }
+
+                        // Initialize extensions
+                        if (window.GroupChatExtensions) {
+                            setTimeout(() => {
+                                window.groupChatExtensions = new window.GroupChatExtensions(window.groupChat, callFrame);
+                                console.log('[GROUP-CALL-DAILY] 🎉 Chat extensions initialized');
+                            }, 1000);
+                        }
+                    } catch (err) {
+                        console.error('[GROUP-CALL-DAILY] ❌ Failed to initialize chat:', err);
+                    }
+                } else {
+                    console.warn('[GROUP-CALL-DAILY] ⚠️ GroupChatAdvanced not loaded');
+                }
+
+                // Check if host and show controls
+                const localParticipant = callFrame.participants().local;
+                isHost = localParticipant?.owner || false;
+
+                if (isHost) {
+                    const hostControlsBtn = document.getElementById('hostControlsBtn');
+                    if (hostControlsBtn) {
+                        hostControlsBtn.style.display = 'flex';
+                        console.log('[DAILY] 👑 You are the host');
+                    }
+                }
+
+                // Show raise hand button for ALL participants
+                const raiseHandBtn = document.getElementById('raiseHandBtn');
+                if (raiseHandBtn) {
+                    raiseHandBtn.style.display = 'flex';
+                    raiseHandBtn.style.visibility = 'visible';
+                    raiseHandBtn.style.opacity = '1';
+                    console.log('[DAILY] ✋ Raise hand button shown');
+                } else {
+                    console.error('[DAILY] ❌ Raise hand button not found!');
+                }
+
+                // Initialize self-view
+                setTimeout(() => initDraggableSelfView(), 1000);
+            });
+
             // Handle recording (if needed)
             callFrame.on('recording-started', () => {
                 console.log('[GROUP-CALL-DAILY] 🔴 Recording started');
@@ -2148,92 +2232,7 @@
             console.log('[UI] 👁️ Auto-hide enabled - UI will hide after 5s of inactivity');
         }
 
-        // Setup reaction listener (global, outside of joined-meeting)
-        callFrame.on('app-message', (event) => {
-            console.log('[DAILY] 📨 Received app-message:', event.data);
-            if (event.data?.type === 'reaction') {
-                console.log('[DAILY] 😊 Showing reaction:', event.data.emoji);
-                showReactionAnimation(event.data.emoji);
-            } else if (event.data?.type === 'raise-hand') {
-                console.log('[DAILY] ✋ Raise hand event:', event.data);
-                // Handle raise hand from other participants
-                updateRaisedHands(event.data);
-            }
-        });
-
-        // Initialize chat extensions after chat is ready
-        callFrame.on('joined-meeting', () => {
-            // Request wake lock
-            requestWakeLock();
-
-            // Setup UI auto-hide (now that Daily.co UI is hidden)
-            setupUIAutoHide();
-
-            // Initialize group chat
-            if (window.GroupChatAdvanced) {
-                try {
-                    window.groupChat = new window.GroupChatAdvanced(callFrame);
-                    console.log('[GROUP-CALL-DAILY] ✅ Group chat initialized');
-
-                    // Setup chat button IMMEDIATELY after chat is created
-                    const chatBtn = document.getElementById('chatBtn');
-                    if (chatBtn) {
-                        chatBtn.addEventListener('click', () => {
-                            console.log('[CHAT] 💬 Chat button clicked');
-                            if (window.groupChat && typeof window.groupChat.toggleChat === 'function') {
-                                window.groupChat.toggleChat();
-                                console.log('[CHAT] ✅ Chat toggled');
-                            } else {
-                                console.error('[CHAT] ❌ Chat not ready');
-                            }
-                        });
-                        console.log('[CHAT] ✅ Chat button listener added');
-                    }
-
-                    // Initialize extensions after chat is ready
-                    if (window.GroupChatExtensions) {
-                        setTimeout(() => {
-                            window.groupChatExtensions = new window.GroupChatExtensions(window.groupChat, callFrame);
-                            console.log('[GROUP-CALL-DAILY] 🎉 Chat extensions initialized');
-                        }, 1000);
-                    }
-                } catch (err) {
-                    console.error('[GROUP-CALL-DAILY] ❌ Failed to initialize chat:', err);
-                }
-            } else {
-                console.warn('[GROUP-CALL-DAILY] ⚠️ GroupChatAdvanced not loaded');
-            }
-
-            // Check if user is host and show controls
-            const localParticipant = callFrame.participants().local;
-            isHost = localParticipant?.owner || false;
-
-            if (isHost) {
-                const hostControlsBtn = document.getElementById('hostControlsBtn');
-                if (hostControlsBtn) {
-                    hostControlsBtn.style.display = 'flex';
-                    console.log('[DAILY] 👑 You are the host - showing host controls');
-                }
-            }
-
-            // Show raise hand button for ALL participants
-            const raiseHandBtn = document.getElementById('raiseHandBtn');
-            console.log('[DAILY] Looking for raise hand button, found:', raiseHandBtn);
-            if (raiseHandBtn) {
-                raiseHandBtn.style.display = 'flex';
-                raiseHandBtn.style.visibility = 'visible';
-                raiseHandBtn.style.opacity = '1';
-                console.log('[DAILY] ✋ Raise hand button display set to flex');
-                console.log('[DAILY] ✋ Button computed style:', window.getComputedStyle(raiseHandBtn).display);
-            } else {
-                console.error('[DAILY] ❌ Raise hand button not found in DOM!');
-            }
-
-            // Initialize self-view after a short delay
-            setTimeout(() => {
-                initDraggableSelfView();
-            }, 1000);
-        });
+        // All listeners moved to setupEventListeners() which is called after callFrame is created
 
         function updateRaisedHands(data) {
             // Update raised hands tracking
