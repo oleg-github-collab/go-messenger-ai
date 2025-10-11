@@ -993,7 +993,7 @@
         </div>
 
         <!-- Raise Hand Button -->
-        <button class="raise-hand-btn ui-element" id="raiseHandBtn" style="display: none;">✋</button>
+        <button class="raise-hand-btn" id="raiseHandBtn" style="display: none;">✋</button>
 
         <!-- Host Controls Button -->
         <button class="host-controls-btn ui-element" id="hostControlsBtn" style="display: none;">👑</button>
@@ -1180,22 +1180,18 @@
                         border: '0'
                     },
 
-                    // HIDE MOST DAILY.CO UI - but keep chat available via API
+                    // UI configuration - hide most, enable chat
                     showLeaveButton: false,
                     showFullscreenButton: false,
                     showLocalVideo: false, // Hide Daily.co local video - we use draggable self-view
                     showParticipantsBar: false,
                     showRecordingButton: false,
-                    showChatButton: false, // We use custom button but Daily chat API
+                    showChatButton: true, // Enable chat button in Daily UI
                     showUserNameChangeButton: false,
                     showBackgroundBlurButton: false,
 
                     // Additional UI hiding
-                    activeSpeakerMode: false, // Don't auto-switch to speaker
-
-                    // Minimal chrome for clean custom UI
-                    customTrayButtons: {}
-                    // Theme removed - causes errors with 'transparent' border
+                    activeSpeakerMode: false // Don't auto-switch to speaker
                 });
 
                 // Hide loading immediately to show Daily.co prejoin UI
@@ -1313,12 +1309,11 @@
                 const chatBtn = document.getElementById('chatBtn');
                 if (chatBtn) {
                     chatBtn.addEventListener('click', () => {
-                        // Toggle Daily.co native chat UI
-                        const currentSettings = callFrame.meetingState();
-                        callFrame.setShowChat(!currentSettings.showChat);
-                        console.log('[DAILY] 💬 Chat toggled');
+                        // Use Daily.co method to toggle chat
+                        callFrame.updateInputSettings({ showChat: true });
+                        console.log('[DAILY] 💬 Chat opened');
                     });
-                    console.log('[DAILY] ✅ Chat button connected to Daily API');
+                    console.log('[DAILY] ✅ Chat button connected');
                 }
 
                 // Check if host and show controls
