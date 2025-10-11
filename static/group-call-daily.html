@@ -146,16 +146,18 @@
         /* Self View */
         .self-view {
             position: fixed;
-            bottom: 80px;
+            bottom: 120px;
             right: 20px;
             width: 200px;
             height: 150px;
             border-radius: 12px;
             overflow: hidden;
             border: 2px solid rgba(255, 255, 255, 0.3);
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
             cursor: move;
             z-index: 999;
             background: #000;
+            display: none; /* Hidden until joined */
         }
 
         .self-view video {
@@ -415,16 +417,16 @@
             micBtn.onclick = async () => {
                 const current = callFrame.localAudio();
                 await callFrame.setLocalAudio(!current);
-                micBtn.classList.toggle('disabled', !current);
-                console.log('[DAILY] Mic:', !current ? 'ON' : 'OFF');
+                // State will be updated by participant-updated event
+                console.log('[DAILY] Mic toggled:', current ? 'OFF' : 'ON');
             };
 
             // Camera toggle - directly connected to Daily API
             cameraBtn.onclick = async () => {
                 const current = callFrame.localVideo();
                 await callFrame.setLocalVideo(!current);
-                cameraBtn.classList.toggle('disabled', !current);
-                console.log('[DAILY] Camera:', !current ? 'ON' : 'OFF');
+                // State will be updated by participant-updated event
+                console.log('[DAILY] Camera toggled:', current ? 'OFF' : 'ON');
             };
 
             // End call - directly connected to Daily API
@@ -534,15 +536,49 @@
                 }
             });
 
-            // Track state changes
+            // Track state changes - update button states
             callFrame.on('participant-updated', (e) => {
                 if (e.participant.local) {
                     const micBtn = document.getElementById('micBtn');
                     const camBtn = document.getElementById('cameraBtn');
-                    micBtn.classList.toggle('active', e.participant.audio);
-                    camBtn.classList.toggle('active', e.participant.video);
+
+                    // Mic: disabled when muted (audio: false)
+                    micBtn.classList.toggle('disabled', !e.participant.audio);
+
+                    // Camera: disabled when off (video: false)
+                    camBtn.classList.toggle('disabled', !e.participant.video);
+
+                    console.log('[DAILY] State updated - Mic:', e.participant.audio, 'Camera:', e.participant.video);
                 }
             });
+
+            // Joined meeting - show self view
+            callFrame.on('joined-meeting', () => {
+                console.log('[DAILY] ✅ Joined meeting');
+
+                // Show self view after joining
+                const selfView = document.getElementById('selfView');
+                if (selfView) {
+                    selfView.style.display = 'block';
+                }
+
+                // Set initial button states
+                updateButtonStates();
+            });
+        }
+
+        function updateButtonStates() {
+            const local = callFrame.participants().local;
+            if (!local) return;
+
+            const micBtn = document.getElementById('micBtn');
+            const camBtn = document.getElementById('cameraBtn');
+
+            // Set initial states based on actual Daily state
+            micBtn.classList.toggle('disabled', !local.audio);
+            camBtn.classList.toggle('disabled', !local.video);
+
+            console.log('[DAILY] Initial states - Mic:', local.audio, 'Camera:', local.video);
         }
 
         function toggleChat() {
@@ -592,20 +628,26 @@
             handRaised = !handRaised;
             const local = callFrame.participants().local;
 
-            // Update UI
-            document.getElementById('raiseHandBtn').classList.toggle('active', handRaised);
-            document.getElementById('raiseHandMobile').classList.toggle('active', handRaised);
+            const raiseHandBtn = document.getElementById('raiseHandBtn');
+            const raiseHandMobile = document.getElementById('raiseHandMobile');
+
+            // Update UI - use btn-active class for green glow
+            if (handRaised) {
+                raiseHandBtn.classList.add('btn-active');
+                raiseHandMobile.classList.add('active');
+            } else {
+                raiseHandBtn.classList.remove('btn-active');
+                raiseHandMobile.classList.remove('active');
+            }
 
             // Send to others
-            if (handRaised) {
-                callFrame.sendAppMessage({
-                    type: 'raise-hand',
-                    data: {
-                        userName: local.user_name,
-                        raised: true
-                    }
-                }, '*');
-            }
+            callFrame.sendAppMessage({
+                type: 'raise-hand',
+                data: {
+                    userName: local.user_name,
+                    raised: handRaised
+                }
+            }, '*');
 
             console.log('✋ Hand', handRaised ? 'raised' : 'lowered');
         }
