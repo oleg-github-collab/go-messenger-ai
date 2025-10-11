@@ -70,6 +70,38 @@ document.addEventListener('DOMContentLoaded', async () => {
         return;
     }
 
+    // Check if audio-only mode
+    const urlParams = new URLSearchParams(window.location.search);
+    const isAudioOnly = urlParams.get('audioOnly') === 'true';
+
+    if (isAudioOnly) {
+        console.log('[CALL] 🎙️ Audio-only mode enabled');
+        sessionStorage.setItem('enableVideo', 'false');
+        sessionStorage.setItem('enableAudio', 'true');
+
+        // Hide video-related UI elements
+        if (localVideo) localVideo.style.display = 'none';
+        if (remoteVideo) remoteVideo.style.display = 'none';
+        if (localPip) localPip.style.display = 'none';
+        if (cameraBtn) cameraBtn.style.display = 'none';
+        if (flipCameraBtn) flipCameraBtn.style.display = 'none';
+
+        // Show audio-only UI
+        if (remotePlaceholder) {
+            remotePlaceholder.style.display = 'flex';
+            remotePlaceholder.innerHTML = `
+                <div style="text-align: center;">
+                    <div style="font-size: 80px; margin-bottom: 20px;">🎙️</div>
+                    <div style="font-size: 24px; font-weight: 600; margin-bottom: 10px;">Audio Call</div>
+                    <div style="font-size: 16px; opacity: 0.8;">Waiting for participant...</div>
+                </div>
+            `;
+        }
+    } else {
+        sessionStorage.setItem('enableVideo', 'true');
+        sessionStorage.setItem('enableAudio', 'true');
+    }
+
     // Get user info from sessionStorage
     let guestName = sessionStorage.getItem('guestName');
     const isHostSession = sessionStorage.getItem('isHost') === 'true';
