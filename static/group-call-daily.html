@@ -1937,25 +1937,7 @@
         const muteAllBtn = document.getElementById('muteAllBtn');
         const unmuteAllBtn = document.getElementById('unmuteAllBtn');
 
-        // Check if user is host
-        callFrame.on('joined-meeting', () => {
-            const localParticipant = callFrame.participants().local;
-            isHost = localParticipant?.owner || false;
-
-            if (isHost) {
-                hostControlsBtn.style.display = 'flex';
-                console.log('[DAILY] 👑 You are the host');
-            }
-
-            // Show raise hand button for all
-            if (raiseHandBtn) {
-                raiseHandBtn.style.display = 'flex';
-                console.log('[DAILY] ✋ Raise hand button shown');
-            }
-
-            // Initialize self-view
-            setTimeout(() => initDraggableSelfView(), 1000);
-        });
+        // Host controls and raise hand will be initialized in main joined-meeting handler below
 
         if (hostControlsBtn) {
             hostControlsBtn.addEventListener('click', () => {
@@ -2220,6 +2202,32 @@
             } else {
                 console.warn('[GROUP-CALL-DAILY] ⚠️ GroupChatAdvanced not loaded');
             }
+
+            // Check if user is host and show controls
+            const localParticipant = callFrame.participants().local;
+            isHost = localParticipant?.owner || false;
+
+            if (isHost) {
+                const hostControlsBtn = document.getElementById('hostControlsBtn');
+                if (hostControlsBtn) {
+                    hostControlsBtn.style.display = 'flex';
+                    console.log('[DAILY] 👑 You are the host - showing host controls');
+                }
+            }
+
+            // Show raise hand button for ALL participants
+            const raiseHandBtn = document.getElementById('raiseHandBtn');
+            if (raiseHandBtn) {
+                raiseHandBtn.style.display = 'flex';
+                console.log('[DAILY] ✋ Raise hand button shown');
+            } else {
+                console.error('[DAILY] ❌ Raise hand button not found in DOM!');
+            }
+
+            // Initialize self-view after a short delay
+            setTimeout(() => {
+                initDraggableSelfView();
+            }, 1000);
         });
 
         function updateRaisedHands(data) {
