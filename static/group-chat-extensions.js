@@ -20,6 +20,15 @@ class GroupChatExtensions {
         this.setupVoiceListener();
     }
 
+    toggleChatPanel() {
+        // Toggle chat via the chat instance
+        if (this.chat && typeof this.chat.toggleChat === 'function') {
+            this.chat.toggleChat();
+        } else {
+            console.error('[GroupChatExtensions] Chat instance not available or toggleChat not found');
+        }
+    }
+
     addExtensionButtons() {
         // Add buttons to chat input area
         const inputArea = document.querySelector('.group-chat-input-area');

@@ -276,18 +276,7 @@
         }
 
         .top-bar {
-            position: absolute;
-            top: 0;
-            left: 0;
-            right: 0;
-            padding: 20px;
-            display: flex;
-            align-items: center;
-            justify-content: space-between;
-            background: linear-gradient(180deg, rgba(0,0,0,0.7) 0%, rgba(0,0,0,0.4) 60%, rgba(0,0,0,0) 100%);
-            backdrop-filter: blur(20px);
-            -webkit-backdrop-filter: blur(20px);
-            pointer-events: auto;
+            display: none; /* Hidden by default */
         }
 
         .call-info {
@@ -435,21 +424,21 @@
 
         @media (max-width: 768px) {
             .controls-wrapper {
-                gap: 8px;
+                gap: 6px;
             }
 
             .control-btn {
-                min-width: 60px;
-                padding: 12px 14px;
+                min-width: 57px;
+                padding: 11px 13px;
             }
 
             .control-btn svg {
-                width: 20px;
-                height: 20px;
+                width: 19px;
+                height: 19px;
             }
 
             .btn-label {
-                font-size: 10px;
+                font-size: 9.5px;
             }
         }
 
@@ -685,10 +674,10 @@
         /* ============================================ */
         .draggable-self-view {
             position: fixed;
-            bottom: 200px;
+            top: 20px;
             right: 20px;
-            width: 180px;
-            height: 135px;
+            width: 220px;
+            height: 165px;
             border-radius: 16px;
             overflow: hidden;
             box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
@@ -1593,14 +1582,7 @@
             setTimeout(() => container.remove(), 2000);
         }
 
-        // Listen for reactions from other participants
-        if (callFrame) {
-            callFrame.on('app-message', (event) => {
-                if (event.data?.type === 'reaction') {
-                    showReactionAnimation(event.data.emoji);
-                }
-            });
-        }
+        // Reaction listener will be set up in joined-meeting event
 
         // Update network stats
         let statsInterval = setInterval(() => {
@@ -2156,6 +2138,15 @@
 
             // Setup UI auto-hide
             setupUIAutoHide();
+
+            // Setup reaction listener
+            callFrame.on('app-message', (event) => {
+                console.log('[DAILY] 📨 Received app-message:', event.data);
+                if (event.data?.type === 'reaction') {
+                    console.log('[DAILY] 😊 Showing reaction:', event.data.emoji);
+                    showReactionAnimation(event.data.emoji);
+                }
+            });
 
             if (window.GroupChatAdvanced && window.GroupChatExtensions) {
                 setTimeout(() => {
