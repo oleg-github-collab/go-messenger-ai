@@ -442,8 +442,8 @@ func serveFile(filename string) http.HandlerFunc {
 func createRoom(hostID, hostName, mode string) string {
 	id := uuid.NewString()
 
-	// Store in memory (only for 1-on-1 mode)
-	if mode == "1on1" {
+	// Store in memory (for 1-on-1 and audio modes - they use P2P WebRTC)
+	if mode == "1on1" || mode == "audio" {
 		mu.Lock()
 		rooms[id] = &Room{
 			ID:           id,
@@ -454,6 +454,7 @@ func createRoom(hostID, hostName, mode string) string {
 			CreatedAt:    time.Now(),
 		}
 		mu.Unlock()
+		log.Printf("[ROOM] 💾 Stored %s room in memory: %s", mode, id)
 	}
 
 	// Store in Redis
