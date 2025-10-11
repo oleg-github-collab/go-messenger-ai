@@ -985,7 +985,7 @@
         <div id="dailyFrame"></div>
 
         <!-- Draggable Self-View -->
-        <div class="draggable-self-view ui-element" id="draggableSelfView" style="display: none;">
+        <div class="draggable-self-view" id="draggableSelfView" style="display: none;">
             <canvas id="selfViewCanvas" class="self-view-video"></canvas>
             <div class="self-view-overlay">
                 <span class="self-view-label">You</span>
@@ -996,7 +996,7 @@
         <button class="raise-hand-btn" id="raiseHandBtn" style="display: none;">✋</button>
 
         <!-- Host Controls Button -->
-        <button class="host-controls-btn ui-element" id="hostControlsBtn" style="display: none;">👑</button>
+        <button class="host-controls-btn" id="hostControlsBtn" style="display: none;">👑</button>
 
         <!-- Host Controls Panel -->
         <div class="host-controls-panel" id="hostControlsPanel">
@@ -1016,7 +1016,7 @@
         <!-- Custom UI Overlay -->
         <div class="custom-ui-overlay">
             <!-- Top Bar -->
-            <div class="top-bar ui-element">
+            <div class="top-bar">
                 <button class="back-button" id="backBtn" title="Leave Call">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                         <path d="M15 18L9 12L15 6" stroke-linecap="round" stroke-linejoin="round"/>
@@ -1035,7 +1035,7 @@
             </div>
 
             <!-- Bottom Controls -->
-            <div class="bottom-controls ui-element">
+            <div class="bottom-controls">
                 <div class="controls-wrapper">
                     <button class="control-btn" id="micBtn" title="Microphone">
                         <svg class="icon-mic-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -2193,8 +2193,8 @@
             // Request wake lock
             requestWakeLock();
 
-            // Setup UI auto-hide
-            setupUIAutoHide();
+            // UI auto-hide disabled - causes issues with Daily.co controls
+            // setupUIAutoHide();
 
             // Initialize group chat
             if (window.GroupChatAdvanced) {
