@@ -237,32 +237,78 @@
             cursor: pointer;
         }
 
-        /* Raise Hand Mobile */
+        /* Raise Hand Mobile - top right */
         .raise-hand-mobile {
             position: fixed;
             top: 20px;
             right: 20px;
-            width: 50px;
-            height: 50px;
-            border-radius: 50%;
-            background: #fbbf24;
-            border: none;
-            font-size: 24px;
-            cursor: pointer;
-            z-index: 1001;
             display: none;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            min-width: 70px;
+            padding: 14px 18px;
+            background: rgba(255, 255, 255, 0.15);
+            border: 1.5px solid rgba(255, 255, 255, 0.15);
+            border-radius: 16px;
+            color: white;
+            cursor: pointer;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
+            z-index: 1001;
+        }
+
+        .raise-hand-mobile:hover {
+            background: rgba(255, 255, 255, 0.25);
+            border-color: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
         }
 
         .raise-hand-mobile.active {
-            background: #10b981;
+            background: rgba(16, 185, 129, 0.9) !important;
+            border-color: rgba(16, 185, 129, 0.4) !important;
+            box-shadow: 0 6px 20px rgba(16, 185, 129, 0.5) !important;
+        }
+
+        .raise-hand-mobile svg {
+            width: 24px;
+            height: 24px;
         }
 
         @media (max-width: 768px) {
             .raise-hand-mobile {
-                display: block;
+                display: flex;
             }
+
+            /* Hide desktop raise hand button on mobile */
+            #raiseHandBtn {
+                display: none !important;
+            }
+
             .chat-overlay {
                 width: 100%;
+            }
+
+            .controls-wrapper {
+                gap: 6px;
+            }
+
+            .control-btn {
+                min-width: 57px;
+                padding: 11px 13px;
+            }
+
+            .control-btn svg {
+                width: 19px;
+                height: 19px;
+            }
+
+            .btn-label {
+                font-size: 9.5px;
             }
         }
     </style>
@@ -276,8 +322,16 @@
             <video id="selfVideo" autoplay muted playsinline></video>
         </div>
 
-        <!-- Raise Hand Mobile -->
-        <button class="raise-hand-mobile" id="raiseHandMobile">✋</button>
+        <!-- Raise Hand Mobile - top right -->
+        <button class="raise-hand-mobile" id="raiseHandMobile">
+            <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v5"/>
+                <path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v6"/>
+                <path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8"/>
+                <path d="M18 8a2 2 0 0 1 2 2v2.5a8 8 0 1 1-16 0v-2a2 2 0 0 1 2-2"/>
+            </svg>
+            <span class="btn-label">Raise</span>
+        </button>
 
         <!-- Bottom Controls -->
         <div class="bottom-controls">
