@@ -1080,7 +1080,7 @@
                         <span class="btn-label">Share</span>
                     </button>
 
-                    <button class="control-btn" id="chatBtn" title="Chat" onclick="if(window.groupChat){window.groupChat.toggleChat()}else{console.error('Chat not initialized')}">
+                    <button class="control-btn" id="chatBtn" title="Chat">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
                         </svg>
@@ -1375,6 +1375,21 @@
                 });
             }
 
+            // Chat button
+            const chatBtn = document.getElementById('chatBtn');
+            if (chatBtn) {
+                chatBtn.addEventListener('click', () => {
+                    console.log('[CHAT] Chat button clicked, groupChat:', window.groupChat);
+                    if (window.groupChat && typeof window.groupChat.toggleChat === 'function') {
+                        window.groupChat.toggleChat();
+                        console.log('[CHAT] ✅ Chat toggled');
+                    } else {
+                        console.error('[CHAT] ❌ Chat not initialized yet. Please wait for call to connect.');
+                        alert('Chat is loading... Please wait a moment and try again.');
+                    }
+                });
+            }
+
             // Start call timer
             startCallTimer();
         }
@@ -1657,15 +1672,7 @@
             if (callFrame) callFrame.destroy();
         });
 
-        // Initialize advanced group chat after call joins
-        let groupChat = null;
-        callFrame.on('joined-meeting', () => {
-            if (window.GroupChatAdvanced) {
-                groupChat = new window.GroupChatAdvanced(callFrame);
-                window.groupChat = groupChat;
-                console.log('[GROUP-CALL-DAILY] 💬 Advanced group chat initialized');
-            }
-        });
+        // Chat will be initialized in the main joined-meeting handler below
 
         // Mini-browser for links (same as in call.js)
         window.openMiniBrowserFromChat = function(url) {
@@ -2188,14 +2195,24 @@
             // Setup UI auto-hide
             setupUIAutoHide();
 
-            if (window.GroupChatAdvanced && window.GroupChatExtensions) {
-                setTimeout(() => {
-                    if (window.groupChat) {
-                        const extensions = new window.GroupChatExtensions(window.groupChat, callFrame);
-                        window.groupChatExtensions = extensions;
-                        console.log('[GROUP-CALL-DAILY] 🎉 Chat extensions initialized');
+            // Initialize group chat
+            if (window.GroupChatAdvanced) {
+                try {
+                    window.groupChat = new window.GroupChatAdvanced(callFrame);
+                    console.log('[GROUP-CALL-DAILY] ✅ Group chat initialized');
+
+                    // Initialize extensions after chat is ready
+                    if (window.GroupChatExtensions) {
+                        setTimeout(() => {
+                            window.groupChatExtensions = new window.GroupChatExtensions(window.groupChat, callFrame);
+                            console.log('[GROUP-CALL-DAILY] 🎉 Chat extensions initialized');
+                        }, 1000);
                     }
-                }, 2000);
+                } catch (err) {
+                    console.error('[GROUP-CALL-DAILY] ❌ Failed to initialize chat:', err);
+                }
+            } else {
+                console.warn('[GROUP-CALL-DAILY] ⚠️ GroupChatAdvanced not loaded');
             }
         });
 
