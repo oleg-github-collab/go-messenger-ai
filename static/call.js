@@ -1423,35 +1423,49 @@ document.addEventListener('DOMContentLoaded', async () => {
     // Share screen button
     const shareScreenBtn = document.getElementById('shareScreenBtn');
     if (shareScreenBtn) {
-        shareScreenBtn.addEventListener('click', async () => {
-            try {
-                const screenStream = await navigator.mediaDevices.getDisplayMedia({
-                    video: true,
-                    audio: false
-                });
+        // Check if screen share is supported
+        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        const hasGetDisplayMedia = navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia;
 
-                const screenTrack = screenStream.getVideoTracks()[0];
+        if (!hasGetDisplayMedia || isMobile) {
+            // Hide or disable button on mobile
+            shareScreenBtn.style.opacity = '0.5';
+            shareScreenBtn.title = 'Screen sharing not available on mobile';
+            shareScreenBtn.addEventListener('click', () => {
+                alert('Screen sharing is not supported on mobile devices');
+            });
+        } else {
+            shareScreenBtn.addEventListener('click', async () => {
+                try {
+                    const screenStream = await navigator.mediaDevices.getDisplayMedia({
+                        video: true,
+                        audio: false
+                    });
 
-                // Replace video track
-                const senders = webrtc.peerConnection.getSenders();
-                const videoSender = senders.find(s => s.track && s.track.kind === 'video');
+                    const screenTrack = screenStream.getVideoTracks()[0];
 
-                if (videoSender) {
-                    await videoSender.replaceTrack(screenTrack);
+                    // Replace video track
+                    const senders = webrtc.peerConnection.getSenders();
+                    const videoSender = senders.find(s => s.track && s.track.kind === 'video');
 
-                    // When user stops sharing
-                    screenTrack.onended = () => {
-                        // Switch back to camera
-                        const cameraTrack = webrtc.localStream.getVideoTracks()[0];
-                        if (cameraTrack) {
-                            videoSender.replaceTrack(cameraTrack);
-                        }
-                    };
+                    if (videoSender) {
+                        await videoSender.replaceTrack(screenTrack);
+
+                        // When user stops sharing
+                        screenTrack.onended = () => {
+                            // Switch back to camera
+                            const cameraTrack = webrtc.localStream.getVideoTracks()[0];
+                            if (cameraTrack) {
+                                videoSender.replaceTrack(cameraTrack);
+                            }
+                        };
+                    }
+                } catch (err) {
+                    console.error('[CALL] Screen share failed:', err);
+                    alert('Failed to share screen: ' + err.message);
                 }
-            } catch (err) {
-                console.error('[CALL] Screen share failed:', err);
-            }
-        });
+            });
+        }
     }
 
     // Switch camera button (desktop)
