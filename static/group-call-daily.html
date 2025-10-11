@@ -10,64 +10,137 @@
             margin: 0;
             padding: 0;
             box-sizing: border-box;
+            -webkit-tap-highlight-color: transparent;
+        }
+
+        html, body {
+            width: 100%;
+            height: 100%;
+            position: fixed;
+            overflow: hidden;
         }
 
         body {
-            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
-            background: #000;
+            font-family: 'Segoe UI', system-ui, -apple-system, BlinkMacSystemFont, sans-serif;
+            background: linear-gradient(135deg, #0f172a 0%, #1e293b 100%);
             color: white;
-            overflow: hidden;
         }
 
         #container {
             width: 100vw;
             height: 100vh;
             position: relative;
+            display: flex;
+            flex-direction: column;
         }
 
         #dailyFrame {
             width: 100%;
             height: 100%;
+            flex: 1;
         }
 
-        /* Controls */
-        .controls {
+        /* Bottom Controls - OPAQUE to hide Daily iframe controls */
+        .bottom-controls {
             position: fixed;
-            bottom: 20px;
-            left: 50%;
-            transform: translateX(-50%);
-            display: flex;
-            gap: 15px;
-            background: rgba(0, 0, 0, 0.8);
-            padding: 15px 25px;
-            border-radius: 40px;
-            backdrop-filter: blur(10px);
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(180deg, rgba(15, 23, 42, 0) 0%, rgba(15, 23, 42, 0.95) 20%, rgba(15, 23, 42, 1) 100%);
+            backdrop-filter: blur(20px);
+            -webkit-backdrop-filter: blur(20px);
+            padding: 40px 20px 30px;
             z-index: 1000;
+            pointer-events: auto;
         }
 
-        .btn {
-            width: 50px;
-            height: 50px;
-            border-radius: 50%;
-            border: none;
-            background: rgba(255, 255, 255, 0.2);
+        .controls-wrapper {
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 12px;
+            max-width: 600px;
+            margin: 0 auto;
+        }
+
+        .control-btn {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            gap: 6px;
+            min-width: 70px;
+            padding: 14px 18px;
+            background: rgba(255, 255, 255, 0.15);
+            border: 1.5px solid rgba(255, 255, 255, 0.15);
+            border-radius: 16px;
             color: white;
             cursor: pointer;
-            font-size: 20px;
-            transition: all 0.2s;
+            backdrop-filter: blur(10px);
+            -webkit-backdrop-filter: blur(10px);
+            transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.15);
         }
 
-        .btn:hover {
-            background: rgba(255, 255, 255, 0.3);
-            transform: scale(1.1);
+        .control-btn:hover {
+            background: rgba(255, 255, 255, 0.25);
+            border-color: rgba(255, 255, 255, 0.3);
+            transform: translateY(-2px);
+            box-shadow: 0 6px 16px rgba(0, 0, 0, 0.2);
         }
 
-        .btn.active {
-            background: #10b981;
+        .control-btn:active {
+            transform: translateY(0);
         }
 
-        .btn.end {
-            background: #ef4444;
+        .control-btn svg {
+            width: 24px;
+            height: 24px;
+        }
+
+        .btn-label {
+            font-size: 11px;
+            font-weight: 600;
+            letter-spacing: 0.3px;
+        }
+
+        .end-call-btn {
+            background: linear-gradient(135deg, #FF3B30 0%, #D32F2F 100%) !important;
+            border-color: rgba(255, 59, 48, 0.3) !important;
+            box-shadow: 0 6px 20px rgba(255, 59, 48, 0.5) !important;
+        }
+
+        .end-call-btn:hover {
+            transform: scale(1.08) !important;
+            box-shadow: 0 8px 24px rgba(255, 59, 48, 0.6) !important;
+        }
+
+        .control-btn.disabled {
+            background: rgba(255, 59, 48, 0.85) !important;
+            border-color: rgba(255, 59, 48, 0.4) !important;
+        }
+
+        .control-btn.disabled .icon-on {
+            display: none !important;
+        }
+
+        .control-btn.disabled .icon-off {
+            display: block !important;
+        }
+
+        .control-btn:not(.disabled) .icon-off {
+            display: none !important;
+        }
+
+        .control-btn.btn-active {
+            background: rgba(16, 185, 129, 0.9) !important;
+            border-color: rgba(16, 185, 129, 0.4) !important;
+            box-shadow: 0 6px 20px rgba(16, 185, 129, 0.5) !important;
+        }
+
+        .control-btn.btn-active:hover {
+            background: rgba(16, 185, 129, 1) !important;
+            box-shadow: 0 8px 24px rgba(16, 185, 129, 0.6) !important;
         }
 
         /* Self View */
@@ -204,13 +277,69 @@
         <!-- Raise Hand Mobile -->
         <button class="raise-hand-mobile" id="raiseHandMobile">✋</button>
 
-        <!-- Controls -->
-        <div class="controls">
-            <button class="btn" id="micBtn" title="Mic">🎤</button>
-            <button class="btn" id="cameraBtn" title="Camera">📹</button>
-            <button class="btn end" id="endBtn" title="Leave">📞</button>
-            <button class="btn" id="chatBtn" title="Chat">💬</button>
-            <button class="btn" id="raiseHandBtn" title="Raise Hand">✋</button>
+        <!-- Bottom Controls -->
+        <div class="bottom-controls">
+            <div class="controls-wrapper">
+                <button class="control-btn" id="micBtn" title="Microphone">
+                    <svg class="icon-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                        <path d="M19 10v2a7 7 0 0 1-14 0v-2M12 19v4M8 23h8"/>
+                    </svg>
+                    <svg class="icon-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="1" y1="1" x2="23" y2="23"/>
+                        <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/>
+                        <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/>
+                        <line x1="12" y1="19" x2="12" y2="23"/>
+                        <line x1="8" y1="23" x2="16" y2="23"/>
+                    </svg>
+                    <span class="btn-label">Mic</span>
+                </button>
+
+                <button class="control-btn" id="cameraBtn" title="Camera">
+                    <svg class="icon-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M23 7l-7 5 7 5V7z"/>
+                        <rect x="1" y="5" width="15" height="14" rx="2" ry="2"/>
+                    </svg>
+                    <svg class="icon-off" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <line x1="1" y1="1" x2="23" y2="23"/>
+                        <path d="M21 21V8a1 1 0 0 0-1-1h-3M3 16v3a1 1 0 0 0 1 1h12"/>
+                    </svg>
+                    <span class="btn-label">Camera</span>
+                </button>
+
+                <button class="control-btn end-call-btn" id="endBtn" title="End Call">
+                    <svg viewBox="0 0 24 24" fill="currentColor">
+                        <path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08c-.18-.17-.29-.42-.29-.7 0-.28.11-.53.29-.71C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28-.79-.74-1.68-1.36-2.66-1.85-.33-.16-.56-.5-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/>
+                    </svg>
+                    <span class="btn-label">End</span>
+                </button>
+
+                <button class="control-btn" id="screenShareBtn" title="Share Screen">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <rect x="2" y="3" width="20" height="14" rx="2" ry="2"/>
+                        <line x1="8" y1="21" x2="16" y2="21"/>
+                        <line x1="12" y1="17" x2="12" y2="21"/>
+                    </svg>
+                    <span class="btn-label">Share</span>
+                </button>
+
+                <button class="control-btn" id="chatBtn" title="Chat">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
+                    </svg>
+                    <span class="btn-label">Chat</span>
+                </button>
+
+                <button class="control-btn" id="raiseHandBtn" title="Raise Hand">
+                    <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v5"/>
+                        <path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v6"/>
+                        <path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8"/>
+                        <path d="M18 8a2 2 0 0 1 2 2v2.5a8 8 0 1 1-16 0v-2a2 2 0 0 1 2-2"/>
+                    </svg>
+                    <span class="btn-label">Raise</span>
+                </button>
+            </div>
         </div>
 
         <!-- Chat -->
@@ -274,33 +403,59 @@
         }
 
         function setupControls() {
-            // Mic
-            document.getElementById('micBtn').onclick = async () => {
-                const localAudio = callFrame.localAudio();
-                await callFrame.setLocalAudio(!localAudio);
+            const micBtn = document.getElementById('micBtn');
+            const cameraBtn = document.getElementById('cameraBtn');
+            const endBtn = document.getElementById('endBtn');
+            const screenShareBtn = document.getElementById('screenShareBtn');
+            const chatBtn = document.getElementById('chatBtn');
+            const raiseHandBtn = document.getElementById('raiseHandBtn');
+            const raiseHandMobile = document.getElementById('raiseHandMobile');
+
+            // Mic toggle - directly connected to Daily API
+            micBtn.onclick = async () => {
+                const current = callFrame.localAudio();
+                await callFrame.setLocalAudio(!current);
+                micBtn.classList.toggle('disabled', !current);
+                console.log('[DAILY] Mic:', !current ? 'ON' : 'OFF');
             };
 
-            // Camera
-            document.getElementById('cameraBtn').onclick = async () => {
-                const localVideo = callFrame.localVideo();
-                await callFrame.setLocalVideo(!localVideo);
+            // Camera toggle - directly connected to Daily API
+            cameraBtn.onclick = async () => {
+                const current = callFrame.localVideo();
+                await callFrame.setLocalVideo(!current);
+                cameraBtn.classList.toggle('disabled', !current);
+                console.log('[DAILY] Camera:', !current ? 'ON' : 'OFF');
             };
 
-            // End call
-            document.getElementById('endBtn').onclick = async () => {
+            // End call - directly connected to Daily API
+            endBtn.onclick = async () => {
                 await callFrame.leave();
                 window.location.href = '/home';
             };
 
+            // Screen share - directly connected to Daily API
+            screenShareBtn.onclick = async () => {
+                const participants = callFrame.participants();
+                const isSharing = participants.local?.screen;
+
+                if (isSharing) {
+                    await callFrame.stopScreenShare();
+                    screenShareBtn.classList.remove('btn-active');
+                } else {
+                    await callFrame.startScreenShare();
+                    screenShareBtn.classList.add('btn-active');
+                }
+            };
+
             // Chat
-            document.getElementById('chatBtn').onclick = () => toggleChat();
+            chatBtn.onclick = () => toggleChat();
             document.getElementById('closeChat').onclick = () => toggleChat();
 
             // Raise hand - desktop
-            document.getElementById('raiseHandBtn').onclick = () => toggleRaiseHand();
+            raiseHandBtn.onclick = () => toggleRaiseHand();
 
             // Raise hand - mobile
-            document.getElementById('raiseHandMobile').onclick = () => toggleRaiseHand();
+            raiseHandMobile.onclick = () => toggleRaiseHand();
         }
 
         function setupChat() {
