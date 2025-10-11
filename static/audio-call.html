@@ -864,14 +864,25 @@
             const messageDiv = document.createElement('div');
             messageDiv.className = 'chat-message' + (isOwn ? ' own' : '');
 
-            const time = new Date(timestamp).toLocaleTimeString([], {
-                hour: '2-digit',
-                minute: '2-digit'
-            });
+            // Fix timestamp - ensure it's a valid number
+            let time = 'now';
+            try {
+                const ts = typeof timestamp === 'number' ? timestamp : parseInt(timestamp) || Date.now();
+                time = new Date(ts).toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            } catch (e) {
+                console.error('[CHAT] Invalid timestamp:', timestamp, e);
+                time = new Date().toLocaleTimeString([], {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+            }
 
             messageDiv.innerHTML = `
-                <div class="message-sender">${isOwn ? 'You' : from}</div>
-                <div class="message-bubble">${escapeHtml(message)}</div>
+                <div class="message-sender">${isOwn ? 'You' : (from || 'Unknown')}</div>
+                <div class="message-bubble">${escapeHtml(message || '')}</div>
                 <div class="message-time">${time}</div>
             `;
 
