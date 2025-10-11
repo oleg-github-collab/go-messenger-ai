@@ -1180,13 +1180,13 @@
                         border: '0'
                     },
 
-                    // UI configuration - hide most, enable chat
+                    // UI configuration - hide all, use custom controls
                     showLeaveButton: false,
                     showFullscreenButton: false,
                     showLocalVideo: false, // Hide Daily.co local video - we use draggable self-view
                     showParticipantsBar: false,
                     showRecordingButton: false,
-                    showChatButton: true, // Enable chat button in Daily UI
+                    showChatButton: false, // Use custom chat with sendAppMessage
                     showUserNameChangeButton: false,
                     showBackgroundBlurButton: false,
 
@@ -1305,16 +1305,46 @@
                 // Setup UI auto-hide
                 setupUIAutoHide();
 
-                // Setup chat button - opens Daily native chat
+                // Initialize custom chat with sendAppMessage
+                window.dailyChatMessages = [];
+                window.dailyChatOpen = false;
+
+                // Listen for chat messages
+                callFrame.on('app-message', (event) => {
+                    if (event.data?.type === 'chat') {
+                        console.log('[DAILY] 💬 Chat message received:', event.data);
+                        window.dailyChatMessages.push({
+                            id: Date.now() + Math.random(),
+                            userName: event.data.userName,
+                            message: event.data.message,
+                            timestamp: event.data.timestamp,
+                            fromSelf: false
+                        });
+                        updateChatUI();
+
+                        // Show unread badge if chat is closed
+                        if (!window.dailyChatOpen) {
+                            const badge = document.getElementById('chatUnreadBadge');
+                            if (badge) {
+                                const count = parseInt(badge.textContent || '0') + 1;
+                                badge.textContent = count;
+                                badge.style.display = 'flex';
+                            }
+                        }
+                    }
+                });
+
+                // Setup chat button
                 const chatBtn = document.getElementById('chatBtn');
                 if (chatBtn) {
                     chatBtn.addEventListener('click', () => {
-                        // Use Daily.co method to toggle chat
-                        callFrame.updateInputSettings({ showChat: true });
-                        console.log('[DAILY] 💬 Chat opened');
+                        toggleChat();
                     });
                     console.log('[DAILY] ✅ Chat button connected');
                 }
+
+                // Create chat overlay
+                createChatOverlay();
 
                 // Check if host and show controls
                 const localParticipant = callFrame.participants().local;
@@ -1328,45 +1358,56 @@
                     }
                 }
 
-                // Setup raise hand button - uses Daily API setLocalParticipant
+                // Setup raise hand button - uses Daily API setUserData (correct method)
                 const raiseHandBtn = document.getElementById('raiseHandBtn');
                 if (raiseHandBtn) {
                     raiseHandBtn.style.display = 'flex';
                     raiseHandBtn.style.visibility = 'visible';
                     raiseHandBtn.style.opacity = '1';
 
-                    let handRaised = false;
-                    raiseHandBtn.addEventListener('click', async () => {
-                        handRaised = !handRaised;
+                    raiseHandBtn.addEventListener('click', () => {
+                        try {
+                            const localSessionId = callFrame.participants().local.session_id;
+                            const prevUserData = callFrame.participants().local.userData || {};
 
-                        // Use Daily.co API to set raised hand state
-                        await callFrame.setLocalParticipant({
-                            setUserData: { raisedHand: handRaised }
-                        });
+                            // Toggle raise hand state
+                            if (prevUserData.handRaised) {
+                                // Lower hand - remove the key
+                                const newUserData = { ...prevUserData };
+                                delete newUserData.handRaised;
+                                callFrame.setUserData(newUserData);
 
-                        // Update button appearance
-                        if (handRaised) {
-                            raiseHandBtn.style.background = 'rgba(16, 185, 129, 0.9)';
-                            raiseHandBtn.classList.add('active');
-                        } else {
-                            raiseHandBtn.style.background = 'rgba(255, 193, 7, 0.9)';
-                            raiseHandBtn.classList.remove('active');
+                                // Update button appearance
+                                raiseHandBtn.style.background = 'rgba(255, 193, 7, 0.9)';
+                                raiseHandBtn.classList.remove('active');
+                                console.log('[DAILY] ✋ Hand lowered');
+                            } else {
+                                // Raise hand - set timestamp
+                                callFrame.setUserData({
+                                    ...prevUserData,
+                                    handRaised: new Date().toISOString()
+                                });
+
+                                // Update button appearance
+                                raiseHandBtn.style.background = 'rgba(16, 185, 129, 0.9)';
+                                raiseHandBtn.classList.add('active');
+                                console.log('[DAILY] ✋ Hand raised');
+                            }
+                        } catch (err) {
+                            console.error('[DAILY] ❌ Error toggling hand:', err);
                         }
-
-                        console.log('[DAILY] ✋ Hand raised:', handRaised);
                     });
 
-                    console.log('[DAILY] ✅ Raise hand button connected to Daily API');
+                    console.log('[DAILY] ✅ Raise hand button initialized');
                 } else {
                     console.error('[DAILY] ❌ Raise hand button not found!');
                 }
 
-                // Listen for participant updates to show raised hands
+                // Listen for participant updates to show raised hands from others
                 callFrame.on('participant-updated', (event) => {
-                    const userData = event.participant.userData;
-                    if (userData && userData.raisedHand !== undefined) {
-                        console.log('[DAILY] 🖐️', event.participant.user_name,
-                            userData.raisedHand ? 'raised hand' : 'lowered hand');
+                    if (event.participant.userData?.handRaised) {
+                        console.log('[DAILY] 🖐️', event.participant.user_name, 'raised hand');
+                        showToast(`✋ ${event.participant.user_name} raised hand`);
                     }
                 });
 
@@ -1946,7 +1987,151 @@
             }
         }
 
-        // Raise hand button is now initialized in joined-meeting event above
+        // ============================================
+        // CUSTOM CHAT FUNCTIONS (using sendAppMessage)
+        // ============================================
+
+        function createChatOverlay() {
+            const overlay = document.createElement('div');
+            overlay.id = 'customChatOverlay';
+            overlay.style.cssText = `
+                position: fixed;
+                top: 0;
+                right: -400px;
+                width: 400px;
+                height: 100%;
+                background: rgba(15, 23, 42, 0.98);
+                backdrop-filter: blur(20px);
+                border-left: 1.5px solid rgba(255, 255, 255, 0.2);
+                z-index: 2000;
+                display: flex;
+                flex-direction: column;
+                transition: right 0.3s ease;
+            `;
+
+            overlay.innerHTML = `
+                <div style="display: flex; justify-content: space-between; align-items: center; padding: 20px; border-bottom: 1.5px solid rgba(255, 255, 255, 0.1);">
+                    <h3 style="margin: 0; color: white; font-size: 18px; font-weight: 600;">💬 Group Chat</h3>
+                    <button id="closeChatBtn" style="background: none; border: none; color: white; font-size: 28px; cursor: pointer; width: 36px; height: 36px; display: flex; align-items: center; justify-content: center; border-radius: 50%; transition: background 0.2s;">✕</button>
+                </div>
+                <div id="chatMessagesContainer" style="flex: 1; overflow-y: auto; padding: 20px; display: flex; flex-direction: column; gap: 16px;"></div>
+                <div style="padding: 20px; border-top: 1.5px solid rgba(255, 255, 255, 0.1); display: flex; gap: 12px;">
+                    <input type="text" id="chatMessageInput" placeholder="Type a message..." style="flex: 1; padding: 12px 16px; border-radius: 24px; border: 1.5px solid rgba(255, 255, 255, 0.2); background: rgba(255, 255, 255, 0.1); color: white; font-size: 14px;" />
+                    <button id="sendChatBtn" style="padding: 12px 24px; border-radius: 24px; border: none; background: #3b82f6; color: white; font-weight: 600; cursor: pointer; transition: background 0.2s;">Send</button>
+                </div>
+            `;
+
+            document.body.appendChild(overlay);
+
+            // Event listeners
+            document.getElementById('closeChatBtn').addEventListener('click', toggleChat);
+            document.getElementById('sendChatBtn').addEventListener('click', sendChatMessage);
+            document.getElementById('chatMessageInput').addEventListener('keypress', (e) => {
+                if (e.key === 'Enter') sendChatMessage();
+            });
+
+            // Hover effects
+            const closeBtn = document.getElementById('closeChatBtn');
+            closeBtn.addEventListener('mouseenter', () => closeBtn.style.background = 'rgba(255, 255, 255, 0.1)');
+            closeBtn.addEventListener('mouseleave', () => closeBtn.style.background = 'none');
+
+            const sendBtn = document.getElementById('sendChatBtn');
+            sendBtn.addEventListener('mouseenter', () => sendBtn.style.background = '#2563eb');
+            sendBtn.addEventListener('mouseleave', () => sendBtn.style.background = '#3b82f6');
+
+            console.log('[DAILY] ✅ Chat overlay created');
+        }
+
+        function toggleChat() {
+            window.dailyChatOpen = !window.dailyChatOpen;
+            const overlay = document.getElementById('customChatOverlay');
+
+            if (window.dailyChatOpen) {
+                overlay.style.right = '0';
+                document.getElementById('chatMessageInput').focus();
+
+                // Clear unread badge
+                const badge = document.getElementById('chatUnreadBadge');
+                if (badge) {
+                    badge.style.display = 'none';
+                    badge.textContent = '0';
+                }
+
+                console.log('[DAILY] 💬 Chat opened');
+            } else {
+                overlay.style.right = '-400px';
+                console.log('[DAILY] 💬 Chat closed');
+            }
+        }
+
+        function sendChatMessage() {
+            const input = document.getElementById('chatMessageInput');
+            const message = input.value.trim();
+
+            if (!message || !callFrame) return;
+
+            try {
+                const localParticipant = callFrame.participants().local;
+
+                // Send via Daily sendAppMessage
+                callFrame.sendAppMessage({
+                    type: 'chat',
+                    userName: localParticipant.user_name,
+                    message: message,
+                    timestamp: Date.now()
+                }, '*'); // '*' sends to all participants
+
+                // Add to own messages
+                window.dailyChatMessages.push({
+                    id: Date.now() + Math.random(),
+                    userName: localParticipant.user_name,
+                    message: message,
+                    timestamp: Date.now(),
+                    fromSelf: true
+                });
+
+                updateChatUI();
+                input.value = '';
+                console.log('[DAILY] 💬 Message sent:', message);
+            } catch (err) {
+                console.error('[DAILY] ❌ Error sending message:', err);
+            }
+        }
+
+        function updateChatUI() {
+            const container = document.getElementById('chatMessagesContainer');
+            if (!container) return;
+
+            container.innerHTML = window.dailyChatMessages.map(msg => {
+                const time = new Date(msg.timestamp).toLocaleTimeString('en-US', {
+                    hour: '2-digit',
+                    minute: '2-digit'
+                });
+
+                return `
+                    <div style="display: flex; flex-direction: column; gap: 4px; max-width: 80%; ${msg.fromSelf ? 'align-self: flex-end;' : 'align-self: flex-start;'}">
+                        <div style="display: flex; justify-content: space-between; align-items: center; gap: 8px; font-size: 12px;">
+                            <span style="color: ${msg.fromSelf ? '#3b82f6' : '#60a5fa'}; font-weight: 600;">${escapeHtml(msg.userName)}</span>
+                            <span style="color: rgba(255, 255, 255, 0.5);">${time}</span>
+                        </div>
+                        <div style="background: ${msg.fromSelf ? '#3b82f6' : 'rgba(255, 255, 255, 0.1)'}; padding: 10px 14px; border-radius: 12px; color: white; word-wrap: break-word;">
+                            ${escapeHtml(msg.message)}
+                        </div>
+                    </div>
+                `;
+            }).join('');
+
+            // Scroll to bottom
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function escapeHtml(text) {
+            const div = document.createElement('div');
+            div.textContent = text;
+            return div.innerHTML;
+        }
+
+        // ============================================
 
         function showToast(message) {
             const toast = document.createElement('div');
