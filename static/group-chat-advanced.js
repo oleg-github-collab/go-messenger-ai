@@ -172,18 +172,29 @@ class GroupChatAdvanced {
     }
 
     toggleChat() {
+        console.log('[GroupChatAdvanced] toggleChat called, isOpen:', this.isOpen);
         this.isOpen = !this.isOpen;
         const overlay = document.getElementById('groupChatOverlay');
+
+        if (!overlay) {
+            console.error('[GroupChatAdvanced] ❌ groupChatOverlay not found in DOM!');
+            return;
+        }
+
+        console.log('[GroupChatAdvanced] Setting isOpen to:', this.isOpen);
 
         if (this.isOpen) {
             overlay.style.display = 'flex';
             setTimeout(() => overlay.classList.add('active'), 10);
             this.unreadCount = 0;
             this.updateUnreadBadge();
-            document.getElementById('groupChatInput').focus();
+            const input = document.getElementById('groupChatInput');
+            if (input) input.focus();
+            console.log('[GroupChatAdvanced] ✅ Chat opened');
         } else {
             overlay.classList.remove('active');
             setTimeout(() => overlay.style.display = 'none', 300);
+            console.log('[GroupChatAdvanced] ✅ Chat closed');
         }
     }
 
