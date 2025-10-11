@@ -1424,17 +1424,29 @@ document.addEventListener('DOMContentLoaded', async () => {
     const shareScreenBtn = document.getElementById('shareScreenBtn');
     if (shareScreenBtn) {
         // Check if screen share is supported
-        const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+        const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+        const isAndroid = /Android/i.test(navigator.userAgent);
         const hasGetDisplayMedia = navigator.mediaDevices && navigator.mediaDevices.getDisplayMedia;
 
-        if (!hasGetDisplayMedia || isMobile) {
-            // Hide or disable button on mobile
+        if (!hasGetDisplayMedia) {
+            // Browser doesn't support screen sharing
             shareScreenBtn.style.opacity = '0.5';
-            shareScreenBtn.title = 'Screen sharing not available on mobile';
+            shareScreenBtn.title = 'Screen sharing not supported in this browser';
             shareScreenBtn.addEventListener('click', () => {
-                alert('Screen sharing is not supported on mobile devices');
+                alert('Screen sharing is not supported in this browser. Please use Chrome, Edge, or Firefox.');
+            });
+        } else if (isIOS) {
+            // iOS doesn't support getDisplayMedia in web browsers
+            shareScreenBtn.style.opacity = '0.5';
+            shareScreenBtn.title = 'Screen sharing not available on iOS';
+            shareScreenBtn.addEventListener('click', () => {
+                alert('Screen sharing is not supported on iOS devices in web browsers. iOS requires native app with ReplayKit.');
             });
         } else {
+            // Desktop or Android - screen sharing works
+            if (isAndroid) {
+                shareScreenBtn.title = 'Share Screen (Android 10+ required)';
+            }
             shareScreenBtn.addEventListener('click', async () => {
                 try {
                     const screenStream = await navigator.mediaDevices.getDisplayMedia({

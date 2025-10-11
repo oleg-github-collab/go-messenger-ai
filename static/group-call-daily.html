@@ -1336,15 +1336,22 @@
             });
 
             // Screen share
-            const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
-            if (isMobile) {
-                // Disable on mobile
+            const isIOS = /iPhone|iPad|iPod/i.test(navigator.userAgent);
+            const isAndroid = /Android/i.test(navigator.userAgent);
+
+            if (isIOS) {
+                // iOS doesn't support getDisplayMedia
                 screenShareBtn.style.opacity = '0.5';
-                screenShareBtn.title = 'Screen sharing not available on mobile';
+                screenShareBtn.title = 'Screen sharing not available on iOS';
                 screenShareBtn.addEventListener('click', () => {
-                    alert('Screen sharing is not supported on mobile devices');
+                    alert('Screen sharing is not supported on iOS devices in web browsers. iOS requires native app with ReplayKit.');
                 });
             } else {
+                // Desktop or Android - screen sharing works
+                if (isAndroid) {
+                    screenShareBtn.title = 'Share Screen (Android 10+ required)';
+                }
+
                 screenShareBtn.addEventListener('click', async () => {
                     try {
                         const participants = callFrame.participants();
@@ -1352,12 +1359,18 @@
 
                         if (isSharing) {
                             await callFrame.stopScreenShare();
+                            console.log('[SCREEN-SHARE] ✅ Stopped sharing');
                         } else {
                             await callFrame.startScreenShare();
+                            console.log('[SCREEN-SHARE] ✅ Started sharing');
                         }
                     } catch (err) {
-                        console.error('[SCREEN-SHARE] Error:', err);
-                        alert('Failed to share screen: ' + err.message);
+                        console.error('[SCREEN-SHARE] ❌ Error:', err);
+                        if (err.message.includes('Permission denied')) {
+                            alert('Screen sharing permission denied. Please allow screen sharing when prompted.');
+                        } else {
+                            alert('Failed to share screen: ' + err.message);
+                        }
                     }
                 });
             }
