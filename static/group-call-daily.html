@@ -1336,16 +1336,31 @@
             });
 
             // Screen share
-            screenShareBtn.addEventListener('click', async () => {
-                const participants = callFrame.participants();
-                const isSharing = participants.local?.screen;
+            const isMobile = /iPhone|iPad|iPod|Android/i.test(navigator.userAgent);
+            if (isMobile) {
+                // Disable on mobile
+                screenShareBtn.style.opacity = '0.5';
+                screenShareBtn.title = 'Screen sharing not available on mobile';
+                screenShareBtn.addEventListener('click', () => {
+                    alert('Screen sharing is not supported on mobile devices');
+                });
+            } else {
+                screenShareBtn.addEventListener('click', async () => {
+                    try {
+                        const participants = callFrame.participants();
+                        const isSharing = participants.local?.screen;
 
-                if (isSharing) {
-                    await callFrame.stopScreenShare();
-                } else {
-                    await callFrame.startScreenShare();
-                }
-            });
+                        if (isSharing) {
+                            await callFrame.stopScreenShare();
+                        } else {
+                            await callFrame.startScreenShare();
+                        }
+                    } catch (err) {
+                        console.error('[SCREEN-SHARE] Error:', err);
+                        alert('Failed to share screen: ' + err.message);
+                    }
+                });
+            }
 
             // Start call timer
             startCallTimer();
