@@ -417,6 +417,18 @@
             display: none;
         }
 
+        /* Raise hand button active state */
+        .control-btn.btn-active {
+            background: rgba(16, 185, 129, 0.9) !important;
+            border-color: rgba(16, 185, 129, 0.4) !important;
+            box-shadow: 0 6px 20px rgba(16, 185, 129, 0.5) !important;
+        }
+
+        .control-btn.btn-active:hover {
+            background: rgba(16, 185, 129, 1) !important;
+            box-shadow: 0 8px 24px rgba(16, 185, 129, 0.6) !important;
+        }
+
         .control-btn.disabled .icon-mic-off,
         .control-btn.disabled .icon-camera-off {
             display: block !important;
@@ -725,42 +737,6 @@
             text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
         }
 
-        /* Raise Hand Button */
-        .raise-hand-btn {
-            position: fixed;
-            top: 20px;
-            right: 256px;
-            width: 52px;
-            height: 52px;
-            border-radius: 50%;
-            background: rgba(255, 193, 7, 0.9);
-            border: 2px solid rgba(255, 255, 255, 0.4);
-            color: white;
-            font-size: 26px;
-            cursor: pointer;
-            z-index: 1003;
-            display: flex;
-            align-items: center;
-            justify-content: center;
-            transition: all 0.3s ease;
-            box-shadow: 0 6px 20px rgba(255, 193, 7, 0.5);
-        }
-
-        .raise-hand-btn:hover {
-            transform: scale(1.1);
-            box-shadow: 0 8px 24px rgba(255, 193, 7, 0.4);
-        }
-
-        .raise-hand-btn.active {
-            background: rgba(255, 193, 7, 0.9);
-            animation: raiseHandPulse 1s ease-in-out infinite;
-        }
-
-        @keyframes raiseHandPulse {
-            0%, 100% { transform: scale(1); }
-            50% { transform: scale(1.1); }
-        }
-
         /* Host Controls Panel */
         .host-controls-btn {
             position: fixed;
@@ -962,14 +938,6 @@
                 bottom: 180px;
             }
 
-            .raise-hand-btn {
-                bottom: 260px;
-                right: 20px;
-                width: 48px;
-                height: 48px;
-                font-size: 24px;
-            }
-
             .host-controls-btn {
                 bottom: 320px;
                 width: 48px;
@@ -991,9 +959,6 @@
                 <span class="self-view-label">You</span>
             </div>
         </div>
-
-        <!-- Raise Hand Button -->
-        <button class="raise-hand-btn" id="raiseHandBtn" style="display: none;">✋</button>
 
         <!-- Host Controls Button -->
         <button class="host-controls-btn ui-element" id="hostControlsBtn" style="display: none;">👑</button>
@@ -1086,6 +1051,16 @@
                         </svg>
                         <span class="btn-label">Chat</span>
                         <span class="chat-unread-badge" id="chatUnreadBadge" style="display: none; position: absolute; top: 5px; right: 5px; background: #ff3b30; color: white; border-radius: 50%; width: 20px; height: 20px; align-items: center; justify-content: center; font-size: 11px; font-weight: 600;"></span>
+                    </button>
+
+                    <button class="control-btn" id="raiseHandBtn" title="Raise Hand">
+                        <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <path d="M18 11V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v5"/>
+                            <path d="M14 10V4a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v6"/>
+                            <path d="M10 10.5V6a2 2 0 0 0-2-2v0a2 2 0 0 0-2 2v8"/>
+                            <path d="M18 8a2 2 0 0 1 2 2v2.5a8 8 0 1 1-16 0v-2a2 2 0 0 1 2-2"/>
+                        </svg>
+                        <span class="btn-label">Raise</span>
                     </button>
 
                     <button class="control-btn" id="moreBtn" title="More Options">
@@ -1361,13 +1336,8 @@
                 // Setup raise hand button - uses Daily API setUserData (correct method)
                 const raiseHandBtn = document.getElementById('raiseHandBtn');
                 if (raiseHandBtn) {
-                    raiseHandBtn.style.display = 'flex';
-                    raiseHandBtn.style.visibility = 'visible';
-                    raiseHandBtn.style.opacity = '1';
-
                     raiseHandBtn.addEventListener('click', () => {
                         try {
-                            const localSessionId = callFrame.participants().local.session_id;
                             const prevUserData = callFrame.participants().local.userData || {};
 
                             // Toggle raise hand state
@@ -1377,9 +1347,8 @@
                                 delete newUserData.handRaised;
                                 callFrame.setUserData(newUserData);
 
-                                // Update button appearance
-                                raiseHandBtn.style.background = 'rgba(255, 193, 7, 0.9)';
-                                raiseHandBtn.classList.remove('active');
+                                // Update button appearance - remove active state
+                                raiseHandBtn.classList.remove('btn-active');
                                 console.log('[DAILY] ✋ Hand lowered');
                             } else {
                                 // Raise hand - set timestamp
@@ -1388,9 +1357,8 @@
                                     handRaised: new Date().toISOString()
                                 });
 
-                                // Update button appearance
-                                raiseHandBtn.style.background = 'rgba(16, 185, 129, 0.9)';
-                                raiseHandBtn.classList.add('active');
+                                // Update button appearance - add active state
+                                raiseHandBtn.classList.add('btn-active');
                                 console.log('[DAILY] ✋ Hand raised');
                             }
                         } catch (err) {
