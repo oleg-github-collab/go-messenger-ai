@@ -1115,6 +1115,10 @@
         </div>
     </div>
 
+    <!-- Daily Chat & Raise Hand Scripts -->
+    <script src="/static/daily-chat.js"></script>
+    <script src="/static/daily-raise-hand.js"></script>
+
     <script>
         console.log('[GROUP-CALL-DAILY] Starting Daily.co integration...');
 
@@ -1309,39 +1313,33 @@
                 // Setup UI auto-hide
                 setupUIAutoHide();
 
-                // Initialize group chat
-                if (window.GroupChatAdvanced) {
+                // Initialize Daily Chat (using sendAppMessage)
+                if (window.DailyChat) {
                     try {
-                        window.groupChat = new window.GroupChatAdvanced(callFrame);
-                        console.log('[GROUP-CALL-DAILY] ✅ Group chat initialized');
+                        window.dailyChat = new window.DailyChat(callFrame);
+                        console.log('[DAILY] ✅ Chat initialized');
 
                         // Setup chat button
                         const chatBtn = document.getElementById('chatBtn');
                         if (chatBtn) {
                             chatBtn.addEventListener('click', () => {
-                                console.log('[CHAT] 💬 Chat button clicked');
-                                if (window.groupChat && typeof window.groupChat.toggleChat === 'function') {
-                                    window.groupChat.toggleChat();
-                                    console.log('[CHAT] ✅ Chat toggled');
-                                } else {
-                                    console.error('[CHAT] ❌ Chat not ready');
-                                }
+                                window.dailyChat.toggleChat();
                             });
-                            console.log('[CHAT] ✅ Chat button listener added');
-                        }
-
-                        // Initialize extensions
-                        if (window.GroupChatExtensions) {
-                            setTimeout(() => {
-                                window.groupChatExtensions = new window.GroupChatExtensions(window.groupChat, callFrame);
-                                console.log('[GROUP-CALL-DAILY] 🎉 Chat extensions initialized');
-                            }, 1000);
+                            console.log('[DAILY] ✅ Chat button connected');
                         }
                     } catch (err) {
-                        console.error('[GROUP-CALL-DAILY] ❌ Failed to initialize chat:', err);
+                        console.error('[DAILY] ❌ Failed to initialize chat:', err);
                     }
-                } else {
-                    console.warn('[GROUP-CALL-DAILY] ⚠️ GroupChatAdvanced not loaded');
+                }
+
+                // Initialize Raise Hand (using sendAppMessage)
+                if (window.DailyRaiseHand) {
+                    try {
+                        window.dailyRaiseHand = new window.DailyRaiseHand(callFrame);
+                        console.log('[DAILY] ✅ Raise hand initialized');
+                    } catch (err) {
+                        console.error('[DAILY] ❌ Failed to initialize raise hand:', err);
+                    }
                 }
 
                 // Check if host and show controls
@@ -1944,46 +1942,15 @@
         }
 
         // ============================================
-        // RAISE HAND FEATURE
+        // RAISE HAND FEATURE - Connect button after initialization
         // ============================================
         const raiseHandBtn = document.getElementById('raiseHandBtn');
-        let handRaised = false;
-
         if (raiseHandBtn) {
             raiseHandBtn.addEventListener('click', () => {
-                handRaised = !handRaised;
-                raiseHandBtn.classList.toggle('active', handRaised);
-
-                // Send raise hand event via Daily.co
-                callFrame.sendAppMessage({
-                    type: 'raise-hand',
-                    raised: handRaised,
-                    userId: callFrame.participants().local.user_id,
-                    userName: callFrame.participants().local.user_name
-                }, '*');
-
-                console.log('[DAILY] Hand', handRaised ? 'raised' : 'lowered');
-            });
-        }
-
-        // Listen for raise hand events
-        if (callFrame) {
-            callFrame.on('app-message', (event) => {
-                if (event.data?.type === 'raise-hand') {
-                    const { userId, userName, raised } = event.data;
-                    if (raised) {
-                        raisedHands.add(userId);
-                        console.log('[DAILY] 🖐️', userName, 'raised hand');
-                        showToast(`🖐️ ${userName} raised hand`);
-                    } else {
-                        raisedHands.delete(userId);
-                        console.log('[DAILY] 👋', userName, 'lowered hand');
-                    }
-
-                    // Update host panel if open
-                    if (isHost && document.getElementById('hostControlsPanel').classList.contains('active')) {
-                        updateHostParticipantList();
-                    }
+                if (window.dailyRaiseHand) {
+                    window.dailyRaiseHand.toggleRaiseHand();
+                } else {
+                    console.error('[DAILY] ❌ Raise hand not initialized');
                 }
             });
         }
