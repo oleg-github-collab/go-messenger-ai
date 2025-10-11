@@ -669,12 +669,350 @@
                 grid-template-columns: 1fr;
             }
         }
+
+        /* ============================================ */
+        /* DRAGGABLE SELF-VIEW */
+        /* ============================================ */
+        .draggable-self-view {
+            position: fixed;
+            bottom: 120px;
+            right: 20px;
+            width: 180px;
+            height: 135px;
+            border-radius: 16px;
+            overflow: hidden;
+            box-shadow: 0 8px 32px rgba(0, 0, 0, 0.6);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            cursor: move;
+            z-index: 1002;
+            transition: box-shadow 0.2s;
+            background: rgba(0, 0, 0, 0.8);
+        }
+
+        .draggable-self-view:hover {
+            box-shadow: 0 12px 40px rgba(0, 0, 0, 0.7);
+            border-color: rgba(255, 255, 255, 0.3);
+        }
+
+        .draggable-self-view.dragging {
+            box-shadow: 0 16px 56px rgba(102, 126, 234, 0.5);
+            border-color: #667eea;
+            cursor: grabbing;
+        }
+
+        .self-view-video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .self-view-overlay {
+            position: absolute;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background: linear-gradient(0deg, rgba(0,0,0,0.5) 0%, transparent 50%);
+            display: flex;
+            align-items: flex-end;
+            padding: 8px;
+            pointer-events: none;
+        }
+
+        .self-view-label {
+            font-size: 12px;
+            font-weight: 600;
+            color: white;
+            text-shadow: 0 2px 4px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Raise Hand Button */
+        .raise-hand-btn {
+            position: fixed;
+            bottom: 180px;
+            right: 20px;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: rgba(255, 193, 7, 0.2);
+            border: 2px solid rgba(255, 193, 7, 0.4);
+            color: #ffc107;
+            font-size: 28px;
+            cursor: pointer;
+            z-index: 1001;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 16px rgba(255, 193, 7, 0.3);
+        }
+
+        .raise-hand-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 8px 24px rgba(255, 193, 7, 0.4);
+        }
+
+        .raise-hand-btn.active {
+            background: rgba(255, 193, 7, 0.9);
+            animation: raiseHandPulse 1s ease-in-out infinite;
+        }
+
+        @keyframes raiseHandPulse {
+            0%, 100% { transform: scale(1); }
+            50% { transform: scale(1.1); }
+        }
+
+        /* Host Controls Panel */
+        .host-controls-btn {
+            position: fixed;
+            bottom: 250px;
+            right: 20px;
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            border: 2px solid rgba(255, 255, 255, 0.2);
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            z-index: 1001;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.3s ease;
+            box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4);
+        }
+
+        .host-controls-btn:hover {
+            transform: scale(1.1);
+            box-shadow: 0 8px 24px rgba(102, 126, 234, 0.5);
+        }
+
+        .host-controls-panel {
+            position: fixed;
+            bottom: 0;
+            left: 0;
+            right: 0;
+            background: linear-gradient(135deg, rgba(26, 26, 26, 0.98) 0%, rgba(40, 40, 40, 0.95) 100%);
+            backdrop-filter: blur(40px);
+            border-top: 2px solid rgba(255, 255, 255, 0.1);
+            padding: 24px;
+            transform: translateY(100%);
+            transition: transform 0.3s ease;
+            z-index: 10002;
+            max-height: 70vh;
+            overflow-y: auto;
+        }
+
+        .host-controls-panel.active {
+            transform: translateY(0);
+        }
+
+        .host-panel-header {
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            margin-bottom: 20px;
+            padding-bottom: 16px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .host-panel-header h3 {
+            margin: 0;
+            font-size: 20px;
+            font-weight: 700;
+            color: white;
+        }
+
+        .host-panel-close {
+            width: 36px;
+            height: 36px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.1);
+            border: none;
+            color: white;
+            font-size: 24px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .host-panel-close:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.1);
+        }
+
+        .host-participant-list {
+            display: flex;
+            flex-direction: column;
+            gap: 12px;
+        }
+
+        .host-participant-item {
+            background: rgba(255, 255, 255, 0.05);
+            border: 1px solid rgba(255, 255, 255, 0.08);
+            border-radius: 12px;
+            padding: 16px;
+            display: flex;
+            align-items: center;
+            justify-content: space-between;
+            gap: 12px;
+        }
+
+        .host-participant-info {
+            display: flex;
+            align-items: center;
+            gap: 12px;
+            flex: 1;
+            min-width: 0;
+        }
+
+        .host-participant-avatar {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-weight: 700;
+            color: white;
+            flex-shrink: 0;
+        }
+
+        .host-participant-name {
+            font-size: 15px;
+            font-weight: 600;
+            color: white;
+            overflow: hidden;
+            text-overflow: ellipsis;
+            white-space: nowrap;
+        }
+
+        .host-participant-raised-hand {
+            font-size: 20px;
+            animation: raiseHandBounce 0.5s ease-in-out infinite alternate;
+        }
+
+        @keyframes raiseHandBounce {
+            from { transform: translateY(0); }
+            to { transform: translateY(-4px); }
+        }
+
+        .host-participant-controls {
+            display: flex;
+            gap: 8px;
+            flex-shrink: 0;
+        }
+
+        .host-control-icon-btn {
+            width: 40px;
+            height: 40px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            color: white;
+            font-size: 18px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            transition: all 0.2s;
+        }
+
+        .host-control-icon-btn:hover {
+            background: rgba(255, 255, 255, 0.12);
+            transform: scale(1.05);
+        }
+
+        .host-control-icon-btn.muted {
+            background: rgba(239, 68, 68, 0.2);
+            border-color: rgba(239, 68, 68, 0.4);
+            color: #ef4444;
+        }
+
+        .host-bulk-actions {
+            display: flex;
+            gap: 12px;
+            margin-top: 20px;
+            padding-top: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+        }
+
+        .host-bulk-btn {
+            flex: 1;
+            padding: 12px 20px;
+            background: rgba(255, 255, 255, 0.08);
+            border: 1px solid rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+            color: white;
+            font-size: 14px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .host-bulk-btn:hover {
+            background: rgba(255, 255, 255, 0.12);
+            transform: translateY(-1px);
+        }
+
+        @media (max-width: 768px) {
+            .draggable-self-view {
+                width: 120px;
+                height: 90px;
+                bottom: 180px;
+            }
+
+            .raise-hand-btn {
+                bottom: 260px;
+                right: 20px;
+                width: 48px;
+                height: 48px;
+                font-size: 24px;
+            }
+
+            .host-controls-btn {
+                bottom: 320px;
+                width: 48px;
+                height: 48px;
+                font-size: 20px;
+            }
+        }
     </style>
 </head>
 <body>
     <div id="callContainer">
         <!-- Daily.co Frame (video only, no UI) -->
         <div id="dailyFrame"></div>
+
+        <!-- Draggable Self-View -->
+        <div class="draggable-self-view" id="draggableSelfView" style="display: none;">
+            <canvas id="selfViewCanvas" class="self-view-video"></canvas>
+            <div class="self-view-overlay">
+                <span class="self-view-label">You</span>
+            </div>
+        </div>
+
+        <!-- Raise Hand Button -->
+        <button class="raise-hand-btn" id="raiseHandBtn" style="display: none;">✋</button>
+
+        <!-- Host Controls Button -->
+        <button class="host-controls-btn" id="hostControlsBtn" style="display: none;">👑</button>
+
+        <!-- Host Controls Panel -->
+        <div class="host-controls-panel" id="hostControlsPanel">
+            <div class="host-panel-header">
+                <h3>👑 Host Controls</h3>
+                <button class="host-panel-close" id="hostPanelClose">✕</button>
+            </div>
+            <div class="host-participant-list" id="hostParticipantList">
+                <!-- Participants will be added here -->
+            </div>
+            <div class="host-bulk-actions">
+                <button class="host-bulk-btn" id="muteAllBtn">🔇 Mute All</button>
+                <button class="host-bulk-btn" id="unmuteAllBtn">🔊 Unmute All</button>
+            </div>
+        </div>
 
         <!-- Custom UI Overlay -->
         <div class="custom-ui-overlay">
@@ -1391,6 +1729,346 @@
                 document.head.appendChild(style);
             }
         };
+
+        // ============================================
+        // DRAGGABLE SELF-VIEW
+        // ============================================
+        let selfViewElement = null;
+        let isDragging = false;
+        let dragOffset = { x: 0, y: 0 };
+        let raisedHands = new Set();
+        let isHost = false;
+
+        function initDraggableSelfView() {
+            selfViewElement = document.getElementById('draggableSelfView');
+            if (!selfViewElement) return;
+
+            selfViewElement.addEventListener('mousedown', startDrag);
+            selfViewElement.addEventListener('touchstart', startDrag, { passive: false });
+            document.addEventListener('mousemove', drag);
+            document.addEventListener('touchmove', drag, { passive: false });
+            document.addEventListener('mouseup', stopDrag);
+            document.addEventListener('touchend', stopDrag);
+
+            // Show self-view
+            selfViewElement.style.display = 'block';
+
+            // Start rendering local video to canvas
+            renderSelfView();
+        }
+
+        function startDrag(e) {
+            e.preventDefault();
+            isDragging = true;
+            selfViewElement.classList.add('dragging');
+
+            const touch = e.touches ? e.touches[0] : e;
+            const rect = selfViewElement.getBoundingClientRect();
+            dragOffset.x = touch.clientX - rect.left;
+            dragOffset.y = touch.clientY - rect.top;
+        }
+
+        function drag(e) {
+            if (!isDragging) return;
+            e.preventDefault();
+
+            const touch = e.touches ? e.touches[0] : e;
+            let x = touch.clientX - dragOffset.x;
+            let y = touch.clientY - dragOffset.y;
+
+            // Constrain to viewport
+            const maxX = window.innerWidth - selfViewElement.offsetWidth;
+            const maxY = window.innerHeight - selfViewElement.offsetHeight;
+            x = Math.max(0, Math.min(x, maxX));
+            y = Math.max(0, Math.min(y, maxY));
+
+            selfViewElement.style.right = 'auto';
+            selfViewElement.style.bottom = 'auto';
+            selfViewElement.style.left = x + 'px';
+            selfViewElement.style.top = y + 'px';
+        }
+
+        function stopDrag() {
+            if (!isDragging) return;
+            isDragging = false;
+            selfViewElement.classList.remove('dragging');
+        }
+
+        function renderSelfView() {
+            if (!callFrame) return;
+
+            const canvas = document.getElementById('selfViewCanvas');
+            if (!canvas) return;
+
+            const ctx = canvas.getContext('2d');
+            const video = document.createElement('video');
+            video.autoplay = true;
+            video.muted = true;
+            video.playsInline = true;
+
+            // Get local video track from Daily.co
+            const localParticipant = callFrame.participants().local;
+            if (localParticipant && localParticipant.tracks?.video) {
+                const videoTrack = localParticipant.tracks.video.persistentTrack;
+                if (videoTrack) {
+                    video.srcObject = new MediaStream([videoTrack]);
+
+                    video.onloadedmetadata = () => {
+                        canvas.width = video.videoWidth;
+                        canvas.height = video.videoHeight;
+
+                        function drawFrame() {
+                            if (video.readyState === video.HAVE_ENOUGH_DATA) {
+                                // Mirror the video horizontally
+                                ctx.save();
+                                ctx.scale(-1, 1);
+                                ctx.drawImage(video, -canvas.width, 0, canvas.width, canvas.height);
+                                ctx.restore();
+                            }
+                            requestAnimationFrame(drawFrame);
+                        }
+                        drawFrame();
+                    };
+                }
+            }
+        }
+
+        // ============================================
+        // RAISE HAND FEATURE
+        // ============================================
+        const raiseHandBtn = document.getElementById('raiseHandBtn');
+        let handRaised = false;
+
+        if (raiseHandBtn) {
+            raiseHandBtn.addEventListener('click', () => {
+                handRaised = !handRaised;
+                raiseHandBtn.classList.toggle('active', handRaised);
+
+                // Send raise hand event via Daily.co
+                callFrame.sendAppMessage({
+                    type: 'raise-hand',
+                    raised: handRaised,
+                    userId: callFrame.participants().local.user_id,
+                    userName: callFrame.participants().local.user_name
+                }, '*');
+
+                console.log('[DAILY] Hand', handRaised ? 'raised' : 'lowered');
+            });
+        }
+
+        // Listen for raise hand events
+        if (callFrame) {
+            callFrame.on('app-message', (event) => {
+                if (event.data?.type === 'raise-hand') {
+                    const { userId, userName, raised } = event.data;
+                    if (raised) {
+                        raisedHands.add(userId);
+                        console.log('[DAILY] 🖐️', userName, 'raised hand');
+                        showToast(`🖐️ ${userName} raised hand`);
+                    } else {
+                        raisedHands.delete(userId);
+                        console.log('[DAILY] 👋', userName, 'lowered hand');
+                    }
+
+                    // Update host panel if open
+                    if (isHost && document.getElementById('hostControlsPanel').classList.contains('active')) {
+                        updateHostParticipantList();
+                    }
+                }
+            });
+        }
+
+        function showToast(message) {
+            const toast = document.createElement('div');
+            toast.style.cssText = `
+                position: fixed;
+                top: 100px;
+                left: 50%;
+                transform: translateX(-50%);
+                background: rgba(0, 0, 0, 0.9);
+                color: white;
+                padding: 12px 24px;
+                border-radius: 12px;
+                font-size: 15px;
+                font-weight: 600;
+                z-index: 10004;
+                animation: toastSlideIn 0.3s ease;
+            `;
+            toast.textContent = message;
+            document.body.appendChild(toast);
+
+            setTimeout(() => {
+                toast.style.animation = 'toastSlideOut 0.3s ease';
+                setTimeout(() => toast.remove(), 300);
+            }, 3000);
+        }
+
+        // ============================================
+        // HOST CONTROLS
+        // ============================================
+        const hostControlsBtn = document.getElementById('hostControlsBtn');
+        const hostControlsPanel = document.getElementById('hostControlsPanel');
+        const hostPanelClose = document.getElementById('hostPanelClose');
+        const muteAllBtn = document.getElementById('muteAllBtn');
+        const unmuteAllBtn = document.getElementById('unmuteAllBtn');
+
+        // Check if user is host
+        callFrame.on('joined-meeting', () => {
+            const localParticipant = callFrame.participants().local;
+            isHost = localParticipant?.owner || false;
+
+            if (isHost) {
+                hostControlsBtn.style.display = 'flex';
+                console.log('[DAILY] 👑 You are the host');
+            }
+
+            // Show raise hand button for all
+            raiseHandBtn.style.display = 'flex';
+
+            // Initialize self-view
+            setTimeout(() => initDraggableSelfView(), 1000);
+        });
+
+        if (hostControlsBtn) {
+            hostControlsBtn.addEventListener('click', () => {
+                hostControlsPanel.classList.add('active');
+                updateHostParticipantList();
+            });
+        }
+
+        if (hostPanelClose) {
+            hostPanelClose.addEventListener('click', () => {
+                hostControlsPanel.classList.remove('active');
+            });
+        }
+
+        if (muteAllBtn) {
+            muteAllBtn.addEventListener('click', async () => {
+                const participants = callFrame.participants();
+                for (const [id, participant] of Object.entries(participants)) {
+                    if (!participant.local && participant.audio) {
+                        try {
+                            await callFrame.updateParticipant(id, { setAudio: false });
+                        } catch (e) {
+                            console.error('[DAILY] Failed to mute participant:', e);
+                        }
+                    }
+                }
+                showToast('🔇 All participants muted');
+            });
+        }
+
+        if (unmuteAllBtn) {
+            unmuteAllBtn.addEventListener('click', async () => {
+                const participants = callFrame.participants();
+                for (const [id, participant] of Object.entries(participants)) {
+                    if (!participant.local && !participant.audio) {
+                        try {
+                            await callFrame.updateParticipant(id, { setAudio: true });
+                        } catch (e) {
+                            console.error('[DAILY] Failed to unmute participant:', e);
+                        }
+                    }
+                }
+                showToast('🔊 All participants unmuted');
+            });
+        }
+
+        function updateHostParticipantList() {
+            const listEl = document.getElementById('hostParticipantList');
+            if (!listEl) return;
+
+            const participants = callFrame.participants();
+            listEl.innerHTML = Object.entries(participants)
+                .filter(([id, p]) => !p.local)
+                .map(([id, p]) => {
+                    const hasRaisedHand = raisedHands.has(p.user_id);
+                    return `
+                        <div class="host-participant-item">
+                            <div class="host-participant-info">
+                                <div class="host-participant-avatar">
+                                    ${(p.user_name || 'Guest').charAt(0).toUpperCase()}
+                                </div>
+                                <div class="host-participant-name">${p.user_name || 'Guest'}</div>
+                                ${hasRaisedHand ? '<span class="host-participant-raised-hand">🖐️</span>' : ''}
+                            </div>
+                            <div class="host-participant-controls">
+                                <button
+                                    class="host-control-icon-btn ${p.audio ? '' : 'muted'}"
+                                    onclick="toggleParticipantAudio('${id}', ${p.audio})"
+                                    title="${p.audio ? 'Mute' : 'Unmute'}">
+                                    ${p.audio ? '🎤' : '🔇'}
+                                </button>
+                                <button
+                                    class="host-control-icon-btn ${p.video ? '' : 'muted'}"
+                                    onclick="toggleParticipantVideo('${id}', ${p.video})"
+                                    title="${p.video ? 'Disable Video' : 'Enable Video'}">
+                                    ${p.video ? '📹' : '📷'}
+                                </button>
+                            </div>
+                        </div>
+                    `;
+                })
+                .join('');
+        }
+
+        window.toggleParticipantAudio = async function(participantId, currentState) {
+            try {
+                await callFrame.updateParticipant(participantId, { setAudio: !currentState });
+                updateHostParticipantList();
+                showToast(currentState ? '🔇 Participant muted' : '🔊 Participant unmuted');
+            } catch (e) {
+                console.error('[DAILY] Failed to toggle audio:', e);
+                alert('Failed to control participant audio');
+            }
+        };
+
+        window.toggleParticipantVideo = async function(participantId, currentState) {
+            try {
+                await callFrame.updateParticipant(participantId, { setVideo: !currentState });
+                updateHostParticipantList();
+                showToast(currentState ? '📷 Video disabled' : '📹 Video enabled');
+            } catch (e) {
+                console.error('[DAILY] Failed to toggle video:', e);
+                alert('Failed to control participant video');
+            }
+        };
+
+        // Update host panel when participants change
+        callFrame.on('participant-updated', () => {
+            if (isHost && hostControlsPanel.classList.contains('active')) {
+                updateHostParticipantList();
+            }
+        });
+
+        callFrame.on('participant-joined', () => {
+            if (isHost && hostControlsPanel.classList.contains('active')) {
+                updateHostParticipantList();
+            }
+        });
+
+        callFrame.on('participant-left', () => {
+            if (isHost && hostControlsPanel.classList.contains('active')) {
+                updateHostParticipantList();
+            }
+        });
+
+        // Add toast animation styles
+        if (!document.getElementById('toastStyles')) {
+            const style = document.createElement('style');
+            style.id = 'toastStyles';
+            style.textContent = `
+                @keyframes toastSlideIn {
+                    from { opacity: 0; transform: translate(-50%, -20px); }
+                    to { opacity: 1; transform: translate(-50%, 0); }
+                }
+                @keyframes toastSlideOut {
+                    from { opacity: 1; transform: translate(-50%, 0); }
+                    to { opacity: 0; transform: translate(-50%, -20px); }
+                }
+            `;
+            document.head.appendChild(style);
+        }
     </script>
     <script src="/static/enhanced-gif-picker.js?v=3"></script>
     <script src="/static/group-chat-advanced.js?v=1"></script>
