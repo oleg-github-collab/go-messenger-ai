@@ -728,22 +728,22 @@
         /* Raise Hand Button */
         .raise-hand-btn {
             position: fixed;
-            bottom: 180px;
-            right: 20px;
+            bottom: 200px;
+            left: 20px;
             width: 56px;
             height: 56px;
             border-radius: 50%;
-            background: rgba(255, 193, 7, 0.2);
-            border: 2px solid rgba(255, 193, 7, 0.4);
-            color: #ffc107;
+            background: rgba(255, 193, 7, 0.85);
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            color: white;
             font-size: 28px;
             cursor: pointer;
             z-index: 1001;
             display: flex;
             align-items: center;
             justify-content: center;
-            transition: all 0.3s ease;
-            box-shadow: 0 4px 16px rgba(255, 193, 7, 0.3);
+            transition: opacity 0.3s ease, transform 0.3s ease;
+            box-shadow: 0 4px 16px rgba(255, 193, 7, 0.4);
         }
 
         .raise-hand-btn:hover {
@@ -1080,7 +1080,7 @@
                         <span class="btn-label">Share</span>
                     </button>
 
-                    <button class="control-btn" id="chatBtn" title="Chat" onclick="window.groupChatExtensions?.toggleChatPanel()">
+                    <button class="control-btn" id="chatBtn" title="Chat" onclick="if(window.groupChat){window.groupChat.toggleChat()}else{console.error('Chat not initialized')}">
                         <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
                             <path d="M21 15a2 2 0 0 1-2 2H7l-4 4V5a2 2 0 0 1 2-2h14a2 2 0 0 1 2 2z"/>
                         </svg>
@@ -2118,6 +2118,11 @@
 
         // Track user activity
         function setupUIAutoHide() {
+            // Ensure UI is visible initially
+            document.querySelectorAll('.ui-element').forEach(el => {
+                el.classList.remove('hidden');
+            });
+
             // Show UI on any interaction
             document.addEventListener('mousemove', showUI);
             document.addEventListener('mousedown', showUI);
@@ -2125,11 +2130,24 @@
             document.addEventListener('touchmove', showUI);
             document.addEventListener('keydown', showUI);
 
-            // Initial timeout
+            // Initial timeout - hide after 5 seconds
             uiTimeout = setTimeout(hideUI, 5000);
 
             console.log('[UI] 👁️ Auto-hide enabled - UI will hide after 5s of inactivity');
         }
+
+        // Setup reaction listener (global, outside of joined-meeting)
+        callFrame.on('app-message', (event) => {
+            console.log('[DAILY] 📨 Received app-message:', event.data);
+            if (event.data?.type === 'reaction') {
+                console.log('[DAILY] 😊 Showing reaction:', event.data.emoji);
+                showReactionAnimation(event.data.emoji);
+            } else if (event.data?.type === 'raise-hand') {
+                console.log('[DAILY] ✋ Raise hand event:', event.data);
+                // Handle raise hand from other participants
+                updateRaisedHands(event.data);
+            }
+        });
 
         // Initialize chat extensions after chat is ready
         callFrame.on('joined-meeting', () => {
@@ -2138,15 +2156,6 @@
 
             // Setup UI auto-hide
             setupUIAutoHide();
-
-            // Setup reaction listener
-            callFrame.on('app-message', (event) => {
-                console.log('[DAILY] 📨 Received app-message:', event.data);
-                if (event.data?.type === 'reaction') {
-                    console.log('[DAILY] 😊 Showing reaction:', event.data.emoji);
-                    showReactionAnimation(event.data.emoji);
-                }
-            });
 
             if (window.GroupChatAdvanced && window.GroupChatExtensions) {
                 setTimeout(() => {
@@ -2158,6 +2167,21 @@
                 }, 2000);
             }
         });
+
+        function updateRaisedHands(data) {
+            // Update raised hands tracking
+            if (data.raised) {
+                raisedHands.add(data.userId);
+                console.log('[DAILY] ✋ User raised hand:', data.userName);
+            } else {
+                raisedHands.delete(data.userId);
+                console.log('[DAILY] 👋 User lowered hand:', data.userName);
+            }
+            // Update host controls if visible
+            if (isHost) {
+                updateHostParticipantList();
+            }
+        }
 
         // Release wake lock on page unload
         window.addEventListener('beforeunload', releaseWakeLock);
