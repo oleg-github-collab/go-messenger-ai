@@ -213,6 +213,16 @@
             transform: translateY(0);
         }
 
+        /* UI Auto-hide */
+        .ui-element {
+            transition: opacity 0.3s ease;
+        }
+
+        .ui-element.hidden {
+            opacity: 0;
+            pointer-events: none;
+        }
+
         /* Back Button - ENHANCED */
         .back-button {
             position: absolute;
@@ -675,7 +685,7 @@
         /* ============================================ */
         .draggable-self-view {
             position: fixed;
-            bottom: 120px;
+            bottom: 200px;
             right: 20px;
             width: 180px;
             height: 135px;
@@ -685,7 +695,7 @@
             border: 2px solid rgba(255, 255, 255, 0.2);
             cursor: move;
             z-index: 1002;
-            transition: box-shadow 0.2s;
+            transition: opacity 0.3s ease, box-shadow 0.2s;
             background: rgba(0, 0, 0, 0.8);
         }
 
@@ -986,7 +996,7 @@
         <div id="dailyFrame"></div>
 
         <!-- Draggable Self-View -->
-        <div class="draggable-self-view" id="draggableSelfView" style="display: none;">
+        <div class="draggable-self-view ui-element" id="draggableSelfView" style="display: none;">
             <canvas id="selfViewCanvas" class="self-view-video"></canvas>
             <div class="self-view-overlay">
                 <span class="self-view-label">You</span>
@@ -994,10 +1004,10 @@
         </div>
 
         <!-- Raise Hand Button -->
-        <button class="raise-hand-btn" id="raiseHandBtn" style="display: none;">✋</button>
+        <button class="raise-hand-btn ui-element" id="raiseHandBtn" style="display: none;">✋</button>
 
         <!-- Host Controls Button -->
-        <button class="host-controls-btn" id="hostControlsBtn" style="display: none;">👑</button>
+        <button class="host-controls-btn ui-element" id="hostControlsBtn" style="display: none;">👑</button>
 
         <!-- Host Controls Panel -->
         <div class="host-controls-panel" id="hostControlsPanel">
@@ -1017,7 +1027,7 @@
         <!-- Custom UI Overlay -->
         <div class="custom-ui-overlay">
             <!-- Top Bar -->
-            <div class="top-bar">
+            <div class="top-bar ui-element">
                 <button class="back-button" id="backBtn" title="Leave Call">
                     <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.5">
                         <path d="M15 18L9 12L15 6" stroke-linecap="round" stroke-linejoin="round"/>
@@ -1036,7 +1046,7 @@
             </div>
 
             <!-- Bottom Controls -->
-            <div class="bottom-controls">
+            <div class="bottom-controls ui-element">
                 <div class="controls-wrapper">
                     <button class="control-btn" id="micBtn" title="Microphone">
                         <svg class="icon-mic-on" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
@@ -2076,8 +2086,77 @@
             `;
             document.head.appendChild(style);
         }
+        // ============================================
+        // UI AUTO-HIDE & WAKE LOCK
+        // ============================================
+        let uiTimeout;
+        let wakeLock = null;
+
+        // Request wake lock to prevent screen from sleeping
+        async function requestWakeLock() {
+            try {
+                if ('wakeLock' in navigator) {
+                    wakeLock = await navigator.wakeLock.request('screen');
+                    console.log('[UI] 🔒 Wake lock active - screen will stay on');
+
+                    wakeLock.addEventListener('release', () => {
+                        console.log('[UI] 🔓 Wake lock released');
+                    });
+                }
+            } catch (err) {
+                console.error('[UI] Wake lock error:', err);
+            }
+        }
+
+        // Release wake lock
+        function releaseWakeLock() {
+            if (wakeLock !== null) {
+                wakeLock.release();
+                wakeLock = null;
+            }
+        }
+
+        // Show UI elements
+        function showUI() {
+            document.querySelectorAll('.ui-element').forEach(el => {
+                el.classList.remove('hidden');
+            });
+
+            // Reset timeout
+            clearTimeout(uiTimeout);
+            uiTimeout = setTimeout(hideUI, 5000);
+        }
+
+        // Hide UI elements
+        function hideUI() {
+            document.querySelectorAll('.ui-element').forEach(el => {
+                el.classList.add('hidden');
+            });
+        }
+
+        // Track user activity
+        function setupUIAutoHide() {
+            // Show UI on any interaction
+            document.addEventListener('mousemove', showUI);
+            document.addEventListener('mousedown', showUI);
+            document.addEventListener('touchstart', showUI);
+            document.addEventListener('touchmove', showUI);
+            document.addEventListener('keydown', showUI);
+
+            // Initial timeout
+            uiTimeout = setTimeout(hideUI, 5000);
+
+            console.log('[UI] 👁️ Auto-hide enabled - UI will hide after 5s of inactivity');
+        }
+
         // Initialize chat extensions after chat is ready
         callFrame.on('joined-meeting', () => {
+            // Request wake lock
+            requestWakeLock();
+
+            // Setup UI auto-hide
+            setupUIAutoHide();
+
             if (window.GroupChatAdvanced && window.GroupChatExtensions) {
                 setTimeout(() => {
                     if (window.groupChat) {
@@ -2086,6 +2165,16 @@
                         console.log('[GROUP-CALL-DAILY] 🎉 Chat extensions initialized');
                     }
                 }, 2000);
+            }
+        });
+
+        // Release wake lock on page unload
+        window.addEventListener('beforeunload', releaseWakeLock);
+
+        // Re-request wake lock when page becomes visible again
+        document.addEventListener('visibilitychange', () => {
+            if (wakeLock !== null && document.visibilityState === 'visible') {
+                requestWakeLock();
             }
         });
     </script>
