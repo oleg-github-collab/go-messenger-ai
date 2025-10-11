@@ -2069,8 +2069,21 @@
             `;
             document.head.appendChild(style);
         }
+        // Initialize chat extensions after chat is ready
+        callFrame.on('joined-meeting', () => {
+            if (window.GroupChatAdvanced && window.GroupChatExtensions) {
+                setTimeout(() => {
+                    if (window.groupChat) {
+                        const extensions = new window.GroupChatExtensions(window.groupChat, callFrame);
+                        window.groupChatExtensions = extensions;
+                        console.log('[GROUP-CALL-DAILY] 🎉 Chat extensions initialized');
+                    }
+                }, 2000);
+            }
+        });
     </script>
     <script src="/static/enhanced-gif-picker.js?v=3"></script>
     <script src="/static/group-chat-advanced.js?v=1"></script>
+    <script src="/static/group-chat-extensions.js?v=1"></script>
 </body>
 </html>
