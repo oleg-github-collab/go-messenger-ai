@@ -324,9 +324,17 @@ class WebRTCManager {
                 console.log('[WebRTC] 🔊 Remote track unmuted:', event.track.kind);
             };
 
-            if (this.remotePlaceholder) {
+            // Only hide placeholder if NOT in audio-only mode
+            if (this.remotePlaceholder && !this.remotePlaceholder.dataset.audioMode) {
                 this.remotePlaceholder.classList.add('hidden');
                 this.remotePlaceholder.style.display = 'none';
+            } else if (this.remotePlaceholder && this.remotePlaceholder.dataset.audioMode) {
+                // Audio mode: update status and show visualizer
+                const statusEl = document.getElementById('audioCallStatus');
+                const visualizerEl = document.getElementById('audioVisualizer');
+                if (statusEl) statusEl.textContent = 'Connected';
+                if (visualizerEl) visualizerEl.style.display = 'flex';
+                console.log('[WebRTC] 🎵 Audio mode: keeping placeholder visible');
             }
             this.updateStatus('Connected', 'success');
 

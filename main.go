@@ -1934,10 +1934,18 @@ func main() {
 		serveFile("guest-modular.html")(w, r)
 	})
 
-	// Audio call page (audio-only, own WebRTC)
+	// Audio call page (audio-only, uses call.html with audioOnly param)
 	http.HandleFunc("/audio/", func(w http.ResponseWriter, r *http.Request) {
-		// Serve beautiful audio-call.html page
-		serveFile("audio-call.html")(w, r)
+		// Extract room ID from URL
+		roomID := strings.TrimPrefix(r.URL.Path, "/audio/")
+
+		// Redirect to /join/ with audioOnly=true parameter
+		// This makes audio calls use the same WebRTC logic as video calls
+		query := r.URL.Query()
+		query.Set("audioOnly", "true")
+
+		redirectURL := fmt.Sprintf("/join/%s?%s", roomID, query.Encode())
+		http.Redirect(w, r, redirectURL, http.StatusTemporaryRedirect)
 	})
 
 	// Meeting room - route based on meeting mode

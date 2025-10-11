@@ -86,16 +86,36 @@ document.addEventListener('DOMContentLoaded', async () => {
         if (cameraBtn) cameraBtn.style.display = 'none';
         if (flipCameraBtn) flipCameraBtn.style.display = 'none';
 
-        // Show audio-only UI
+        // Show audio-only UI with beautiful visualizer
         if (remotePlaceholder) {
             remotePlaceholder.style.display = 'flex';
+            remotePlaceholder.style.flexDirection = 'column';
+            remotePlaceholder.style.gap = '30px';
             remotePlaceholder.innerHTML = `
                 <div style="text-align: center;">
-                    <div style="font-size: 80px; margin-bottom: 20px;">🎙️</div>
-                    <div style="font-size: 24px; font-weight: 600; margin-bottom: 10px;">Audio Call</div>
-                    <div style="font-size: 16px; opacity: 0.8;">Waiting for participant...</div>
+                    <div style="font-size: 100px; margin-bottom: 20px; animation: pulse 2s infinite;">🎙️</div>
+                    <div style="font-size: 28px; font-weight: 600; margin-bottom: 10px;">Audio Call</div>
+                    <div id="audioCallStatus" style="font-size: 18px; opacity: 0.8;">Connecting...</div>
                 </div>
+                <div id="audioVisualizer" style="display: none; justify-content: center; align-items: center; gap: 4px; height: 60px;">
+                    ${Array(20).fill(0).map((_, i) => `
+                        <div class="audio-bar" style="width: 4px; background: rgba(255,255,255,0.6); border-radius: 2px; height: 10px; transition: height 0.1s; animation: audioPulse ${0.5 + Math.random() * 0.5}s ease-in-out infinite; animation-delay: ${i * 0.05}s;"></div>
+                    `).join('')}
+                </div>
+                <style>
+                    @keyframes pulse {
+                        0%, 100% { transform: scale(1); opacity: 1; }
+                        50% { transform: scale(1.1); opacity: 0.8; }
+                    }
+                    @keyframes audioPulse {
+                        0%, 100% { height: 10px; }
+                        50% { height: 40px; }
+                    }
+                </style>
             `;
+
+            // Keep placeholder visible in audio mode (override webrtc.js)
+            remotePlaceholder.dataset.audioMode = 'true';
         }
     } else {
         sessionStorage.setItem('enableVideo', 'true');
