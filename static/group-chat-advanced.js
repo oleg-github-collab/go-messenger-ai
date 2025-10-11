@@ -75,12 +75,6 @@ class GroupChatAdvanced {
                 </div>
             </div>
 
-            <!-- Chat Toggle Button -->
-            <button class="group-chat-toggle" id="groupChatToggle">
-                💬
-                <span class="chat-unread-badge" id="chatUnreadBadge" style="display: none;">1</span>
-            </button>
-
             <!-- Emoji Picker -->
             <div class="chat-emoji-picker" id="chatEmojiPicker" style="display: none;">
                 <div class="emoji-picker-content">
@@ -124,10 +118,7 @@ class GroupChatAdvanced {
     }
 
     setupEventListeners() {
-        // Toggle chat
-        document.getElementById('groupChatToggle').addEventListener('click', () => {
-            this.toggleChat();
-        });
+        // Toggle chat (will be connected externally via chatBtn in group-call-daily.html)
 
         // Close chat
         document.getElementById('groupChatClose').addEventListener('click', () => {
