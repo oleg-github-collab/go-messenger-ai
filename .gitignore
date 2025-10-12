@@ -44,3 +44,4 @@ main
 
 # Archive directory (old infrastructure - preserved locally)
 archive/
+node_modules/
