@@ -2327,6 +2327,9 @@ func main() {
 	// Professional Mode (100ms) endpoints
 	registerProfessionalModeRoutes()
 
+	// Room Management endpoints
+	registerRoomRoutes()
+
 	// Recording Storage endpoints
 	registerRecordingRoutes()
 
