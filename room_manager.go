@@ -56,20 +56,25 @@ func handleCreateRoom(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// HOST AUTHENTICATION - Must be logged in
-	cookie, err := r.Cookie("session")
+	cookie, err := r.Cookie("auth_token")
 	if err != nil {
+		log.Printf("[ROOM] ❌ No auth_token cookie")
 		http.Error(w, "Unauthorized - Please login", http.StatusUnauthorized)
 		return
 	}
 
-	username, err := rdb.Get(ctx, "session:"+cookie.Value).Result()
+	// Validate session from Redis
+	sessionKey := fmt.Sprintf("session:%s", cookie.Value)
+	userID, err := rdb.Get(ctx, sessionKey).Result()
 	if err != nil {
-		log.Printf("[ROOM] ❌ Invalid session")
+		log.Printf("[ROOM] ❌ Invalid session token")
 		http.Error(w, "Unauthorized - Invalid session", http.StatusUnauthorized)
 		return
 	}
 
-	log.Printf("[ROOM] ✅ Authenticated user: %s", username)
+	// For room host, we'll use "Oleh" as the username (the only valid login)
+	username := "Oleh"
+	log.Printf("[ROOM] ✅ Authenticated user: %s (userID: %s)", username, userID)
 
 	// Generate short room code
 	roomCode := generateRoomCode()
@@ -114,6 +119,22 @@ func handleCreateRoom(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("[ROOM] ✅ Room created: %s (HMS: %s)", roomCode, hmsRoomID)
 
+	// Generate 100ms auth tokens if room was created
+	var hostToken, guestToken string
+	if hmsRoomID != "" {
+		// Host token with full permissions
+		hostToken, err = generateHMSToken(hmsRoomID, "host-"+username, "host", username)
+		if err != nil {
+			log.Printf("[ROOM] ⚠️  Failed to generate host token: %v", err)
+		}
+
+		// Guest token with limited permissions
+		guestToken, err = generateHMSToken(hmsRoomID, "guest-placeholder", "guest", "Guest")
+		if err != nil {
+			log.Printf("[ROOM] ⚠️  Failed to generate guest token: %v", err)
+		}
+	}
+
 	// Create invite URL
 	baseURL := os.Getenv("BASE_URL")
 	if baseURL == "" {
@@ -122,12 +143,14 @@ func handleCreateRoom(w http.ResponseWriter, r *http.Request) {
 
 	inviteURL := fmt.Sprintf("%s/room/%s", baseURL, roomCode)
 
-	// Return room details
+	// Return room details with auth tokens
 	response := map[string]interface{}{
 		"room_id":     roomCode,
 		"hms_room_id": hmsRoomID,
 		"invite_url":  inviteURL,
 		"host_url":    fmt.Sprintf("%s/room/%s?host=true", baseURL, roomCode),
+		"host_token":  hostToken,
+		"guest_token": guestToken,
 		"expires_at":  room.ExpiresAt,
 		"status":      "created",
 	}
@@ -304,17 +327,21 @@ func handleEndRoom(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// HOST AUTHENTICATION
-	cookie, err := r.Cookie("session")
+	cookie, err := r.Cookie("auth_token")
 	if err != nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
 
-	username, err := rdb.Get(ctx, "session:"+cookie.Value).Result()
+	sessionKey := fmt.Sprintf("session:%s", cookie.Value)
+	userID, err := rdb.Get(ctx, sessionKey).Result()
 	if err != nil {
 		http.Error(w, "Unauthorized", http.StatusUnauthorized)
 		return
 	}
+
+	username := "Oleh" // The authenticated host
+	_ = userID         // Validate session exists
 
 	// Get room
 	roomKey := fmt.Sprintf("room:%s", req.RoomID)

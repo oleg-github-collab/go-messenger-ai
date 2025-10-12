@@ -12,6 +12,8 @@ import (
 	"net/http"
 	"os"
 	"time"
+
+	"github.com/golang-jwt/jwt/v5"
 )
 
 // 100ms Configuration
@@ -206,29 +208,40 @@ func handleCreateProfessionalToken(w http.ResponseWriter, r *http.Request) {
 
 // Generate 100ms JWT Token
 func generateHMSToken(roomID, userID, role, userName string) (string, error) {
-	// Implementation would use JWT library (e.g., github.com/golang-jwt/jwt)
-	// For now, return a placeholder
-	// In production, you'd generate a proper JWT with:
-	// - access_key, app_id, room_id, user_id, role, type: "app"
-	// - Signed with HMS_APP_SECRET
+	if HMS_APP_ACCESS_KEY == "" || HMS_APP_SECRET == "" {
+		return "", fmt.Errorf("HMS credentials not configured")
+	}
 
-	// This is a simplified version - you need to implement full JWT signing
-	payload := map[string]interface{}{
+	// Create JWT claims according to 100ms spec
+	// https://www.100ms.live/docs/server-side/v2/introduction/authentication-and-tokens
+	now := time.Now().Unix()
+	claims := jwt.MapClaims{
 		"access_key": HMS_APP_ACCESS_KEY,
 		"room_id":    roomID,
 		"user_id":    userID,
 		"role":       role,
 		"type":       "app",
 		"version":    2,
-		"iat":        time.Now().Unix(),
-		"nbf":        time.Now().Unix(),
-		"exp":        time.Now().Add(24 * time.Hour).Unix(),
+		"iat":        now,
+		"nbf":        now,
+		"exp":        now + 86400, // 24 hours
 	}
 
-	// TODO: Implement proper JWT signing with HMS_APP_SECRET
-	// For now, returning a mock token
-	payloadJSON, _ := json.Marshal(payload)
-	return fmt.Sprintf("mock_token_%s", hex.EncodeToString(payloadJSON)[:32]), nil
+	// Add user name if provided
+	if userName != "" {
+		claims["user_name"] = userName
+	}
+
+	// Create token with HS256 signing method
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+
+	// Sign with HMS_APP_SECRET
+	signedToken, err := token.SignedString([]byte(HMS_APP_SECRET))
+	if err != nil {
+		return "", fmt.Errorf("failed to sign JWT: %w", err)
+	}
+
+	return signedToken, nil
 }
 
 // Analyze Transcript with AI Handler
