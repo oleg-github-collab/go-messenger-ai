@@ -521,9 +521,18 @@
     <!-- 100ms SDK - SIMPLE CDN approach -->
     <script src="https://cdn.100ms.live/latest/hms.js"></script>
     <script>
-        console.log('[SDK] Loaded from 100ms CDN');
-        console.log('[SDK] window.HMSReactiveStore:', typeof window.HMSReactiveStore);
-        console.log('[SDK] All HMS exports:', Object.keys(window).filter(k => k.startsWith('HMS')));
+        console.log('[SDK] ✅ Loaded from 100ms CDN');
+        console.log('[SDK] 🔍 Checking window.hmsStore:', typeof window.hmsStore);
+        console.log('[SDK] 🔍 Checking window.hmsActions:', typeof window.hmsActions);
+        console.log('[SDK] 🔍 Checking window.HMSReactiveStore:', typeof window.HMSReactiveStore);
+        console.log('[SDK] 🔍 Checking window.HMS:', typeof window.HMS);
+        console.log('[SDK] 🔍 All window properties starting with hms:', Object.keys(window).filter(k => k.toLowerCase().includes('hms')));
+
+        // If window.hmsStore exists, CDN uses pre-initialized approach
+        if (window.hmsStore && window.hmsActions) {
+            console.log('[SDK] ✅ CDN uses pre-initialized hmsStore/hmsActions approach');
+            window.HMSReactiveStore = 'PRE_INITIALIZED';
+        }
     </script>
 
     <!-- Translations -->
