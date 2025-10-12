@@ -385,7 +385,7 @@ func registerRoomRoutes() {
 	http.HandleFunc("/api/rooms/create", handleCreateRoom)
 	http.HandleFunc("/api/rooms/info", handleGetRoomInfo)
 	http.HandleFunc("/api/rooms/end", handleEndRoom)
-	http.HandleFunc("/room/", handleJoinRoom) // Dynamic route handler
+	// NOTE: /room/ route is handled in main.go to avoid conflicts
 
 	log.Println("[ROOM] ✅ Room management routes registered")
 }

@@ -1952,7 +1952,30 @@ func main() {
 
 		log.Printf("[ROOM] 📱 Request for room: %s", roomID)
 
-		// Check meeting mode
+		// CHECK FOR PROFESSIONAL ROOM FIRST (abc-xyz-123 format)
+		if roomID != "" && strings.Contains(roomID, "-") {
+			roomKey := fmt.Sprintf("room:%s", roomID)
+			roomJSON, err := rdb.Get(ctx, roomKey).Result()
+			if err == nil {
+				// This is a professional AI room
+				var professionalRoom struct {
+					Status string `json:"status"`
+				}
+				json.Unmarshal([]byte(roomJSON), &professionalRoom)
+
+				if professionalRoom.Status == "ended" || professionalRoom.Status == "expired" {
+					log.Printf("[ROOM] 🔒 Professional room has ended")
+					http.Redirect(w, r, "/meeting-ended?reason=ended", http.StatusFound)
+					return
+				}
+
+				log.Printf("[ROOM] 🤖 Serving professional-1on1.html (Professional AI Mode)")
+				serveFile("professional-1on1.html")(w, r)
+				return
+			}
+		}
+
+		// Check meeting mode (regular meetings)
 		if roomID != "" {
 			meetingData, err := getMeeting(roomID)
 			if err == nil {
