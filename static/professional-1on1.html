@@ -518,12 +518,15 @@
         </div>
     </div>
 
-    <!-- 100ms SDK (Local) -->
-    <script type="module">
-        import * as HMS from '/static/js/hms-sdk.js';
-        window.HMSReactiveStore = HMS.HMSReactiveStore;
-        window.HMS = HMS;
-        console.log('[HMS SDK] Loaded locally');
+    <!-- 100ms SDK (Local CJS Bundle) -->
+    <script src="/static/js/hms-sdk-bundle.js"></script>
+    <script>
+        // Verify SDK loaded
+        if (window.HMSReactiveStore) {
+            console.log('[SDK] ✅ 100ms SDK loaded successfully');
+        } else {
+            console.error('[SDK] ❌ Failed to load 100ms SDK');
+        }
     </script>
 
     <!-- Translations -->
