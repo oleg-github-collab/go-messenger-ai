@@ -220,6 +220,7 @@ class Professional1on1Call {
             const response = await fetch('/api/professional/create-room', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
+                credentials: 'include',
                 body: JSON.stringify({
                     name: `1-on-1 Call ${Date.now()}`,
                     description: 'Professional 1-on-1 call with AI'
@@ -239,6 +240,7 @@ class Professional1on1Call {
             const response = await fetch('/api/professional/create-token', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
+                credentials: 'include',
                 body: JSON.stringify({
                     room_id: roomId,
                     user_id: `user_${Date.now()}`,
@@ -392,6 +394,7 @@ class Professional1on1Call {
             const response = await fetch('/api/analyze-transcript', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
+                credentials: 'include',
                 body: JSON.stringify({
                     speaker: entry.speakerName,
                     text: entry.text,
