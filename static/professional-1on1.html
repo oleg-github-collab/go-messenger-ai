@@ -10,11 +10,36 @@
     <link rel="stylesheet" href="/static/css/professional-1on1.css">
     <link rel="stylesheet" href="/static/css/professional-1on1-enhanced.css">
     <link rel="stylesheet" href="/static/css/professional-1on1-fixes.css">
-    <link rel="stylesheet" href="/static/css/professional-1on1-mobile-fix.css">
+    <link rel="stylesheet" href="/static/css/professional-1on1-mobile-clean.css">
 </head>
 <body>
+    <!-- Preview Screen -->
+    <div class="preview-screen" id="previewScreen">
+        <div class="preview-content">
+            <h2>Ready to join?</h2>
+            <div class="preview-video-container">
+                <video id="previewVideo" autoplay muted playsinline></video>
+                <div class="preview-placeholder" id="previewPlaceholder">
+                    <div class="preview-icon">👤</div>
+                    <p>Camera preview</p>
+                </div>
+            </div>
+            <div class="preview-controls">
+                <button class="preview-control-btn" id="previewMicBtn" data-active="true">
+                    <span class="btn-icon">🎤</span>
+                </button>
+                <button class="preview-control-btn" id="previewCameraBtn" data-active="true">
+                    <span class="btn-icon">📹</span>
+                </button>
+            </div>
+            <div class="preview-actions">
+                <button class="join-btn" id="joinCallBtn">Join Call</button>
+            </div>
+        </div>
+    </div>
+
     <!-- Loading Screen -->
-    <div class="loading-screen" id="loadingScreen">
+    <div class="loading-screen" id="loadingScreen" style="display: none;">
         <div class="loading-content">
             <div class="loading-logo">
                 <div class="pulse-ring"></div>

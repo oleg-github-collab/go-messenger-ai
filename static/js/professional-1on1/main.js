@@ -46,34 +46,91 @@ class Professional1on1Call {
             this.isHost = urlParams.get('host') !== null;
         }
 
-        // Show loading steps
-        await this.showLoadingSteps();
+        // Show preview screen first
+        await this.showPreviewScreen();
 
         // Cache DOM
         this.cacheDOM();
 
         // Setup events
         this.setupEvents();
+    }
 
-        // Initialize AI Transcription (only for host)
-        if (window.AITranscription && this.isHost) {
-            this.aiTranscription = new AITranscription(this);
+    async showPreviewScreen() {
+        console.log('[PREVIEW] Showing preview screen...');
+
+        const previewScreen = document.getElementById('previewScreen');
+        const previewVideo = document.getElementById('previewVideo');
+        const previewPlaceholder = document.getElementById('previewPlaceholder');
+        const joinBtn = document.getElementById('joinCallBtn');
+        const previewMicBtn = document.getElementById('previewMicBtn');
+        const previewCameraBtn = document.getElementById('previewCameraBtn');
+
+        // Get preview media
+        try {
+            this.previewStream = await navigator.mediaDevices.getUserMedia({
+                video: true,
+                audio: true
+            });
+
+            previewVideo.srcObject = this.previewStream;
+            previewPlaceholder.style.display = 'none';
+            console.log('[PREVIEW] ✅ Media preview ready');
+        } catch (error) {
+            console.error('[PREVIEW] ❌ Failed to get media:', error);
+            previewPlaceholder.innerHTML = '<div class="preview-icon">⚠️</div><p>Camera access denied</p>';
         }
 
-        // Hide AI controls for guests
-        if (!this.isHost) {
-            this.hideAIControlsForGuests();
-        }
+        // Preview controls
+        previewMicBtn.addEventListener('click', () => {
+            const active = previewMicBtn.dataset.active === 'true';
+            previewMicBtn.dataset.active = !active;
+            if (this.previewStream) {
+                this.previewStream.getAudioTracks().forEach(track => track.enabled = !active);
+            }
+        });
 
-        // Initialize 100ms
-        await this.init100ms();
+        previewCameraBtn.addEventListener('click', () => {
+            const active = previewCameraBtn.dataset.active === 'true';
+            previewCameraBtn.dataset.active = !active;
+            if (this.previewStream) {
+                this.previewStream.getVideoTracks().forEach(track => track.enabled = !active);
+            }
+        });
 
-        // Hide loading
-        document.getElementById('loadingScreen').style.display = 'none';
-        document.getElementById('callContainer').style.display = 'flex';
+        // Join button
+        return new Promise((resolve) => {
+            joinBtn.addEventListener('click', async () => {
+                console.log('[PREVIEW] Joining call...');
+                previewScreen.style.display = 'none';
+                document.getElementById('loadingScreen').style.display = 'flex';
 
-        // Start call timer
-        this.startCallTimer();
+                // Show loading steps
+                await this.showLoadingSteps();
+
+                // Initialize AI Transcription (only for host)
+                if (window.AITranscription && this.isHost) {
+                    this.aiTranscription = new AITranscription(this);
+                }
+
+                // Hide AI controls for guests
+                if (!this.isHost) {
+                    this.hideAIControlsForGuests();
+                }
+
+                // Initialize 100ms
+                await this.init100ms();
+
+                // Hide loading
+                document.getElementById('loadingScreen').style.display = 'none';
+                document.getElementById('callContainer').style.display = 'flex';
+
+                // Start call timer
+                this.startCallTimer();
+
+                resolve();
+            });
+        });
     }
 
     async loadRoomInfo() {
