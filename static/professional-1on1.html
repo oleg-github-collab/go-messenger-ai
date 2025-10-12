@@ -518,65 +518,12 @@
         </div>
     </div>
 
-    <!-- 100ms SDK via jsdelivr with full bundle -->
+    <!-- 100ms SDK - SIMPLE CDN approach -->
+    <script src="https://cdn.100ms.live/latest/hms.js"></script>
     <script>
-        console.log('[SDK-LOAD] 🔍 Starting SDK load via jsdelivr...');
-    </script>
-
-    <script type="module">
-        console.log('[SDK-LOAD] 🔍 Importing from jsdelivr...');
-
-        try {
-            // Use jsdelivr with +esm which bundles ALL dependencies
-            const module = await import('https://cdn.jsdelivr.net/npm/@100mslive/hms-video-store@0.12.39/+esm');
-
-            console.log('[SDK-LOAD] ✅ Module imported:', module);
-            console.log('[SDK-LOAD] ✅ Available exports:', Object.keys(module));
-
-            // Extract HMSReactiveStore
-            const { HMSReactiveStore } = module;
-
-            if (!HMSReactiveStore) {
-                throw new Error('HMSReactiveStore not found in module exports');
-            }
-
-            console.log('[SDK-LOAD] ✅ HMSReactiveStore type:', typeof HMSReactiveStore);
-
-            // Assign to window
-            window.HMSReactiveStore = HMSReactiveStore;
-
-            console.log('[SDK-LOAD] ✅ SDK loaded successfully!');
-
-            // Test instantiation
-            try {
-                const testInstance = new HMSReactiveStore();
-                console.log('[SDK-LOAD] ✅ Test instance created:', testInstance);
-                console.log('[SDK-LOAD] ✅ Has getActions:', typeof testInstance.getActions);
-                console.log('[SDK-LOAD] ✅ Has getStore:', typeof testInstance.getStore);
-            } catch (testError) {
-                console.error('[SDK-LOAD] ❌ Test instantiation failed:', testError);
-            }
-
-        } catch (error) {
-            console.error('[SDK-LOAD] ❌ Failed to load SDK:', error);
-            console.error('[SDK-LOAD] ❌ Error message:', error.message);
-            console.error('[SDK-LOAD] ❌ Error stack:', error.stack);
-
-            // Show user-friendly error
-            alert('Failed to load video SDK. Please refresh the page.');
-        }
-    </script>
-
-    <script>
-        // Final verification
-        setTimeout(() => {
-            console.log('[SDK-LOAD] 🔍 Final verification...');
-            if (window.HMSReactiveStore) {
-                console.log('[SDK-LOAD] ✅ SDK is ready!');
-            } else {
-                console.error('[SDK-LOAD] ❌ SDK not loaded after 2 seconds');
-            }
-        }, 2000);
+        console.log('[SDK] Loaded from 100ms CDN');
+        console.log('[SDK] window.HMSReactiveStore:', typeof window.HMSReactiveStore);
+        console.log('[SDK] All HMS exports:', Object.keys(window).filter(k => k.startsWith('HMS')));
     </script>
 
     <!-- Translations -->
