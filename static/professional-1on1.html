@@ -518,37 +518,15 @@
         </div>
     </div>
 
-    <!-- 100ms SDK - LOCAL BUNDLED VERSION (CDN blocked in region) -->
-    <script src="/static/js/hms-bundle.js"></script>
+    <!-- 100ms Prebuilt Iframe (official ready-made UI) -->
     <script>
-        console.log('[SDK] ✅ Loaded from local bundle');
-        console.log('[SDK] window.HMSReactiveStore:', typeof window.HMSReactiveStore);
+        console.log('[100MS] Using Prebuilt iframe - no SDK needed');
 
-        if (!window.HMSReactiveStore) {
-            console.error('[SDK] ❌ HMSReactiveStore not found, checking HMS global...');
-            console.log('[SDK] window.HMS:', window.HMS);
-
-            // The bundle might export as HMS.HMSReactiveStore
-            if (window.HMS && window.HMS.HMSReactiveStore) {
-                window.HMSReactiveStore = window.HMS.HMSReactiveStore;
-                console.log('[SDK] ✅ Extracted HMSReactiveStore from HMS global');
-            }
-        }
-
-        if (window.HMSReactiveStore) {
-            console.log('[SDK] ✅ SDK ready!');
-        } else {
-            console.error('[SDK] ❌ Failed to initialize SDK');
-        }
+        // We'll load 100ms prebuilt in iframe
+        window.use100msPrebuilt = true;
     </script>
 
-    <!-- Translations -->
-    <script src="/static/js/professional-1on1/i18n.js"></script>
-
-    <!-- HMS Integration -->
-    <script src="/static/js/professional-1on1/hms-integration.js"></script>
-
-    <!-- App Scripts -->
-    <script src="/static/js/professional-1on1/app.js"></script>
+    <!-- Prebuilt App (no SDK, no custom UI, just iframe) -->
+    <script src="/static/js/professional-1on1/prebuilt-app.js"></script>
 </body>
 </html>
