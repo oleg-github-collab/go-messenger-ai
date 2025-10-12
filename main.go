@@ -2324,6 +2324,9 @@ func main() {
 	// Transcript save endpoint (legacy)
 	http.HandleFunc("/api/transcript/save", authMiddleware(saveTranscriptHandler))
 
+	// Professional Mode (100ms) endpoints
+	registerProfessionalModeRoutes()
+
 	// Initialize start time for health check
 	startTime = time.Now()
 
