@@ -518,60 +518,64 @@
         </div>
     </div>
 
-    <!-- 100ms SDK - Detailed Loading with Debugging -->
+    <!-- 100ms SDK via jsdelivr with full bundle -->
     <script>
-        console.log('[SDK-LOAD] 🔍 Step 1: Starting SDK load process');
-        console.log('[SDK-LOAD] 🔍 Browser:', navigator.userAgent);
-        console.log('[SDK-LOAD] 🔍 Supports importmap:', HTMLScriptElement.supports ? HTMLScriptElement.supports('importmap') : 'unknown');
-        console.log('[SDK-LOAD] 🔍 Supports ES modules:', 'noModule' in HTMLScriptElement.prototype);
-    </script>
-
-    <script type="importmap">
-    {
-        "imports": {
-            "@100mslive/hms-video-store": "https://esm.sh/@100mslive/hms-video-store@0.12.39"
-        }
-    }
+        console.log('[SDK-LOAD] 🔍 Starting SDK load via jsdelivr...');
     </script>
 
     <script type="module">
-        console.log('[SDK-LOAD] 🔍 Step 2: ES Module script executing');
+        console.log('[SDK-LOAD] 🔍 Importing from jsdelivr...');
 
         try {
-            console.log('[SDK-LOAD] 🔍 Step 3: Importing HMSReactiveStore...');
-            const { HMSReactiveStore } = await import('@100mslive/hms-video-store');
+            // Use jsdelivr with +esm which bundles ALL dependencies
+            const module = await import('https://cdn.jsdelivr.net/npm/@100mslive/hms-video-store@0.12.39/+esm');
 
-            console.log('[SDK-LOAD] 🔍 Step 4: Import successful, HMSReactiveStore:', typeof HMSReactiveStore);
+            console.log('[SDK-LOAD] ✅ Module imported:', module);
+            console.log('[SDK-LOAD] ✅ Available exports:', Object.keys(module));
 
+            // Extract HMSReactiveStore
+            const { HMSReactiveStore } = module;
+
+            if (!HMSReactiveStore) {
+                throw new Error('HMSReactiveStore not found in module exports');
+            }
+
+            console.log('[SDK-LOAD] ✅ HMSReactiveStore type:', typeof HMSReactiveStore);
+
+            // Assign to window
             window.HMSReactiveStore = HMSReactiveStore;
 
-            console.log('[SDK-LOAD] ✅ Step 5: SDK loaded successfully!');
-            console.log('[SDK-LOAD] ✅ window.HMSReactiveStore available:', typeof window.HMSReactiveStore);
+            console.log('[SDK-LOAD] ✅ SDK loaded successfully!');
 
             // Test instantiation
             try {
                 const testInstance = new HMSReactiveStore();
-                console.log('[SDK-LOAD] ✅ Test instantiation successful:', testInstance);
+                console.log('[SDK-LOAD] ✅ Test instance created:', testInstance);
+                console.log('[SDK-LOAD] ✅ Has getActions:', typeof testInstance.getActions);
+                console.log('[SDK-LOAD] ✅ Has getStore:', typeof testInstance.getStore);
             } catch (testError) {
                 console.error('[SDK-LOAD] ❌ Test instantiation failed:', testError);
             }
 
         } catch (error) {
-            console.error('[SDK-LOAD] ❌ Import failed at step:', error);
-            console.error('[SDK-LOAD] ❌ Error details:', {
-                message: error.message,
-                stack: error.stack,
-                name: error.name
-            });
+            console.error('[SDK-LOAD] ❌ Failed to load SDK:', error);
+            console.error('[SDK-LOAD] ❌ Error message:', error.message);
+            console.error('[SDK-LOAD] ❌ Error stack:', error.stack);
+
+            // Show user-friendly error
+            alert('Failed to load video SDK. Please refresh the page.');
         }
     </script>
 
     <script>
-        // Fallback check
+        // Final verification
         setTimeout(() => {
-            console.log('[SDK-LOAD] 🔍 Final check after 2 seconds...');
-            console.log('[SDK-LOAD] window.HMSReactiveStore exists:', !!window.HMSReactiveStore);
-            console.log('[SDK-LOAD] window object keys:', Object.keys(window).filter(k => k.includes('HMS')));
+            console.log('[SDK-LOAD] 🔍 Final verification...');
+            if (window.HMSReactiveStore) {
+                console.log('[SDK-LOAD] ✅ SDK is ready!');
+            } else {
+                console.error('[SDK-LOAD] ❌ SDK not loaded after 2 seconds');
+            }
         }, 2000);
     </script>
 
