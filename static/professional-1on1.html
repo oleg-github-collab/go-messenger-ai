@@ -518,8 +518,13 @@
         </div>
     </div>
 
-    <!-- 100ms SDK -->
-    <script src="https://sdk.100ms.live/latest/hms.js"></script>
+    <!-- 100ms SDK (Local) -->
+    <script type="module">
+        import * as HMS from '/static/js/hms-sdk.js';
+        window.HMSReactiveStore = HMS.HMSReactiveStore;
+        window.HMS = HMS;
+        console.log('[HMS SDK] Loaded locally');
+    </script>
 
     <!-- Translations -->
     <script src="/static/js/professional-1on1/i18n.js"></script>

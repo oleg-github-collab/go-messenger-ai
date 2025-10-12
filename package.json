@@ -1,0 +1,5 @@
+{
+  "dependencies": {
+    "@100mslive/hms-video-store": "^0.12.39"
+  }
+}
