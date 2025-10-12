@@ -1083,3 +1083,327 @@ body::before {
         opacity: 0;
     }
 }
+
+/* Mobile Optimizations */
+@media (max-width: 768px) {
+    /* Notetaker Panel - Compact on mobile */
+    .notetaker-panel {
+        bottom: 90px;
+        right: 12px;
+        left: 12px;
+        padding: 12px;
+        min-width: auto;
+    }
+
+    .notetaker-header {
+        gap: 8px;
+        margin-bottom: 10px;
+    }
+
+    .notetaker-icon {
+        font-size: 18px;
+    }
+
+    .notetaker-title {
+        font-size: 13px;
+    }
+
+    .notetaker-status {
+        font-size: 11px;
+        padding: 3px 8px;
+    }
+
+    .notetaker-controls {
+        gap: 6px;
+        margin-bottom: 6px;
+    }
+
+    .notetaker-btn {
+        padding: 8px;
+        font-size: 12px;
+        gap: 4px;
+    }
+
+    .notetaker-btn svg {
+        width: 16px;
+        height: 16px;
+    }
+
+    .notetaker-timer {
+        font-size: 14px;
+    }
+
+    /* Reactions Panel - Compact on mobile */
+    .reactions-panel {
+        bottom: 90px;
+        right: 12px;
+        left: 12px;
+        padding: 16px;
+    }
+
+    .reactions-grid {
+        grid-template-columns: repeat(4, 1fr);
+        gap: 8px;
+    }
+
+    .reaction-emoji {
+        font-size: 24px;
+        padding: 10px;
+        width: 50px;
+        height: 50px;
+    }
+
+    /* Floating reactions - smaller on mobile */
+    .floating-reaction {
+        font-size: 36px;
+        bottom: 80px;
+    }
+
+    /* Bottom controls - better spacing */
+    .bottom-controls {
+        padding: 12px 8px;
+        gap: 8px;
+    }
+
+    .control-btn {
+        min-width: 50px;
+        padding: 10px 8px;
+        font-size: 11px;
+    }
+
+    .control-btn svg {
+        width: 20px;
+        height: 20px;
+    }
+
+    .control-btn span {
+        display: none;
+    }
+
+    .control-btn.large {
+        width: 56px;
+        height: 56px;
+    }
+
+    .control-btn.large svg {
+        width: 24px;
+        height: 24px;
+    }
+
+    /* Transcript panel - full width on mobile */
+    .transcript-panel {
+        right: 0;
+        width: 100%;
+        max-width: 100%;
+        border-radius: 16px 16px 0 0;
+    }
+
+    .transcript-panel.hidden {
+        transform: translateX(100%);
+    }
+
+    /* Settings panel - full screen on mobile */
+    .settings-panel {
+        right: 0;
+        width: 100%;
+        max-width: 100%;
+        height: 100vh;
+        border-radius: 0;
+        padding: 20px;
+    }
+
+    /* Chat panel - full width on mobile */
+    .chat-panel {
+        right: 0;
+        width: 100%;
+        max-width: 100%;
+        border-radius: 16px 16px 0 0;
+    }
+
+    /* Poll modal - full screen on mobile */
+    .poll-modal {
+        width: 90%;
+        max-width: 400px;
+        padding: 20px;
+    }
+
+    /* AI Modal - full screen on mobile */
+    .ai-recommendation-modal {
+        width: 90%;
+        max-width: 400px;
+        padding: 20px;
+    }
+
+    /* Whiteboard - full screen */
+    .whiteboard-container {
+        border-radius: 0;
+    }
+
+    /* Top bar - compact */
+    .top-bar {
+        padding: 10px 12px;
+        gap: 8px;
+    }
+
+    .back-btn,
+    .settings-btn {
+        width: 36px;
+        height: 36px;
+    }
+
+    /* Video area - better mobile layout */
+    .local-video-pip {
+        width: 100px;
+        height: 140px;
+        bottom: 100px;
+        right: 12px;
+    }
+
+    /* Hide desktop-only elements on mobile */
+    .desktop-only {
+        display: none !important;
+    }
+
+    /* Show mobile-only elements */
+    .mobile-only {
+        display: flex !important;
+    }
+}
+
+/* Landscape mobile optimization */
+@media (max-width: 768px) and (orientation: landscape) {
+    .notetaker-panel {
+        bottom: 70px;
+        right: 8px;
+        padding: 10px;
+    }
+
+    .notetaker-controls {
+        flex-direction: row;
+    }
+
+    .local-video-pip {
+        width: 80px;
+        height: 110px;
+        bottom: 70px;
+        right: 8px;
+    }
+
+    .transcript-panel {
+        width: 320px;
+        max-width: 320px;
+        border-radius: 16px 0 0 16px;
+    }
+}
+
+/* Touch-friendly improvements */
+@media (hover: none) and (pointer: coarse) {
+    /* Increase touch targets */
+    .control-btn {
+        min-width: 54px;
+        min-height: 54px;
+    }
+
+    .notetaker-btn {
+        min-height: 44px;
+    }
+
+    .reaction-emoji {
+        min-width: 50px;
+        min-height: 50px;
+    }
+
+    /* Remove hover effects on touch devices */
+    .control-btn:hover,
+    .notetaker-btn:hover,
+    .reaction-emoji:hover {
+        transform: none;
+    }
+
+    /* Add active states for touch feedback */
+    .control-btn:active {
+        transform: scale(0.95);
+        opacity: 0.8;
+    }
+
+    .notetaker-btn:active {
+        transform: scale(0.95);
+        opacity: 0.9;
+    }
+
+    .reaction-emoji:active {
+        transform: scale(1.1);
+    }
+}
+
+/* Very small screens (iPhone SE, etc) */
+@media (max-width: 375px) {
+    .notetaker-panel {
+        padding: 10px;
+    }
+
+    .notetaker-btn {
+        font-size: 11px;
+        padding: 6px;
+    }
+
+    .notetaker-btn span {
+        display: none;
+    }
+
+    .reactions-grid {
+        grid-template-columns: repeat(4, 1fr);
+        gap: 6px;
+    }
+
+    .reaction-emoji {
+        width: 45px;
+        height: 45px;
+        font-size: 22px;
+    }
+
+    .control-btn {
+        min-width: 48px;
+        padding: 8px 6px;
+    }
+
+    .bottom-controls {
+        padding: 10px 6px;
+        gap: 6px;
+    }
+}
+
+/* Recording button active state */
+.control-btn.recording {
+    background: rgba(239, 68, 68, 0.2) !important;
+    border-color: #ef4444 !important;
+    animation: recordingPulse 2s ease infinite;
+}
+
+@keyframes recordingPulse {
+    0%, 100% {
+        box-shadow: 0 0 0 0 rgba(239, 68, 68, 0.7);
+    }
+    50% {
+        box-shadow: 0 0 0 10px rgba(239, 68, 68, 0);
+    }
+}
+
+/* Button states - enhanced visibility */
+.control-btn[data-active="false"] {
+    background: rgba(239, 68, 68, 0.15);
+    border-color: rgba(239, 68, 68, 0.3);
+}
+
+.control-btn[data-active="false"]:hover {
+    background: rgba(239, 68, 68, 0.25);
+}
+
+.control-btn[data-active="true"] {
+    background: rgba(16, 185, 129, 0.15);
+    border-color: rgba(16, 185, 129, 0.3);
+}
+
+.control-btn[data-active="true"]:hover {
+    background: rgba(16, 185, 129, 0.25);
+}

@@ -173,6 +173,7 @@ class Professional1on1Call {
         this.dom.closePollBtn?.addEventListener('click', () => this.hidePollCreator());
         this.dom.createPollBtn?.addEventListener('click', () => this.createPoll());
         document.getElementById('addPollOption')?.addEventListener('click', () => this.addPollOption());
+        document.getElementById('cancelPollBtn')?.addEventListener('click', () => this.hidePollCreator());
 
         // Whiteboard
         this.dom.closeWhiteboardBtn.addEventListener('click', () => this.toggleWhiteboard());
@@ -240,22 +241,33 @@ class Professional1on1Call {
 
         try {
             // Get local media
-            const stream = await navigator.mediaDevices.getUserMedia({
-                video: true,
-                audio: true
+            this.localStream = await navigator.mediaDevices.getUserMedia({
+                video: {
+                    width: { ideal: 1280 },
+                    height: { ideal: 720 },
+                    facingMode: 'user'
+                },
+                audio: {
+                    echoCancellation: true,
+                    noiseSuppression: true,
+                    autoGainControl: true
+                }
             });
 
             // Display local video
-            this.dom.localVideo.srcObject = stream;
-            this.dom.localVideo.play();
+            this.dom.localVideo.srcObject = this.localStream;
+            await this.dom.localVideo.play();
 
             console.log('[WEBRTC] ✅ Local media started');
+            console.log('[WEBRTC] Audio tracks:', this.localStream.getAudioTracks().length);
+            console.log('[WEBRTC] Video tracks:', this.localStream.getVideoTracks().length);
 
             // Show placeholder for remote
             this.dom.remotePlaceholder.style.display = 'flex';
 
-            // You can add your own WebRTC signaling here
-            // For now, just show that camera/mic work
+            // Mark buttons as active
+            this.dom.micBtn.dataset.active = 'true';
+            this.dom.cameraBtn.dataset.active = 'true';
 
         } catch (error) {
             console.error('[WEBRTC] ❌ Failed:', error);
@@ -567,38 +579,64 @@ class Professional1on1Call {
     async toggleMic() {
         try {
             if (this.hmsActions && this.localPeer) {
-                const isEnabled = await this.hmsActions.setLocalAudioEnabled(!this.localPeer.audioEnabled);
-                this.dom.micBtn.dataset.active = isEnabled ? 'true' : 'false';
+                const newState = !this.localPeer.audioEnabled;
+                await this.hmsActions.setLocalAudioEnabled(newState);
+                this.updateButtonState(this.dom.micBtn, newState);
+                console.log('[MIC] HMS:', newState ? 'ON' : 'OFF');
             } else if (this.localStream) {
                 // Fallback WebRTC mode
                 const audioTracks = this.localStream.getAudioTracks();
                 if (audioTracks.length > 0) {
-                    audioTracks[0].enabled = !audioTracks[0].enabled;
-                    this.dom.micBtn.dataset.active = audioTracks[0].enabled ? 'true' : 'false';
-                    console.log('[MIC]', audioTracks[0].enabled ? 'ON' : 'OFF');
+                    const newState = !audioTracks[0].enabled;
+                    audioTracks[0].enabled = newState;
+                    this.updateButtonState(this.dom.micBtn, newState);
+                    console.log('[MIC] WebRTC:', newState ? 'ON' : 'OFF');
+                } else {
+                    console.error('[MIC] No audio tracks available');
                 }
+            } else {
+                console.error('[MIC] No stream available');
             }
         } catch (error) {
             console.error('[MIC] Error:', error);
+            alert('Microphone error: ' + error.message);
         }
     }
 
     async toggleCamera() {
         try {
             if (this.hmsActions && this.localPeer) {
-                const isEnabled = await this.hmsActions.setLocalVideoEnabled(!this.localPeer.videoEnabled);
-                this.dom.cameraBtn.dataset.active = isEnabled ? 'true' : 'false';
+                const newState = !this.localPeer.videoEnabled;
+                await this.hmsActions.setLocalVideoEnabled(newState);
+                this.updateButtonState(this.dom.cameraBtn, newState);
+                console.log('[CAMERA] HMS:', newState ? 'ON' : 'OFF');
             } else if (this.localStream) {
                 // Fallback WebRTC mode
                 const videoTracks = this.localStream.getVideoTracks();
                 if (videoTracks.length > 0) {
-                    videoTracks[0].enabled = !videoTracks[0].enabled;
-                    this.dom.cameraBtn.dataset.active = videoTracks[0].enabled ? 'true' : 'false';
-                    console.log('[CAMERA]', videoTracks[0].enabled ? 'ON' : 'OFF');
+                    const newState = !videoTracks[0].enabled;
+                    videoTracks[0].enabled = newState;
+                    this.updateButtonState(this.dom.cameraBtn, newState);
+                    console.log('[CAMERA] WebRTC:', newState ? 'ON' : 'OFF');
+                } else {
+                    console.error('[CAMERA] No video tracks available');
                 }
+            } else {
+                console.error('[CAMERA] No stream available');
             }
         } catch (error) {
             console.error('[CAMERA] Error:', error);
+            alert('Camera error: ' + error.message);
+        }
+    }
+
+    updateButtonState(button, isActive) {
+        button.dataset.active = isActive ? 'true' : 'false';
+        const iconOn = button.querySelector('.icon-on');
+        const iconOff = button.querySelector('.icon-off');
+        if (iconOn && iconOff) {
+            iconOn.style.display = isActive ? 'block' : 'none';
+            iconOff.style.display = isActive ? 'none' : 'block';
         }
     }
 
@@ -837,29 +875,75 @@ class Professional1on1Call {
 
     async toggleRecording() {
         try {
-            if (this.hmsActions?.startRTMPOrRecording) {
-                if (this.dom.recordingIndicator.style.display === 'none') {
-                    await this.hmsActions.startRTMPOrRecording({record: true});
+            const isRecording = this.dom.recordingIndicator.style.display === 'flex';
+
+            if (this.hmsActions) {
+                if (!isRecording) {
+                    // Start recording with 100ms
+                    console.log('[RECORDING] Starting 100ms recording...');
+
+                    const recordingConfig = {
+                        meetingURL: window.location.href,
+                        rtmpURLs: [],
+                        record: true
+                    };
+
+                    await this.hmsActions.startRTMPOrRecording(recordingConfig);
                     this.dom.recordingIndicator.style.display = 'flex';
-                    console.log('[RECORDING] Started');
+                    this.dom.recordBtn.classList.add('recording');
+                    console.log('[RECORDING] ✅ Started successfully');
                 } else {
+                    // Stop recording
+                    console.log('[RECORDING] Stopping recording...');
                     await this.hmsActions.stopRTMPAndRecording();
                     this.dom.recordingIndicator.style.display = 'none';
-                    console.log('[RECORDING] Stopped');
+                    this.dom.recordBtn.classList.remove('recording');
+                    console.log('[RECORDING] ✅ Stopped successfully');
                 }
             } else {
-                // Fallback mode - toggle recording indicator
-                if (this.dom.recordingIndicator.style.display === 'none' || !this.dom.recordingIndicator.style.display) {
-                    this.dom.recordingIndicator.style.display = 'flex';
-                    console.log('[RECORDING] Started (demo mode)');
-                    alert('Recording started (demo mode). In production, this will use 100ms recording.');
+                // Fallback mode with MediaRecorder API
+                if (!isRecording) {
+                    if (this.localStream) {
+                        this.mediaRecorder = new MediaRecorder(this.localStream, {
+                            mimeType: 'video/webm;codecs=vp8,opus'
+                        });
+
+                        this.recordedChunks = [];
+
+                        this.mediaRecorder.ondataavailable = (event) => {
+                            if (event.data.size > 0) {
+                                this.recordedChunks.push(event.data);
+                            }
+                        };
+
+                        this.mediaRecorder.onstop = () => {
+                            const blob = new Blob(this.recordedChunks, { type: 'video/webm' });
+                            const url = URL.createObjectURL(blob);
+                            const a = document.createElement('a');
+                            a.href = url;
+                            a.download = `recording-${Date.now()}.webm`;
+                            a.click();
+                            console.log('[RECORDING] ✅ Saved locally');
+                        };
+
+                        this.mediaRecorder.start(1000);
+                        this.dom.recordingIndicator.style.display = 'flex';
+                        this.dom.recordBtn.classList.add('recording');
+                        console.log('[RECORDING] ✅ Started (local recording)');
+                    } else {
+                        alert('No media stream available for recording');
+                    }
                 } else {
-                    this.dom.recordingIndicator.style.display = 'none';
-                    console.log('[RECORDING] Stopped (demo mode)');
+                    if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
+                        this.mediaRecorder.stop();
+                        this.dom.recordingIndicator.style.display = 'none';
+                        this.dom.recordBtn.classList.remove('recording');
+                        console.log('[RECORDING] ✅ Stopped (local recording)');
+                    }
                 }
             }
         } catch (error) {
-            console.error('[RECORDING] Error:', error);
+            console.error('[RECORDING] ❌ Error:', error);
             alert('Recording error: ' + error.message);
         }
     }
@@ -990,7 +1074,7 @@ class Professional1on1Call {
     }
 
     // Notetaker Methods
-    startNotetaker() {
+    async startNotetaker() {
         console.log('[NOTETAKER] Starting...');
 
         const statusEl = document.getElementById('notetakerStatus');
@@ -1019,11 +1103,34 @@ class Professional1on1Call {
             }
         }, 1000);
 
-        // Start recording if available
-        if (this.hmsActions?.startRTMPOrRecording) {
-            this.hmsActions.startRTMPOrRecording({record: true}).catch(err => {
-                console.warn('[NOTETAKER] HMS recording failed:', err);
-            });
+        // Start recording with 100ms API
+        try {
+            if (this.hmsActions?.startRTMPOrRecording) {
+                const recordingConfig = {
+                    meetingURL: window.location.href,
+                    rtmpURLs: [],
+                    record: true
+                };
+                await this.hmsActions.startRTMPOrRecording(recordingConfig);
+                console.log('[NOTETAKER] ✅ 100ms recording started');
+            } else if (this.localStream) {
+                // Fallback to MediaRecorder
+                this.notetakerRecorder = new MediaRecorder(this.localStream, {
+                    mimeType: 'video/webm;codecs=vp8,opus'
+                });
+                this.notetakerChunks = [];
+
+                this.notetakerRecorder.ondataavailable = (event) => {
+                    if (event.data.size > 0) {
+                        this.notetakerChunks.push(event.data);
+                    }
+                };
+
+                this.notetakerRecorder.start(1000);
+                console.log('[NOTETAKER] ✅ Local recording started');
+            }
+        } catch (error) {
+            console.warn('[NOTETAKER] Recording failed:', error);
         }
     }
 
@@ -1045,6 +1152,12 @@ class Professional1on1Call {
                 </svg>
                 <span data-i18n="resume">Resume</span>
             `;
+
+            // Pause local recording if available
+            if (this.notetakerRecorder?.state === 'recording') {
+                this.notetakerRecorder.pause();
+                console.log('[NOTETAKER] ⏸ Paused');
+            }
         } else {
             this.notetakerPaused = false;
             const pauseDuration = Date.now() - this.notetakerPausedAt;
@@ -1058,10 +1171,16 @@ class Professional1on1Call {
                 </svg>
                 <span data-i18n="pause">Pause</span>
             `;
+
+            // Resume local recording if available
+            if (this.notetakerRecorder?.state === 'paused') {
+                this.notetakerRecorder.resume();
+                console.log('[NOTETAKER] ▶️ Resumed');
+            }
         }
     }
 
-    stopNotetaker() {
+    async stopNotetaker() {
         console.log('[NOTETAKER] Stopping...');
 
         if (this.notetakerInterval) {
@@ -1087,14 +1206,28 @@ class Professional1on1Call {
         this.notetakerPaused = false;
         this.notetakerStartTime = null;
 
-        // Stop recording if available
-        if (this.hmsActions?.stopRTMPAndRecording) {
-            this.hmsActions.stopRTMPAndRecording().catch(err => {
-                console.warn('[NOTETAKER] HMS stop recording failed:', err);
-            });
+        // Stop recording
+        try {
+            if (this.hmsActions?.stopRTMPAndRecording) {
+                await this.hmsActions.stopRTMPAndRecording();
+                console.log('[NOTETAKER] ✅ 100ms recording stopped');
+            } else if (this.notetakerRecorder?.state === 'recording' || this.notetakerRecorder?.state === 'paused') {
+                this.notetakerRecorder.onstop = () => {
+                    const blob = new Blob(this.notetakerChunks, { type: 'video/webm' });
+                    const url = URL.createObjectURL(blob);
+                    const a = document.createElement('a');
+                    a.href = url;
+                    a.download = `notetaker-${Date.now()}.webm`;
+                    a.click();
+                    console.log('[NOTETAKER] ✅ Recording saved');
+                };
+                this.notetakerRecorder.stop();
+            }
+        } catch (error) {
+            console.warn('[NOTETAKER] Stop recording failed:', error);
         }
 
-        alert('Notetaker stopped. Notes will be available in your dashboard.');
+        alert('Notetaker stopped. Recording saved.');
     }
 }
 
