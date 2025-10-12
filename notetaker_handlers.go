@@ -13,23 +13,9 @@ import (
 	"github.com/google/uuid"
 )
 
-// OpenAI API structures
-type OpenAIRequest struct {
-	Model    string              `json:"model"`
-	Messages []OpenAIMessage     `json:"messages"`
-	MaxTokens int                `json:"max_tokens,omitempty"`
-}
-
-type OpenAIMessage struct {
-	Role    string `json:"role"`
-	Content string `json:"content"`
-}
-
-type OpenAIResponse struct {
-	Choices []struct {
-		Message OpenAIMessage `json:"message"`
-	} `json:"choices"`
-}
+// OpenAI API structures are now defined in ai_analyzer.go
+// OpenAIRequest includes Temperature and ResponseFormat
+// MaxTokens is removed - use Temperature instead
 
 // Notetaker API request/response structures
 type AnalyzeRequest struct {
@@ -482,7 +468,8 @@ func callOpenAIForAnalysis(prompt, text string) (map[string]interface{}, error) 
 			{Role: "system", Content: "You are an AI assistant analyzing conversation transcripts. Respond only with valid JSON."},
 			{Role: "user", Content: prompt},
 		},
-		MaxTokens: 1000,
+		Temperature: 0.7,
+		ResponseFormat: map[string]string{"type": "json_object"},
 	}
 
 	jsonBody, _ := json.Marshal(reqBody)
@@ -533,7 +520,8 @@ func callOpenAIForInsights(prompt, transcriptText string) (map[string]interface{
 			{Role: "system", Content: "You are an AI assistant providing insights on conversation transcripts. Respond only with valid JSON."},
 			{Role: "user", Content: prompt},
 		},
-		MaxTokens: 2000,
+		Temperature: 0.7,
+		ResponseFormat: map[string]string{"type": "json_object"},
 	}
 
 	jsonBody, _ := json.Marshal(reqBody)

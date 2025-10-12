@@ -1,6 +1,7 @@
 package main
 
 import (
+	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
@@ -96,7 +97,7 @@ func handleCreateProfessionalRoom(w http.ResponseWriter, r *http.Request) {
 
 	// Create HTTP request to 100ms API
 	apiReq, err := http.NewRequest("POST", "https://api.100ms.live/v2/rooms",
-		io.NopCloser(string(roomJSON)))
+		bytes.NewBuffer(roomJSON))
 	if err != nil {
 		log.Printf("[PROFESSIONAL] Failed to create room request: %v", err)
 		http.Error(w, "Failed to create room", http.StatusInternalServerError)
@@ -343,7 +344,7 @@ func verifyWebhookSignature(r *http.Request, signature string) bool {
 	}
 
 	// Restore body for further reading
-	r.Body = io.NopCloser(string(body))
+	r.Body = io.NopCloser(bytes.NewBuffer(body))
 
 	// Calculate HMAC
 	mac := hmac.New(sha256.New, []byte(HMS_APP_SECRET))
