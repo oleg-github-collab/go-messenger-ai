@@ -107,10 +107,20 @@ class Professional1on1Call {
         try {
             console.log('[100MS] Initializing...');
 
+            // Wait for SDK to load (max 5 seconds)
+            for (let i = 0; i < 50; i++) {
+                if (typeof HMSReactiveStore !== 'undefined') {
+                    break;
+                }
+                await new Promise(resolve => setTimeout(resolve, 100));
+            }
+
             // Check if SDK loaded
             if (typeof HMSReactiveStore === 'undefined') {
-                throw new Error('100ms SDK not loaded');
+                throw new Error('100ms SDK not loaded - please refresh the page');
             }
+
+            console.log('[100MS] SDK loaded successfully');
 
             // Check room info
             if (!this.roomInfo || !this.roomInfo.hms_room_id) {
@@ -139,19 +149,22 @@ class Professional1on1Call {
 
             console.log('[100MS] Store initialized');
 
-            // Subscribe to peers
-            this.hmsStore.subscribe((peers) => {
-                console.log('[100MS] Peers update:', peers);
-                this.updatePeers(peers);
-            }, selectPeers);
+            // Subscribe to all state changes and filter for peers
+            this.hmsStore.subscribe((state) => {
+                if (!state) return;
 
-            // Subscribe to local peer
-            this.hmsStore.subscribe((peer) => {
-                if (peer) {
-                    console.log('[100MS] Local peer:', peer);
-                    this.updateLocalPeer(peer);
+                // Get all peers from state
+                const peers = Object.values(state.peers || {});
+                console.log('[100MS] State update, peers:', peers.length);
+
+                this.updatePeers(peers);
+
+                // Update local peer
+                const localPeer = peers.find(p => p.isLocal);
+                if (localPeer) {
+                    this.updateLocalPeer(localPeer);
                 }
-            }, selectLocalPeer);
+            });
 
             // Join room
             await this.hmsActions.join({
