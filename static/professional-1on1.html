@@ -518,15 +518,18 @@
         </div>
     </div>
 
-    <!-- 100ms SDK (Local CJS Bundle) -->
-    <script src="/static/js/hms-sdk-bundle.js"></script>
-    <script>
-        // Verify SDK loaded
-        if (window.HMSReactiveStore) {
-            console.log('[SDK] ✅ 100ms SDK loaded successfully');
-        } else {
-            console.error('[SDK] ❌ Failed to load 100ms SDK');
+    <!-- 100ms SDK via ES Module with importmap -->
+    <script type="importmap">
+    {
+        "imports": {
+            "@100mslive/hms-video-store": "https://esm.sh/@100mslive/hms-video-store@0.12.39"
         }
+    }
+    </script>
+    <script type="module">
+        import { HMSReactiveStore } from '@100mslive/hms-video-store';
+        window.HMSReactiveStore = HMSReactiveStore;
+        console.log('[SDK] ✅ 100ms SDK loaded successfully via importmap');
     </script>
 
     <!-- Translations -->
