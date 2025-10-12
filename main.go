@@ -2327,6 +2327,9 @@ func main() {
 	// Professional Mode (100ms) endpoints
 	registerProfessionalModeRoutes()
 
+	// Recording Storage endpoints
+	registerRecordingRoutes()
+
 	// Initialize start time for health check
 	startTime = time.Now()
 

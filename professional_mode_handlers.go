@@ -202,8 +202,8 @@ func handleAnalyzeTranscript(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("[AI ANALYZER] Analyzing: [%s] %s", req.Speaker, req.Text)
 
-	// Call OpenAI or your AI service
-	analysis, err := analyzeStatementWithAI(req)
+	// Call GPT-4o analyzer
+	analysis, err := analyzeStatementWithGPT4o(req)
 	if err != nil {
 		log.Printf("[AI ANALYZER] ❌ Failed: %v", err)
 		http.Error(w, "AI analysis failed", http.StatusInternalServerError)
