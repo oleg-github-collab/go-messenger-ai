@@ -40,6 +40,11 @@ class Professional1on1Call {
         // Setup events
         this.setupEvents();
 
+        // Initialize AI Transcription
+        if (window.AITranscription) {
+            this.aiTranscription = new AITranscription(this);
+        }
+
         // Initialize 100ms
         await this.init100ms();
 
@@ -179,10 +184,22 @@ class Professional1on1Call {
         this.dom.closeWhiteboardBtn.addEventListener('click', () => this.toggleWhiteboard());
         this.setupWhiteboard();
 
+        // AI Transcription
+        document.getElementById('toggleAITranscriptBtn')?.addEventListener('click', () => this.toggleAITranscription());
+
         // Notetaker
         document.getElementById('startNotetakerBtn')?.addEventListener('click', () => this.startNotetaker());
         document.getElementById('pauseNotetakerBtn')?.addEventListener('click', () => this.pauseNotetaker());
         document.getElementById('stopNotetakerBtn')?.addEventListener('click', () => this.stopNotetaker());
+
+        // Custom Alert System
+        document.getElementById('alertClose')?.addEventListener('click', () => this.hideCustomAlert());
+        document.getElementById('confirmCancel')?.addEventListener('click', () => this.hideCustomConfirm(false));
+        document.getElementById('confirmOk')?.addEventListener('click', () => this.hideCustomConfirm(true));
+        document.getElementById('confirmBackdrop')?.addEventListener('click', () => this.hideCustomConfirm(false));
+
+        // Poll Results
+        document.getElementById('closePollResultsBtn')?.addEventListener('click', () => this.hidePollResults());
     }
 
     async init100ms() {
@@ -271,7 +288,7 @@ class Professional1on1Call {
 
         } catch (error) {
             console.error('[WEBRTC] ❌ Failed:', error);
-            alert('Could not access camera/microphone: ' + error.message);
+            this.showCustomAlert("Could not access camera/microphone: " + error.message, "error");
         }
     }
 
@@ -573,7 +590,7 @@ class Professional1on1Call {
 
     copyRecommendation(text) {
         navigator.clipboard.writeText(text);
-        alert('Copied to clipboard!');
+        this.showCustomAlert("Copied to clipboard!", "success");
     }
 
     async toggleMic() {
@@ -599,7 +616,7 @@ class Professional1on1Call {
             }
         } catch (error) {
             console.error('[MIC] Error:', error);
-            alert('Microphone error: ' + error.message);
+            this.showCustomAlert("Microphone error: " + error.message, "error");
         }
     }
 
@@ -626,7 +643,7 @@ class Professional1on1Call {
             }
         } catch (error) {
             console.error('[CAMERA] Error:', error);
-            alert('Camera error: ' + error.message);
+            this.showCustomAlert("Camera error: " + error.message, "error");
         }
     }
 
@@ -653,7 +670,7 @@ class Professional1on1Call {
                         audio: false
                     });
                     console.log('[SCREEN SHARE] Started');
-                    alert('Screen sharing started (demo mode)');
+                    this.showCustomAlert("Screen sharing started (demo mode)", "info");
 
                     this.screenStream.getVideoTracks()[0].addEventListener('ended', () => {
                         this.screenStream = null;
@@ -687,8 +704,47 @@ class Professional1on1Call {
         const message = this.dom.chatInput.value.trim();
         if (!message) return;
 
-        await this.hmsActions.sendBroadcastMessage(message);
-        this.dom.chatInput.value = '';
+        try {
+            if (this.hmsActions?.sendBroadcastMessage) {
+                await this.hmsActions.sendBroadcastMessage(message);
+            } else {
+                // Fallback - display locally
+                this.addChatMessage('You', message, true);
+            }
+            this.dom.chatInput.value = '';
+        } catch (error) {
+            console.error('[CHAT] Send failed:', error);
+            this.showCustomAlert('Failed to send message', 'error');
+        }
+    }
+
+    addChatMessage(sender, message, isMe) {
+        const msgDiv = document.createElement('div');
+        msgDiv.className = `chat-message ${isMe ? 'me' : 'other'}`;
+
+        const time = new Date().toLocaleTimeString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit'
+        });
+
+        msgDiv.innerHTML = `
+            <div class="message-header">
+                <span class="sender-name">${isMe ? 'You' : sender}</span>
+                <span class="message-time">${time}</span>
+            </div>
+            <div class="message-text">${this.escapeHtml(message)}</div>
+        `;
+
+        this.dom.chatMessages.appendChild(msgDiv);
+        this.dom.chatMessages.scrollTop = this.dom.chatMessages.scrollHeight;
+
+        // Store message
+        this.chatMessages.push({
+            sender,
+            message,
+            time: new Date(),
+            isMe
+        });
     }
 
     handleChatMessages(messages) {
@@ -819,6 +875,9 @@ class Professional1on1Call {
     setupWhiteboard() {
         const canvas = this.dom.whiteboardCanvas;
         this.whiteboardCtx = canvas.getContext('2d');
+        this.whiteboardCtx.lineCap = 'round';
+        this.whiteboardCtx.lineJoin = 'round';
+        this.whiteboardLineWidth = 3;
 
         // Tool buttons
         document.querySelectorAll('.tool-btn').forEach(btn => {
@@ -827,23 +886,61 @@ class Professional1on1Call {
                     this.currentTool = btn.dataset.tool;
                     document.querySelectorAll('.tool-btn').forEach(b => b.classList.remove('active'));
                     btn.classList.add('active');
+
+                    // Set line width based on tool
+                    if (btn.dataset.tool === 'eraser') {
+                        this.whiteboardLineWidth = 20;
+                    } else {
+                        this.whiteboardLineWidth = 3;
+                    }
                 }
             });
         });
 
-        document.getElementById('colorPicker').addEventListener('change', (e) => {
+        document.getElementById('colorPicker')?.addEventListener('change', (e) => {
             this.currentColor = e.target.value;
         });
 
-        document.getElementById('clearWbBtn').addEventListener('click', () => {
-            this.whiteboardCtx.clearRect(0, 0, canvas.width, canvas.height);
+        document.getElementById('clearWbBtn')?.addEventListener('click', async () => {
+            const confirmed = await this.showCustomConfirm('Clear entire whiteboard?', 'Clear Whiteboard');
+            if (confirmed) {
+                this.whiteboardCtx.clearRect(0, 0, canvas.width, canvas.height);
+                this.showCustomAlert('Whiteboard cleared', 'success');
+            }
         });
 
-        // Drawing
+        // Drawing events - Mouse
         canvas.addEventListener('mousedown', (e) => this.startDrawing(e));
         canvas.addEventListener('mousemove', (e) => this.draw(e));
         canvas.addEventListener('mouseup', () => this.stopDrawing());
         canvas.addEventListener('mouseout', () => this.stopDrawing());
+
+        // Drawing events - Touch
+        canvas.addEventListener('touchstart', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const mouseEvent = new MouseEvent('mousedown', {
+                clientX: touch.clientX,
+                clientY: touch.clientY
+            });
+            canvas.dispatchEvent(mouseEvent);
+        });
+
+        canvas.addEventListener('touchmove', (e) => {
+            e.preventDefault();
+            const touch = e.touches[0];
+            const mouseEvent = new MouseEvent('mousemove', {
+                clientX: touch.clientX,
+                clientY: touch.clientY
+            });
+            canvas.dispatchEvent(mouseEvent);
+        });
+
+        canvas.addEventListener('touchend', (e) => {
+            e.preventDefault();
+            const mouseEvent = new MouseEvent('mouseup', {});
+            canvas.dispatchEvent(mouseEvent);
+        });
     }
 
     resizeWhiteboardCanvas() {
@@ -931,7 +1028,7 @@ class Professional1on1Call {
                         this.dom.recordBtn.classList.add('recording');
                         console.log('[RECORDING] ✅ Started (local recording)');
                     } else {
-                        alert('No media stream available for recording');
+                        this.showCustomAlert("No media stream available for recording", "error");
                     }
                 } else {
                     if (this.mediaRecorder && this.mediaRecorder.state === 'recording') {
@@ -944,7 +1041,7 @@ class Professional1on1Call {
             }
         } catch (error) {
             console.error('[RECORDING] ❌ Error:', error);
-            alert('Recording error: ' + error.message);
+            this.showCustomAlert("Recording error: " + error.message, "error");
         }
     }
 
@@ -1010,7 +1107,7 @@ class Professional1on1Call {
         };
 
         this.bookmarks.push(bookmark);
-        alert(`Bookmark added at ${bookmark.timeInCall}`);
+        this.showCustomAlert(`Bookmark added at ${bookmark.timeInCall}`, "success");
     }
 
     async exportTranscript() {
@@ -1061,7 +1158,8 @@ class Professional1on1Call {
     }
 
     async endCall() {
-        if (!confirm('End the call?')) return;
+        const confirmed = await this.showCustomConfirm('Are you sure you want to end the call?', 'End Call');
+        if (!confirmed) return;
 
         if (this.timerInterval) clearInterval(this.timerInterval);
         if (this.notetakerInterval) clearInterval(this.notetakerInterval);
@@ -1227,7 +1325,235 @@ class Professional1on1Call {
             console.warn('[NOTETAKER] Stop recording failed:', error);
         }
 
-        alert('Notetaker stopped. Recording saved.');
+        this.showCustomAlert('Notetaker stopped. Recording saved.', 'success');
+    }
+
+    // AI Transcription Toggle
+    toggleAITranscription() {
+        if (!this.aiTranscription) {
+            this.showCustomAlert('AI Transcription not available', 'error');
+            return;
+        }
+
+        const btn = document.getElementById('toggleAITranscriptBtn');
+
+        if (this.aiTranscription.isRecording) {
+            this.aiTranscription.stopTranscription();
+            btn.classList.remove('active');
+            btn.style.color = 'rgba(255, 255, 255, 0.6)';
+        } else {
+            this.aiTranscription.startTranscription();
+            btn.classList.add('active');
+            btn.style.color = '#4facfe';
+        }
+    }
+
+    // Custom Alert System
+    showCustomAlert(message, type = 'info') {
+        const alertEl = document.getElementById('customAlert');
+        const iconEl = document.getElementById('alertIcon');
+        const titleEl = document.getElementById('alertTitle');
+        const messageEl = document.getElementById('alertMessage');
+
+        // Set icon and title based on type
+        const configs = {
+            success: { icon: '✅', title: 'Success', class: 'success' },
+            error: { icon: '❌', title: 'Error', class: 'error' },
+            warning: { icon: '⚠️', title: 'Warning', class: 'warning' },
+            info: { icon: 'ℹ️', title: 'Info', class: 'info' }
+        };
+
+        const config = configs[type] || configs.info;
+
+        iconEl.textContent = config.icon;
+        titleEl.textContent = config.title;
+        messageEl.textContent = message;
+
+        alertEl.className = `custom-alert glassmorphic ${config.class}`;
+        alertEl.style.display = 'flex';
+
+        // Auto-hide after 5 seconds
+        if (this.alertTimeout) clearTimeout(this.alertTimeout);
+        this.alertTimeout = setTimeout(() => this.hideCustomAlert(), 5000);
+    }
+
+    hideCustomAlert() {
+        const alertEl = document.getElementById('customAlert');
+        alertEl.style.display = 'none';
+        if (this.alertTimeout) clearTimeout(this.alertTimeout);
+    }
+
+    async showCustomConfirm(message, title = 'Confirm Action') {
+        return new Promise((resolve) => {
+            const backdropEl = document.getElementById('confirmBackdrop');
+            const confirmEl = document.getElementById('customConfirm');
+            const titleEl = document.getElementById('confirmTitle');
+            const messageEl = document.getElementById('confirmMessage');
+
+            titleEl.textContent = title;
+            messageEl.textContent = message;
+
+            backdropEl.style.display = 'block';
+            confirmEl.style.display = 'block';
+
+            this.confirmResolver = resolve;
+        });
+    }
+
+    hideCustomConfirm(result) {
+        const backdropEl = document.getElementById('confirmBackdrop');
+        const confirmEl = document.getElementById('customConfirm');
+
+        backdropEl.style.display = 'none';
+        confirmEl.style.display = 'none';
+
+        if (this.confirmResolver) {
+            this.confirmResolver(result);
+            this.confirmResolver = null;
+        }
+    }
+
+    // Poll System with Results
+    async createPoll() {
+        const question = document.getElementById('pollQuestion').value;
+        const options = Array.from(document.querySelectorAll('.poll-options input'))
+            .map(input => input.value)
+            .filter(v => v.trim());
+
+        if (!question || options.length < 2) {
+            this.showCustomAlert('Please enter a question and at least 2 options', 'warning');
+            return;
+        }
+
+        try {
+            // Store poll locally
+            const poll = {
+                id: Date.now(),
+                question,
+                options: options.map(text => ({
+                    text,
+                    votes: 0,
+                    voters: []
+                })),
+                totalVotes: 0,
+                createdAt: new Date()
+            };
+
+            if (!this.polls) this.polls = [];
+            this.polls.push(poll);
+
+            // Use 100ms polls API if available
+            if (this.hmsActions?.interactivityCenter) {
+                await this.hmsActions.interactivityCenter.startPoll({
+                    question,
+                    options: options.map(text => ({text})),
+                    type: 'single-choice'
+                });
+            }
+
+            this.hidePollCreator();
+            this.showCustomAlert('Poll created successfully!', 'success');
+            this.displayActivePoll(poll);
+
+            // Clear inputs
+            document.getElementById('pollQuestion').value = '';
+            document.querySelectorAll('.poll-options input').forEach(input => input.value = '');
+        } catch (error) {
+            console.error('[POLL] Error:', error);
+            this.showCustomAlert('Failed to create poll: ' + error.message, 'error');
+        }
+    }
+
+    displayActivePoll(poll) {
+        // Show poll in transcript area
+        const pollEl = document.createElement('div');
+        pollEl.className = 'active-poll glassmorphic';
+        pollEl.innerHTML = `
+            <div class="poll-question">📊 ${poll.question}</div>
+            <div class="poll-options-voting">
+                ${poll.options.map((option, index) => `
+                    <button class="poll-vote-btn" onclick="app.votePoll(${poll.id}, ${index})">
+                        ${option.text}
+                    </button>
+                `).join('')}
+            </div>
+            <button class="poll-show-results" onclick="app.showPollResults(${poll.id})">
+                View Results
+            </button>
+        `;
+
+        this.dom.transcriptList.appendChild(pollEl);
+        this.dom.transcriptList.scrollTop = this.dom.transcriptList.scrollHeight;
+    }
+
+    votePoll(pollId, optionIndex) {
+        const poll = this.polls.find(p => p.id === pollId);
+        if (!poll) return;
+
+        // Check if already voted
+        const userId = 'user_local';
+        const alreadyVoted = poll.options.some(opt => opt.voters.includes(userId));
+
+        if (alreadyVoted) {
+            this.showCustomAlert('You have already voted in this poll', 'warning');
+            return;
+        }
+
+        // Add vote
+        poll.options[optionIndex].votes++;
+        poll.options[optionIndex].voters.push(userId);
+        poll.totalVotes++;
+
+        this.showCustomAlert('Vote recorded!', 'success');
+        this.showPollResults(pollId);
+    }
+
+    showPollResults(pollId) {
+        const poll = this.polls.find(p => p.id === pollId);
+        if (!poll) return;
+
+        const modalEl = document.getElementById('pollResultsModal');
+        const bodyEl = document.getElementById('pollResultsBody');
+
+        const maxVotes = Math.max(...poll.options.map(o => o.votes), 1);
+
+        bodyEl.innerHTML = `
+            <div class="poll-question" style="margin-bottom: 24px; font-size: 18px; font-weight: 700;">
+                ${poll.question}
+            </div>
+            ${poll.options.map(option => {
+                const percentage = poll.totalVotes > 0 ? (option.votes / poll.totalVotes * 100).toFixed(1) : 0;
+                return `
+                    <div class="poll-option-result">
+                        <div class="poll-option-header">
+                            <div class="poll-option-text">${option.text}</div>
+                            <div class="poll-option-votes">${option.votes} vote${option.votes !== 1 ? 's' : ''}</div>
+                        </div>
+                        <div class="poll-option-bar">
+                            <div class="poll-option-fill" style="width: ${percentage}%"></div>
+                        </div>
+                        <div class="poll-option-percentage">${percentage}%</div>
+                    </div>
+                `;
+            }).join('')}
+            <div class="poll-total-votes">
+                Total votes: ${poll.totalVotes}
+            </div>
+        `;
+
+        this.dom.aiModalBackdrop.style.display = 'block';
+        modalEl.style.display = 'block';
+    }
+
+    hidePollResults() {
+        const modalEl = document.getElementById('pollResultsModal');
+        modalEl.style.display = 'none';
+
+        // Only hide backdrop if other modals are closed
+        if (this.dom.aiRecommendationModal.style.display === 'none' &&
+            this.dom.pollModal.style.display === 'none') {
+            this.dom.aiModalBackdrop.style.display = 'none';
+        }
     }
 }
 
