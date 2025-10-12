@@ -1,7 +1,6 @@
 package main
 
 import (
-	"encoding/json"
 	"log"
 	"net/http"
 	"sync"
@@ -40,7 +39,7 @@ var (
 	transcriptRooms = make(map[string]*TranscriptRoom)
 	transcriptMu    sync.RWMutex
 
-	upgrader = websocket.Upgrader{
+	transcriptUpgrader = websocket.Upgrader{
 		CheckOrigin: func(r *http.Request) bool {
 			return true // Allow all origins in production
 		},
@@ -147,7 +146,7 @@ func handleTranscriptWebSocket(w http.ResponseWriter, r *http.Request) {
 	isHost := r.URL.Query().Get("host") == "true"
 
 	// Upgrade connection
-	conn, err := upgrader.Upgrade(w, r, nil)
+	conn, err := transcriptUpgrader.Upgrade(w, r, nil)
 	if err != nil {
 		log.Printf("[TRANSCRIPT WS] Upgrade error: %v", err)
 		return
