@@ -269,7 +269,7 @@ class Professional1on1Call {
 
     async init100ms() {
         try {
-            console.log('[VIDEO] Initializing...');
+            console.log('[VIDEO] Initializing 100ms...');
 
             // Check if 100ms SDK is loaded
             if (typeof HMSReactiveStore === 'undefined') {
@@ -278,13 +278,29 @@ class Professional1on1Call {
                 return;
             }
 
-            // Get credentials from URL or use demo
-            const urlParams = new URLSearchParams(window.location.search);
-            const roomId = urlParams.get('room') || await this.createRoom();
-            const userName = urlParams.get('name') || 'Host (Oleh)';
+            // Check if room info loaded (from loadRoomInfo)
+            if (!this.roomInfo || !this.roomInfo.hms_room_id) {
+                console.error('[VIDEO] No room info available');
+                await this.initFallbackWebRTC();
+                return;
+            }
 
-            // Get auth token from backend
-            const token = await this.getAuthToken(roomId, userName, 'host');
+            // Use room info from backend
+            const hmsRoomId = this.roomInfo.hms_room_id;
+            const userName = this.isHost ? 'Oleh' : `Guest-${Date.now().toString().slice(-4)}`;
+            const userId = this.isHost ? 'host-oleh' : `guest-${Date.now()}`;
+            const role = this.isHost ? 'host' : 'guest';
+
+            console.log('[VIDEO] Joining as:', role, userName);
+
+            // Get auth token from backend (will generate unique token for each guest)
+            const token = await this.getAuthToken(hmsRoomId, userId, role, userName);
+
+            if (!token) {
+                console.error('[VIDEO] Failed to get auth token');
+                await this.initFallbackWebRTC();
+                return;
+            }
 
             // Initialize HMS
             this.hmsManager = new HMSReactiveStore();
@@ -306,10 +322,12 @@ class Professional1on1Call {
                 }
             });
 
-            console.log('[100MS] ✅ Joined room:', roomId);
+            console.log('[100MS] ✅ Joined room as', role, ':', hmsRoomId);
 
-            // Enable transcription
-            await this.enableTranscription();
+            // Enable transcription (host only)
+            if (this.isHost) {
+                await this.enableTranscription();
+            }
 
         } catch (error) {
             console.error('[VIDEO] ❌ Failed:', error);
@@ -377,25 +395,32 @@ class Professional1on1Call {
         }
     }
 
-    async getAuthToken(roomId, userName, role) {
+    async getAuthToken(roomId, userId, role, userName) {
         try {
+            console.log('[TOKEN] Requesting token for:', {roomId, userId, role, userName});
+
             const response = await fetch('/api/professional/create-token', {
                 method: 'POST',
                 headers: {'Content-Type': 'application/json'},
                 credentials: 'include',
                 body: JSON.stringify({
                     room_id: roomId,
-                    user_id: `user_${Date.now()}`,
+                    user_id: userId,
                     role: role,
                     user_name: userName
                 })
             });
 
+            if (!response.ok) {
+                throw new Error(`Token request failed: ${response.status}`);
+            }
+
             const data = await response.json();
+            console.log('[TOKEN] ✅ Received token');
             return data.token;
         } catch (error) {
-            console.error('[TOKEN] Failed:', error);
-            throw error;
+            console.error('[TOKEN] ❌ Failed:', error);
+            return null;
         }
     }
 

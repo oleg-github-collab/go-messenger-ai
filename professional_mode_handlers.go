@@ -157,38 +157,47 @@ func handleCreateProfessionalRoom(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(roomResp)
 }
 
-// Create 100ms Auth Token Handler - HOST ONLY (Oleh)
+// Create 100ms Auth Token Handler - PUBLIC (guests can get tokens)
 func handleCreateProfessionalToken(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
 		return
 	}
 
-	// HOST AUTHENTICATION - Check if authenticated OR allow for now
-	cookie, err := r.Cookie("session")
-	authenticated := false
-	username := ""
-
-	if err == nil && cookie.Value != "" {
-		username, err = rdb.Get(ctx, "session:"+cookie.Value).Result()
-		if err == nil {
-			authenticated = true
-		}
-	}
-
-	// If authenticated but not Oleh, deny
-	if authenticated && username != "Oleh" {
-		log.Printf("[PROFESSIONAL] ❌ Unauthorized: Not host (user: %s)", username)
-		http.Error(w, "Unauthorized - Professional AI is host-only", http.StatusForbidden)
-		return
-	}
-
-	log.Printf("[PROFESSIONAL] ✅ Token creation allowed (user: %s, authenticated: %v)", username, authenticated)
-
 	var req CreateTokenRequest
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "Invalid request body", http.StatusBadRequest)
 		return
+	}
+
+	// Validate role
+	if req.Role != "host" && req.Role != "guest" {
+		http.Error(w, "Invalid role - must be 'host' or 'guest'", http.StatusBadRequest)
+		return
+	}
+
+	// If requesting host role, verify authentication
+	if req.Role == "host" {
+		cookie, err := r.Cookie("auth_token")
+		if err != nil {
+			log.Printf("[PROFESSIONAL] ❌ No auth_token for host role request")
+			http.Error(w, "Unauthorized - Host role requires authentication", http.StatusUnauthorized)
+			return
+		}
+
+		// Validate session
+		sessionKey := fmt.Sprintf("session:%s", cookie.Value)
+		userID, err := rdb.Get(ctx, sessionKey).Result()
+		if err != nil {
+			log.Printf("[PROFESSIONAL] ❌ Invalid session for host role")
+			http.Error(w, "Unauthorized - Invalid session", http.StatusUnauthorized)
+			return
+		}
+
+		log.Printf("[PROFESSIONAL] ✅ Host token request authorized (userID: %s)", userID)
+	} else {
+		// Guest tokens - no auth required
+		log.Printf("[PROFESSIONAL] ✅ Guest token request for: %s", req.UserName)
 	}
 
 	// Generate JWT token for 100ms
@@ -199,7 +208,7 @@ func handleCreateProfessionalToken(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	log.Printf("[PROFESSIONAL] ✅ Token generated for user: %s", req.UserName)
+	log.Printf("[PROFESSIONAL] ✅ Token generated for %s: %s", req.Role, req.UserName)
 
 	// Return token
 	w.Header().Set("Content-Type", "application/json")
