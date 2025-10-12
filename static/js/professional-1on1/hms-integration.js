@@ -14,36 +14,72 @@ class HMSVideoCall {
     }
 
     async initialize() {
-        console.log('[HMS] Initializing SDK...');
+        console.log('[HMS] 🔍 Initializing SDK...');
+        console.log('[HMS] 🔍 Current time:', new Date().toISOString());
 
         // Wait for SDK to load
         await this.waitForSDK();
 
+        console.log('[HMS] 🔍 SDK loaded, creating instance...');
+
         // Import from global HMS
         const { HMSReactiveStore } = window;
 
-        // Initialize HMS
-        this.hms = new HMSReactiveStore();
-        this.hms.triggerOnSubscribe();
+        if (!HMSReactiveStore) {
+            throw new Error('HMSReactiveStore not found on window after wait');
+        }
 
-        this.hmsActions = this.hms.getActions();
-        this.hmsStore = this.hms.getStore();
-        this.hmsNotifications = this.hms.getNotifications();
+        console.log('[HMS] 🔍 HMSReactiveStore type:', typeof HMSReactiveStore);
 
-        console.log('[HMS] ✅ SDK initialized');
+        try {
+            // Initialize HMS
+            this.hms = new HMSReactiveStore();
+            console.log('[HMS] ✅ HMSReactiveStore instance created:', this.hms);
 
-        // Subscribe to peer updates
-        this.subscribeToPeers();
+            this.hms.triggerOnSubscribe();
+            console.log('[HMS] ✅ triggerOnSubscribe() called');
+
+            this.hmsActions = this.hms.getActions();
+            console.log('[HMS] ✅ hmsActions obtained:', typeof this.hmsActions);
+
+            this.hmsStore = this.hms.getStore();
+            console.log('[HMS] ✅ hmsStore obtained:', typeof this.hmsStore);
+
+            this.hmsNotifications = this.hms.getNotifications();
+            console.log('[HMS] ✅ hmsNotifications obtained:', typeof this.hmsNotifications);
+
+            console.log('[HMS] ✅ SDK initialized successfully');
+
+            // Subscribe to peer updates
+            this.subscribeToPeers();
+        } catch (error) {
+            console.error('[HMS] ❌ Initialization error:', error);
+            console.error('[HMS] ❌ Error stack:', error.stack);
+            throw error;
+        }
     }
 
     async waitForSDK() {
+        console.log('[HMS-WAIT] 🔍 Waiting for SDK to load...');
+        console.log('[HMS-WAIT] 🔍 Initial window.HMSReactiveStore:', typeof window.HMSReactiveStore);
+        console.log('[HMS-WAIT] 🔍 Available window properties with HMS:', Object.keys(window).filter(k => k.includes('HMS')));
+
         for (let i = 0; i < 50; i++) {
+            if (i % 10 === 0) {
+                console.log(`[HMS-WAIT] 🔍 Attempt ${i}/50: window.HMSReactiveStore =`, typeof window.HMSReactiveStore);
+            }
+
             if (window.HMSReactiveStore) {
+                console.log('[HMS-WAIT] ✅ SDK found after', i, 'attempts');
+                console.log('[HMS-WAIT] ✅ Type:', typeof window.HMSReactiveStore);
                 return;
             }
             await new Promise(resolve => setTimeout(resolve, 100));
         }
-        throw new Error('100ms SDK failed to load');
+
+        console.error('[HMS-WAIT] ❌ SDK failed to load after 5 seconds');
+        console.error('[HMS-WAIT] ❌ window keys:', Object.keys(window).slice(0, 20));
+        throw new Error('100ms SDK failed to load - check console logs above');
     }
 
     subscribeToPeers() {

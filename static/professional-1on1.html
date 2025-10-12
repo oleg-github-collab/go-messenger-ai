@@ -518,7 +518,14 @@
         </div>
     </div>
 
-    <!-- 100ms SDK via ES Module with importmap -->
+    <!-- 100ms SDK - Detailed Loading with Debugging -->
+    <script>
+        console.log('[SDK-LOAD] 🔍 Step 1: Starting SDK load process');
+        console.log('[SDK-LOAD] 🔍 Browser:', navigator.userAgent);
+        console.log('[SDK-LOAD] 🔍 Supports importmap:', HTMLScriptElement.supports ? HTMLScriptElement.supports('importmap') : 'unknown');
+        console.log('[SDK-LOAD] 🔍 Supports ES modules:', 'noModule' in HTMLScriptElement.prototype);
+    </script>
+
     <script type="importmap">
     {
         "imports": {
@@ -526,10 +533,46 @@
         }
     }
     </script>
+
     <script type="module">
-        import { HMSReactiveStore } from '@100mslive/hms-video-store';
-        window.HMSReactiveStore = HMSReactiveStore;
-        console.log('[SDK] ✅ 100ms SDK loaded successfully via importmap');
+        console.log('[SDK-LOAD] 🔍 Step 2: ES Module script executing');
+
+        try {
+            console.log('[SDK-LOAD] 🔍 Step 3: Importing HMSReactiveStore...');
+            const { HMSReactiveStore } = await import('@100mslive/hms-video-store');
+
+            console.log('[SDK-LOAD] 🔍 Step 4: Import successful, HMSReactiveStore:', typeof HMSReactiveStore);
+
+            window.HMSReactiveStore = HMSReactiveStore;
+
+            console.log('[SDK-LOAD] ✅ Step 5: SDK loaded successfully!');
+            console.log('[SDK-LOAD] ✅ window.HMSReactiveStore available:', typeof window.HMSReactiveStore);
+
+            // Test instantiation
+            try {
+                const testInstance = new HMSReactiveStore();
+                console.log('[SDK-LOAD] ✅ Test instantiation successful:', testInstance);
+            } catch (testError) {
+                console.error('[SDK-LOAD] ❌ Test instantiation failed:', testError);
+            }
+
+        } catch (error) {
+            console.error('[SDK-LOAD] ❌ Import failed at step:', error);
+            console.error('[SDK-LOAD] ❌ Error details:', {
+                message: error.message,
+                stack: error.stack,
+                name: error.name
+            });
+        }
+    </script>
+
+    <script>
+        // Fallback check
+        setTimeout(() => {
+            console.log('[SDK-LOAD] 🔍 Final check after 2 seconds...');
+            console.log('[SDK-LOAD] window.HMSReactiveStore exists:', !!window.HMSReactiveStore);
+            console.log('[SDK-LOAD] window object keys:', Object.keys(window).filter(k => k.includes('HMS')));
+        }, 2000);
     </script>
 
     <!-- Translations -->
