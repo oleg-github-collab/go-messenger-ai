@@ -49,6 +49,7 @@ document.addEventListener('DOMContentLoaded', () => {
 
         // Create room using new API
         createMeetingBtn.disabled = true;
+        const originalHTML = createMeetingBtn.innerHTML;
         createMeetingBtn.innerHTML = '<span class="btn-icon">⏳</span> Creating AI Room...';
 
         try {
@@ -90,11 +91,13 @@ document.addEventListener('DOMContentLoaded', () => {
                 copyBtn.textContent = '✓ Copied';
 
             } else {
-                throw new Error('Failed to create room');
+                const errorText = await response.text();
+                console.error('[HOME] ❌ Server error:', response.status, errorText);
+                throw new Error(`Server returned ${response.status}: ${errorText}`);
             }
         } catch (error) {
             console.error('[HOME] ❌ Room creation failed:', error);
-            alert('Failed to create Professional AI room. Please try again.');
+            alert('Failed to create Professional AI room. Please login first.');
             createMeetingBtn.disabled = false;
             createMeetingBtn.innerHTML = originalHTML;
         }

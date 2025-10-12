@@ -55,7 +55,7 @@ func handleCreateRoom(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	// HOST AUTHENTICATION - Only Oleh can create rooms
+	// HOST AUTHENTICATION - Must be logged in
 	cookie, err := r.Cookie("session")
 	if err != nil {
 		http.Error(w, "Unauthorized - Please login", http.StatusUnauthorized)
@@ -63,11 +63,13 @@ func handleCreateRoom(w http.ResponseWriter, r *http.Request) {
 	}
 
 	username, err := rdb.Get(ctx, "session:"+cookie.Value).Result()
-	if err != nil || username != "Oleh" {
-		log.Printf("[ROOM] ❌ Unauthorized room creation attempt by: %s", username)
-		http.Error(w, "Unauthorized - Only host can create rooms", http.StatusForbidden)
+	if err != nil {
+		log.Printf("[ROOM] ❌ Invalid session")
+		http.Error(w, "Unauthorized - Invalid session", http.StatusUnauthorized)
 		return
 	}
+
+	log.Printf("[ROOM] ✅ Authenticated user: %s", username)
 
 	// Generate short room code
 	roomCode := generateRoomCode()
@@ -92,7 +94,7 @@ func handleCreateRoom(w http.ResponseWriter, r *http.Request) {
 		ID:          roomCode,
 		HMS_RoomID:  hmsRoomID,
 		HostID:      username,
-		HostName:    "Oleh",
+		HostName:    username,
 		CreatedAt:   time.Now(),
 		ExpiresAt:   time.Now().Add(8 * time.Hour),
 		Status:      "active",
