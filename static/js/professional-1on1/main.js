@@ -499,8 +499,11 @@ class Professional1on1Call {
     }
 
     hideAIModal() {
-        this.dom.aiModalBackdrop.style.display = 'none';
         this.dom.aiRecommendationModal.style.display = 'none';
+        // Only hide backdrop if poll modal is also closed
+        if (this.dom.pollModal.style.display === 'none') {
+            this.dom.aiModalBackdrop.style.display = 'none';
+        }
     }
 
     async sendQuickResponse(text) {
@@ -533,7 +536,16 @@ class Professional1on1Call {
     }
 
     toggleChat() {
-        this.dom.chatPanel.classList.toggle('open');
+        const panel = this.dom.chatPanel;
+        if (panel.style.display === 'none' || !panel.style.display) {
+            panel.style.display = 'flex';
+            // Reset unread badge
+            const badge = document.getElementById('chatBadge');
+            badge.textContent = '0';
+            badge.style.display = 'none';
+        } else {
+            panel.style.display = 'none';
+        }
     }
 
     async sendChatMessage() {
@@ -589,13 +601,16 @@ class Professional1on1Call {
     }
 
     showPollCreator() {
-        this.dom.pollModal.style.display = 'block';
+        this.dom.pollModal.style.display = 'flex';
         this.dom.aiModalBackdrop.style.display = 'block';
     }
 
     hidePollCreator() {
         this.dom.pollModal.style.display = 'none';
-        this.dom.aiModalBackdrop.style.display = 'none';
+        // Only hide backdrop if AI modal is also closed
+        if (this.dom.aiRecommendationModal.style.display === 'none') {
+            this.dom.aiModalBackdrop.style.display = 'none';
+        }
     }
 
     async createPoll() {

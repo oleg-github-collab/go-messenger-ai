@@ -1,0 +1,403 @@
+/**
+ * UI Fixes - Prevent jumping, glitching, and ensure buttons work
+ */
+
+/* Fix jumping modals and panels */
+.ai-modal-backdrop,
+.settings-panel,
+.chat-panel,
+.poll-modal,
+.whiteboard-container,
+.ai-recommendation-modal {
+    transform: none !important;
+    will-change: auto;
+}
+
+/* Settings Panel - Fixed positioning */
+.settings-panel {
+    position: fixed !important;
+    top: var(--space-lg) !important;
+    right: var(--space-lg) !important;
+    bottom: var(--space-lg) !important;
+    transform: none !important;
+    width: 420px;
+    max-height: none !important;
+    height: auto;
+}
+
+.settings-panel.hidden {
+    display: none !important;
+}
+
+/* AI Modal - Centered properly */
+.ai-recommendation-modal {
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    max-width: 600px;
+    width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    z-index: var(--z-modal);
+}
+
+/* AI Modal Backdrop */
+.ai-modal-backdrop {
+    position: fixed !important;
+    inset: 0 !important;
+    background: rgba(0, 0, 0, 0.7);
+    backdrop-filter: blur(8px);
+    z-index: calc(var(--z-modal) - 1);
+    cursor: pointer;
+}
+
+/* Chat Panel - Fixed right side */
+.chat-panel {
+    position: fixed !important;
+    top: var(--space-lg) !important;
+    right: var(--space-lg) !important;
+    bottom: var(--space-lg) !important;
+    width: 380px;
+    transform: none !important;
+    display: flex;
+    flex-direction: column;
+    z-index: var(--z-panels);
+}
+
+.chat-panel.hidden {
+    display: none !important;
+}
+
+/* Poll Modal - Centered and stable */
+.poll-modal {
+    position: fixed !important;
+    top: 50% !important;
+    left: 50% !important;
+    transform: translate(-50%, -50%) !important;
+    width: 500px;
+    max-width: 90%;
+    max-height: 80vh;
+    overflow-y: auto;
+    z-index: var(--z-modal);
+}
+
+.poll-modal.hidden {
+    display: none !important;
+}
+
+/* Whiteboard Container - Full screen */
+.whiteboard-container {
+    position: fixed !important;
+    inset: var(--space-lg) !important;
+    transform: none !important;
+    background: rgba(10, 10, 15, 0.95);
+    backdrop-filter: blur(20px);
+    border-radius: var(--radius-xl);
+    z-index: var(--z-modal);
+    display: flex;
+    flex-direction: column;
+}
+
+.whiteboard-container.hidden {
+    display: none !important;
+}
+
+/* Remove transform from hover states on positioned elements */
+.settings-panel:hover,
+.chat-panel:hover,
+.poll-modal:hover,
+.ai-recommendation-modal:hover {
+    transform: none !important;
+}
+
+.settings-panel {
+    transform: none !important;
+}
+
+.chat-panel {
+    transform: none !important;
+}
+
+.poll-modal {
+    transform: translate(-50%, -50%) !important;
+}
+
+.ai-recommendation-modal {
+    transform: translate(-50%, -50%) !important;
+}
+
+/* Fix buttons - ensure they're clickable */
+button,
+.control-btn,
+.icon-btn,
+.filter-tab,
+.lang-option,
+.tool-btn,
+.close-btn {
+    pointer-events: auto !important;
+    cursor: pointer !important;
+    user-select: none;
+}
+
+/* Prevent text selection on buttons */
+button *,
+.control-btn *,
+.icon-btn * {
+    pointer-events: none;
+}
+
+/* Fix close buttons */
+.close-btn,
+#closeAiModalBtn,
+#closeChatBtn,
+#closePollBtn,
+#closeWhiteboardBtn,
+#closeSettingsBtn {
+    width: 36px;
+    height: 36px;
+    border-radius: var(--radius-md);
+    border: none;
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    font-size: 20px;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all var(--transition-quick);
+    flex-shrink: 0;
+}
+
+.close-btn:hover {
+    background: rgba(255, 68, 68, 0.3);
+    transform: scale(1.1);
+}
+
+.close-btn:active {
+    transform: scale(0.95);
+}
+
+/* Fix modal animations - no jumping */
+@keyframes modalFadeIn {
+    from {
+        opacity: 0;
+        scale: 0.95;
+    }
+    to {
+        opacity: 1;
+        scale: 1;
+    }
+}
+
+.ai-recommendation-modal[style*="display: block"],
+.ai-recommendation-modal[style*="display: flex"] {
+    animation: modalFadeIn 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+.poll-modal[style*="display: block"],
+.poll-modal[style*="display: flex"] {
+    animation: modalFadeIn 0.3s cubic-bezier(0.25, 0.1, 0.25, 1);
+}
+
+/* Fix settings content scrolling */
+.settings-content {
+    flex: 1;
+    overflow-y: auto;
+    overflow-x: hidden;
+    padding: var(--space-lg);
+    scrollbar-width: thin;
+    scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+}
+
+.settings-content::-webkit-scrollbar {
+    width: 6px;
+}
+
+.settings-content::-webkit-scrollbar-track {
+    background: transparent;
+}
+
+.settings-content::-webkit-scrollbar-thumb {
+    background: rgba(255, 255, 255, 0.2);
+    border-radius: var(--radius-full);
+}
+
+/* Fix panel headers - prevent hover jump */
+.panel-header {
+    flex-shrink: 0;
+    padding: var(--space-lg);
+    border-bottom: 1px solid rgba(255, 255, 255, 0.05);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+}
+
+/* Ensure modals are above everything */
+.ai-modal-backdrop {
+    z-index: 29 !important;
+}
+
+.ai-recommendation-modal,
+.poll-modal {
+    z-index: 30 !important;
+}
+
+.settings-panel,
+.chat-panel {
+    z-index: 25 !important;
+}
+
+.whiteboard-container {
+    z-index: 35 !important;
+}
+
+/* Fix transcript panel hover - no jumping */
+.transcript-panel:hover {
+    transform: none !important;
+}
+
+.transcript-entry:hover {
+    background: rgba(255, 255, 255, 0.08);
+    transform: scale(1.01);
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.2);
+}
+
+/* Fix control buttons - stable positioning */
+.bottom-controls {
+    position: absolute;
+    bottom: var(--space-lg);
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: center;
+    justify-content: space-between;
+    gap: var(--space-xl);
+    padding: var(--space-md) var(--space-lg);
+    min-width: 800px;
+    z-index: var(--z-controls);
+}
+
+.bottom-controls:hover {
+    transform: translateX(-50%) !important;
+}
+
+/* Local video PiP - prevent jumping */
+.local-video-pip {
+    position: absolute;
+    bottom: var(--space-xl);
+    left: var(--space-xl);
+    width: 240px;
+    height: 180px;
+    border-radius: var(--radius-lg);
+    overflow: hidden;
+    box-shadow: var(--glass-shadow);
+    border: 2px solid rgba(255, 255, 255, 0.1);
+    cursor: move;
+    z-index: var(--z-controls);
+}
+
+.local-video-pip:hover {
+    transform: scale(1.02);
+    box-shadow: var(--glass-hover-shadow);
+    border-color: rgba(255, 255, 255, 0.2);
+}
+
+/* Prevent unwanted transforms */
+.video-area,
+.remote-video-container,
+.top-bar {
+    transform: none !important;
+}
+
+/* Fix button states */
+.control-btn[data-active="false"] {
+    background: rgba(239, 68, 68, 0.2);
+    color: #fca5a5;
+}
+
+.control-btn[data-active="false"]:hover {
+    background: rgba(239, 68, 68, 0.3);
+}
+
+/* Ensure SVG icons don't interfere with clicks */
+.control-btn svg,
+.icon-btn svg {
+    pointer-events: none;
+}
+
+/* Fix language options */
+.lang-option {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    padding: var(--space-md) var(--space-lg);
+    border: 2px solid rgba(255, 255, 255, 0.08);
+    border-radius: var(--radius-lg);
+    background: rgba(255, 255, 255, 0.03);
+    color: rgba(255, 255, 255, 0.7);
+    font-size: 15px;
+    font-weight: 500;
+    cursor: pointer;
+    transition: all var(--transition-smooth);
+}
+
+.lang-option:hover {
+    background: rgba(255, 255, 255, 0.08);
+    border-color: rgba(255, 255, 255, 0.15);
+    color: white;
+    transform: none;
+}
+
+.lang-option.active {
+    background: var(--gradient-ai);
+    border-color: transparent;
+    color: white;
+    box-shadow: 0 4px 16px rgba(102, 126, 234, 0.4);
+    transform: none;
+}
+
+/* Fix toggle switches */
+.toggle-label {
+    display: flex;
+    align-items: center;
+    gap: var(--space-md);
+    cursor: pointer;
+    font-size: 14px;
+    color: rgba(255, 255, 255, 0.8);
+    transition: color var(--transition-quick);
+    user-select: none;
+}
+
+/* Smooth modal show/hide */
+.ai-recommendation-modal,
+.poll-modal,
+.settings-panel,
+.chat-panel {
+    transition: opacity 0.3s ease, visibility 0.3s ease;
+}
+
+[style*="display: none"] {
+    opacity: 0 !important;
+    visibility: hidden !important;
+    pointer-events: none !important;
+}
+
+/* Ensure proper stacking */
+body {
+    position: relative;
+    overflow: hidden;
+}
+
+.call-container {
+    position: relative;
+    width: 100%;
+    height: 100vh;
+    overflow: hidden;
+}
+
+/* Prevent layout shift */
+* {
+    backface-visibility: hidden;
+    -webkit-font-smoothing: antialiased;
+}

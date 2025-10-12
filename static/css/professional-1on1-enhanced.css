@@ -114,13 +114,12 @@ body::before {
     border: 1px solid var(--glass-border);
     box-shadow: var(--glass-shadow);
     border-radius: var(--radius-lg);
-    transition: all var(--transition-smooth);
+    will-change: box-shadow, border-color;
 }
 
 .glassmorphic:hover {
     box-shadow: var(--glass-hover-shadow);
     border-color: rgba(255, 255, 255, 0.12);
-    transform: translateY(-2px);
 }
 
 /* Enhanced Top Bar */
@@ -668,17 +667,18 @@ body::before {
     display: flex;
     flex-direction: column;
     z-index: var(--z-modal);
-    animation: settingsSlideIn 0.5s cubic-bezier(0.25, 0.1, 0.25, 1);
+    animation: settingsSlideIn 0.5s cubic-bezier(0.25, 0.1, 0.25, 1) forwards;
+    will-change: transform, opacity;
 }
 
 @keyframes settingsSlideIn {
     from {
         opacity: 0;
-        transform: translateY(-50%) translateX(100px) scale(0.9);
+        transform: translateY(-50%) translateX(100px);
     }
     to {
         opacity: 1;
-        transform: translateY(-50%) translateX(0) scale(1);
+        transform: translateY(-50%) translateX(0);
     }
 }
 
