@@ -111,6 +111,15 @@ func handleCreateProfessionalRoom(w http.ResponseWriter, r *http.Request) {
 		templateID = req.TemplateID
 	}
 
+	// Check if Management Token is set
+	if HMS_MANAGEMENT_TOKEN == "" {
+		log.Printf("[PROFESSIONAL] ❌ HMS_MANAGEMENT_TOKEN not set in environment")
+		http.Error(w, "100ms not configured (missing Management Token)", http.StatusServiceUnavailable)
+		return
+	}
+
+	log.Printf("[PROFESSIONAL] Creating room: %s (template: %s, token length: %d)", req.Name, templateID, len(HMS_MANAGEMENT_TOKEN))
+
 	// Call 100ms API to create room
 	roomData := map[string]interface{}{
 		"name":        req.Name,
@@ -143,15 +152,25 @@ func handleCreateProfessionalRoom(w http.ResponseWriter, r *http.Request) {
 	}
 	defer resp.Body.Close()
 
+	// Read response body
+	bodyBytes, _ := io.ReadAll(resp.Body)
+
+	// Check status code
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+		log.Printf("[PROFESSIONAL] ❌ 100ms API error: %d - %s", resp.StatusCode, string(bodyBytes))
+		http.Error(w, fmt.Sprintf("100ms API error: %d - %s", resp.StatusCode, string(bodyBytes)), http.StatusInternalServerError)
+		return
+	}
+
 	// Parse response
 	var roomResp RoomResponse
-	if err := json.NewDecoder(resp.Body).Decode(&roomResp); err != nil {
-		log.Printf("[PROFESSIONAL] Failed to decode room response: %v", err)
+	if err := json.Unmarshal(bodyBytes, &roomResp); err != nil {
+		log.Printf("[PROFESSIONAL] Failed to decode room response: %v (body: %s)", err, string(bodyBytes))
 		http.Error(w, "Failed to parse room response", http.StatusInternalServerError)
 		return
 	}
 
-	log.Printf("[PROFESSIONAL] ✅ Room created: %s", roomResp.ID)
+	log.Printf("[PROFESSIONAL] ✅ Room created: %s (full response: %s)", roomResp.ID, string(bodyBytes))
 
 	// Return room details
 	w.Header().Set("Content-Type", "application/json")
