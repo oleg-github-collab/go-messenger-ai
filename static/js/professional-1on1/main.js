@@ -127,6 +127,21 @@ class Professional1on1Call {
         this.dom.endCallBtn.addEventListener('click', () => this.endCall());
         this.dom.backBtn.addEventListener('click', () => this.endCall());
 
+        // Settings
+        const settingsBtn = document.getElementById('settingsBtn');
+        settingsBtn?.addEventListener('click', () => this.toggleSettings());
+        const closeSettingsBtn = document.getElementById('closeSettingsBtn');
+        closeSettingsBtn?.addEventListener('click', () => this.toggleSettings());
+
+        // Language switcher
+        document.querySelectorAll('.lang-option').forEach(btn => {
+            btn.addEventListener('click', () => {
+                document.querySelectorAll('.lang-option').forEach(b => b.classList.remove('active'));
+                btn.classList.add('active');
+                applyTranslations(btn.dataset.lang);
+            });
+        });
+
         // Transcript
         this.dom.togglePanelBtn.addEventListener('click', () => this.toggleTranscriptPanel());
         this.dom.bookmarkBtn.addEventListener('click', () => this.addBookmark());
@@ -615,6 +630,15 @@ class Professional1on1Call {
             this.resizeWhiteboardCanvas();
         } else {
             container.style.display = 'none';
+        }
+    }
+
+    toggleSettings() {
+        const panel = document.getElementById('settingsPanel');
+        if (panel.style.display === 'none' || !panel.style.display) {
+            panel.style.display = 'flex';
+        } else {
+            panel.style.display = 'none';
         }
     }
 
