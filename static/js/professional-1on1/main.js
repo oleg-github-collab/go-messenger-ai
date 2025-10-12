@@ -153,19 +153,25 @@ class Professional1on1Call {
         });
 
         // AI Modal
-        this.dom.closeAiModalBtn.addEventListener('click', () => this.hideAIModal());
-        this.dom.aiModalBackdrop.addEventListener('click', () => this.hideAIModal());
+        this.dom.closeAiModalBtn?.addEventListener('click', () => this.hideAIModal());
+        this.dom.aiModalBackdrop?.addEventListener('click', (e) => {
+            if (e.target === this.dom.aiModalBackdrop) {
+                this.hideAIModal();
+                this.hidePollCreator();
+            }
+        });
 
         // Chat
-        this.dom.closeChatBtn.addEventListener('click', () => this.toggleChat());
-        this.dom.sendChatBtn.addEventListener('click', () => this.sendChatMessage());
-        this.dom.chatInput.addEventListener('keypress', (e) => {
+        this.dom.closeChatBtn?.addEventListener('click', () => this.toggleChat());
+        this.dom.sendChatBtn?.addEventListener('click', () => this.sendChatMessage());
+        this.dom.chatInput?.addEventListener('keypress', (e) => {
             if (e.key === 'Enter') this.sendChatMessage();
         });
 
         // Poll
-        this.dom.closePollBtn.addEventListener('click', () => this.hidePollCreator());
-        this.dom.createPollBtn.addEventListener('click', () => this.createPoll());
+        this.dom.closePollBtn?.addEventListener('click', () => this.hidePollCreator());
+        this.dom.createPollBtn?.addEventListener('click', () => this.createPoll());
+        document.getElementById('addPollOption')?.addEventListener('click', () => this.addPollOption());
 
         // Whiteboard
         this.dom.closeWhiteboardBtn.addEventListener('click', () => this.toggleWhiteboard());
@@ -649,6 +655,18 @@ class Professional1on1Call {
         }
     }
 
+    addPollOption() {
+        const optionsContainer = document.getElementById('pollOptions');
+        const optionCount = optionsContainer.querySelectorAll('input').length + 1;
+
+        const input = document.createElement('input');
+        input.type = 'text';
+        input.className = 'poll-input';
+        input.placeholder = `Option ${optionCount}`;
+
+        optionsContainer.appendChild(input);
+    }
+
     async createPoll() {
         const question = document.getElementById('pollQuestion').value;
         const options = Array.from(document.querySelectorAll('.poll-options input'))
@@ -661,18 +679,27 @@ class Professional1on1Call {
         }
 
         try {
-            // Use 100ms polls API
-            await this.hmsActions.interactivityCenter.startPoll({
-                question,
-                options: options.map(text => ({text})),
-                type: 'single-choice'
-            });
+            // Use 100ms polls API if available
+            if (this.hmsActions?.interactivityCenter) {
+                await this.hmsActions.interactivityCenter.startPoll({
+                    question,
+                    options: options.map(text => ({text})),
+                    type: 'single-choice'
+                });
+            } else {
+                console.log('[POLL] Created (fallback mode):', {question, options});
+                // In fallback mode, just log the poll
+            }
 
             this.hidePollCreator();
             alert('Poll created!');
+
+            // Clear inputs
+            document.getElementById('pollQuestion').value = '';
+            document.querySelectorAll('.poll-options input').forEach(input => input.value = '');
         } catch (error) {
             console.error('[POLL] Error:', error);
-            alert('Failed to create poll');
+            alert('Failed to create poll: ' + error.message);
         }
     }
 

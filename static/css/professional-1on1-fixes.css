@@ -74,12 +74,22 @@
     position: fixed !important;
     top: 50% !important;
     left: 50% !important;
+    right: auto !important;
+    bottom: auto !important;
+    margin: 0 !important;
     transform: translate(-50%, -50%) !important;
     width: 500px;
     max-width: 90%;
     max-height: 80vh;
     overflow-y: auto;
-    z-index: var(--z-modal);
+    z-index: 30 !important;
+    will-change: contents;
+    backface-visibility: hidden;
+    transition: none !important;
+}
+
+.poll-modal * {
+    will-change: auto;
 }
 
 .poll-modal.hidden {
@@ -105,9 +115,7 @@
 
 /* Remove transform from hover states on positioned elements */
 .settings-panel:hover,
-.chat-panel:hover,
-.poll-modal:hover,
-.ai-recommendation-modal:hover {
+.chat-panel:hover {
     transform: none !important;
 }
 
@@ -119,12 +127,24 @@
     transform: none !important;
 }
 
-.poll-modal {
+.poll-modal,
+.poll-modal:hover,
+.poll-modal:focus,
+.poll-modal:active,
+.poll-modal:focus-within {
     transform: translate(-50%, -50%) !important;
+    transition: none !important;
+    animation: none !important;
 }
 
-.ai-recommendation-modal {
+.ai-recommendation-modal,
+.ai-recommendation-modal:hover,
+.ai-recommendation-modal:focus,
+.ai-recommendation-modal:active,
+.ai-recommendation-modal:focus-within {
     transform: translate(-50%, -50%) !important;
+    transition: none !important;
+    animation: none !important;
 }
 
 /* Fix buttons - ensure they're clickable */
