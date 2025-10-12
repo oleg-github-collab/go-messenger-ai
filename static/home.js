@@ -43,10 +43,61 @@ document.addEventListener('DOMContentLoaded', () => {
     });
 
     // Handle Professional AI selection
-    professionalAIBtn.addEventListener('click', () => {
+    professionalAIBtn.addEventListener('click', async () => {
         const hostName = document.getElementById('hostNameInput').value.trim() || 'Oleh';
         meetingTypeModal.style.display = 'none';
-        window.location.href = `/static/professional-1on1.html?host=${encodeURIComponent(hostName)}`;
+
+        // Create room using new API
+        createMeetingBtn.disabled = true;
+        createMeetingBtn.innerHTML = '<span class="btn-icon">⏳</span> Creating AI Room...';
+
+        try {
+            const response = await fetch('/api/rooms/create', {
+                method: 'POST',
+                credentials: 'include',
+                headers: {
+                    'Content-Type': 'application/json'
+                }
+            });
+
+            if (response.ok) {
+                const data = await response.json();
+                console.log('[HOME] ✅ Professional room created:', data);
+
+                currentMeetingURL = data.host_url;
+
+                // Show share section with both host and guest links
+                meetingLinkInput.value = data.invite_url;
+                shareSection.style.display = 'block';
+                createMeetingBtn.style.display = 'none';
+
+                // Add special section for host link
+                const hostLinkSection = document.createElement('div');
+                hostLinkSection.className = 'host-link-section';
+                hostLinkSection.innerHTML = `
+                    <div style="margin-top: 20px; padding: 16px; background: rgba(79, 172, 254, 0.1); border-radius: 12px; border: 1px solid rgba(79, 172, 254, 0.3);">
+                        <p style="margin: 0 0 10px 0; font-size: 14px; color: #4facfe; font-weight: 600;">🎯 Your Host Link (with AI controls):</p>
+                        <div style="display: flex; gap: 10px;">
+                            <input type="text" value="${data.host_url}" readonly style="flex: 1; padding: 10px; background: rgba(255,255,255,0.05); border: 1px solid rgba(79,172,254,0.2); border-radius: 8px; color: white; font-size: 13px;">
+                            <button onclick="navigator.clipboard.writeText('${data.host_url}'); this.textContent='✓ Copied'" style="padding: 10px 20px; background: #4facfe; border: none; border-radius: 8px; color: white; font-weight: 600; cursor: pointer;">Copy</button>
+                        </div>
+                    </div>
+                `;
+                shareSection.appendChild(hostLinkSection);
+
+                // Auto-copy guest invite link
+                navigator.clipboard.writeText(data.invite_url);
+                copyBtn.textContent = '✓ Copied';
+
+            } else {
+                throw new Error('Failed to create room');
+            }
+        } catch (error) {
+            console.error('[HOME] ❌ Room creation failed:', error);
+            alert('Failed to create Professional AI room. Please try again.');
+            createMeetingBtn.disabled = false;
+            createMeetingBtn.innerHTML = originalHTML;
+        }
     });
 
     // Cancel modal

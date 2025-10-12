@@ -31,6 +31,21 @@ class Professional1on1Call {
     async init() {
         console.log('[1-ON-1] Initializing...');
 
+        // Extract room info from URL path: /room/abc-xyz-123
+        const pathParts = window.location.pathname.split('/');
+        if (pathParts[1] === 'room' && pathParts[2]) {
+            this.roomCode = pathParts[2];
+            this.isHost = new URLSearchParams(window.location.search).get('host') === 'true';
+            console.log('[1-ON-1] Room:', this.roomCode, 'Host:', this.isHost);
+
+            // Load room info
+            await this.loadRoomInfo();
+        } else {
+            // Fallback for old URLs
+            const urlParams = new URLSearchParams(window.location.search);
+            this.isHost = urlParams.get('host') !== null;
+        }
+
         // Show loading steps
         await this.showLoadingSteps();
 
@@ -40,9 +55,14 @@ class Professional1on1Call {
         // Setup events
         this.setupEvents();
 
-        // Initialize AI Transcription
-        if (window.AITranscription) {
+        // Initialize AI Transcription (only for host)
+        if (window.AITranscription && this.isHost) {
             this.aiTranscription = new AITranscription(this);
+        }
+
+        // Hide AI controls for guests
+        if (!this.isHost) {
+            this.hideAIControlsForGuests();
         }
 
         // Initialize 100ms
@@ -54,6 +74,51 @@ class Professional1on1Call {
 
         // Start call timer
         this.startCallTimer();
+    }
+
+    async loadRoomInfo() {
+        try {
+            const response = await fetch(`/api/rooms/info?room_id=${this.roomCode}`, {
+                credentials: 'include'
+            });
+
+            if (response.ok) {
+                this.roomInfo = await response.json();
+                console.log('[1-ON-1] Room info loaded:', this.roomInfo);
+
+                // Update UI with room info
+                if (this.roomInfo.status === 'expired') {
+                    this.showCustomAlert('This room has expired', 'warning');
+                }
+            } else {
+                console.error('[1-ON-1] Failed to load room info');
+            }
+        } catch (error) {
+            console.error('[1-ON-1] Error loading room info:', error);
+        }
+    }
+
+    hideAIControlsForGuests() {
+        console.log('[1-ON-1] Hiding AI controls for guest');
+
+        // Hide AI transcription button
+        const aiTranscriptBtn = document.getElementById('toggleAITranscriptBtn');
+        if (aiTranscriptBtn) {
+            aiTranscriptBtn.style.display = 'none';
+        }
+
+        // Hide export/bookmark buttons (host-only features)
+        const bookmarkBtn = document.getElementById('bookmarkBtn');
+        const exportBtn = document.getElementById('exportBtn');
+        if (bookmarkBtn) bookmarkBtn.style.display = 'none';
+        if (exportBtn) exportBtn.style.display = 'none';
+
+        // Keep transcript panel visible but read-only
+        // Remove AI recommendations from guest view
+        const transcriptPanel = document.getElementById('transcriptPanel');
+        if (transcriptPanel) {
+            transcriptPanel.classList.add('guest-mode');
+        }
     }
 
     async showLoadingSteps() {

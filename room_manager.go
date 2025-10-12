@@ -103,7 +103,7 @@ func handleCreateRoom(w http.ResponseWriter, r *http.Request) {
 	roomKey := fmt.Sprintf("room:%s", roomCode)
 	roomJSON, _ := json.Marshal(room)
 
-	err = rdb.Set(ctx, roomKey, roomJSON, 8*time.Hour).Err()
+	err = rdb.Set(ctx, roomKey, string(roomJSON), 8*time.Hour).Err()
 	if err != nil {
 		log.Printf("[ROOM] ❌ Failed to store room: %v", err)
 		http.Error(w, "Failed to create room", http.StatusInternalServerError)
@@ -242,8 +242,8 @@ func handleJoinRoom(w http.ResponseWriter, r *http.Request) {
 
 	// Increment participant count
 	room.Participants++
-	roomJSON, _ = json.Marshal(room)
-	rdb.Set(ctx, roomKey, roomJSON, 8*time.Hour)
+	updatedRoomJSON, _ := json.Marshal(room)
+	rdb.Set(ctx, roomKey, string(updatedRoomJSON), 8*time.Hour)
 
 	// Serve professional mode page
 	log.Printf("[ROOM] ✅ User joined room %s (host: %v)", roomCode, isHost)
@@ -333,8 +333,8 @@ func handleEndRoom(w http.ResponseWriter, r *http.Request) {
 
 	// Mark as ended
 	room.Status = "ended"
-	roomJSON, _ = json.Marshal(room)
-	rdb.Set(ctx, roomKey, roomJSON, 1*time.Hour) // Keep for 1 hour for records
+	endedRoomJSON, _ := json.Marshal(room)
+	rdb.Set(ctx, roomKey, string(endedRoomJSON), 1*time.Hour) // Keep for 1 hour for records
 
 	log.Printf("[ROOM] ✅ Room ended: %s by %s", req.RoomID, username)
 

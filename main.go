@@ -2330,6 +2330,9 @@ func main() {
 	// Room Management endpoints
 	registerRoomRoutes()
 
+	// Live Transcription WebSocket
+	registerTranscriptWebSocket()
+
 	// Recording Storage endpoints
 	registerRecordingRoutes()
 
