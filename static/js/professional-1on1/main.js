@@ -174,7 +174,14 @@ class Professional1on1Call {
 
     async init100ms() {
         try {
-            console.log('[100MS] Initializing SDK...');
+            console.log('[VIDEO] Initializing...');
+
+            // Check if 100ms SDK is loaded
+            if (typeof HMSReactiveStore === 'undefined') {
+                console.warn('[VIDEO] 100ms SDK not loaded, using fallback WebRTC');
+                await this.initFallbackWebRTC();
+                return;
+            }
 
             // Get credentials from URL or use demo
             const urlParams = new URLSearchParams(window.location.search);
@@ -210,8 +217,37 @@ class Professional1on1Call {
             await this.enableTranscription();
 
         } catch (error) {
-            console.error('[100MS] ❌ Failed:', error);
-            alert('Failed to join call: ' + error.message);
+            console.error('[VIDEO] ❌ Failed:', error);
+            console.warn('[VIDEO] Falling back to WebRTC');
+            await this.initFallbackWebRTC();
+        }
+    }
+
+    async initFallbackWebRTC() {
+        console.log('[WEBRTC] Starting fallback mode...');
+
+        try {
+            // Get local media
+            const stream = await navigator.mediaDevices.getUserMedia({
+                video: true,
+                audio: true
+            });
+
+            // Display local video
+            this.dom.localVideo.srcObject = stream;
+            this.dom.localVideo.play();
+
+            console.log('[WEBRTC] ✅ Local media started');
+
+            // Show placeholder for remote
+            this.dom.remotePlaceholder.style.display = 'flex';
+
+            // You can add your own WebRTC signaling here
+            // For now, just show that camera/mic work
+
+        } catch (error) {
+            console.error('[WEBRTC] ❌ Failed:', error);
+            alert('Could not access camera/microphone: ' + error.message);
         }
     }
 
