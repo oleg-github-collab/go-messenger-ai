@@ -10,18 +10,9 @@ import (
 	"io"
 	"log"
 	"net/http"
-	"os"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-)
-
-// 100ms Configuration
-var (
-	HMS_APP_ACCESS_KEY    = os.Getenv("HMS_APP_ACCESS_KEY")
-	HMS_APP_SECRET        = os.Getenv("HMS_APP_SECRET")
-	HMS_TEMPLATE_ID       = os.Getenv("HMS_TEMPLATE_ID")
-	HMS_MANAGEMENT_TOKEN  = os.Getenv("HMS_MANAGEMENT_TOKEN")
 )
 
 // 100ms Room Creation Request

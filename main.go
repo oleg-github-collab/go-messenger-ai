@@ -42,6 +42,14 @@ var (
 	openAIAPIKey = getEnv("OPENAI_API_KEY", "")
 )
 
+// 100ms Configuration
+var (
+	HMS_APP_ACCESS_KEY    = os.Getenv("HMS_APP_ACCESS_KEY")
+	HMS_APP_SECRET        = os.Getenv("HMS_APP_SECRET")
+	HMS_TEMPLATE_ID       = os.Getenv("HMS_TEMPLATE_ID")
+	HMS_MANAGEMENT_TOKEN  = os.Getenv("HMS_MANAGEMENT_TOKEN")
+)
+
 var (
 	addr = flag.String("addr", ":8080", "HTTP service address")
 	ctx  = context.Background()
@@ -1782,6 +1790,12 @@ func main() {
 	} else {
 		log.Printf("[DAILY] ⚠️  Daily.co not configured (optional)")
 	}
+
+	// Log 100ms configuration status
+	log.Printf("[100MS] HMS_APP_ACCESS_KEY: %v", HMS_APP_ACCESS_KEY != "")
+	log.Printf("[100MS] HMS_APP_SECRET: %v", HMS_APP_SECRET != "")
+	log.Printf("[100MS] HMS_TEMPLATE_ID: %v", HMS_TEMPLATE_ID != "")
+	log.Printf("[100MS] HMS_MANAGEMENT_TOKEN: %v (length: %d)", HMS_MANAGEMENT_TOKEN != "", len(HMS_MANAGEMENT_TOKEN))
 
 	// Initialize transcript processor
 	transcriptProc = transcript.NewProcessor(&redisAdapter{rdb: rdb})
