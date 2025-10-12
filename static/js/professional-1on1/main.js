@@ -527,7 +527,47 @@ class Professional1on1Call {
     }
 
     handleChatMessages(messages) {
-        // TODO: Render chat messages
+        if (!messages || messages.length === 0) return;
+
+        this.dom.chatMessages.innerHTML = '';
+
+        messages.forEach(msg => {
+            const isMe = msg.sender === this.localPeer?.name;
+            const msgDiv = document.createElement('div');
+            msgDiv.className = `chat-message ${isMe ? 'me' : 'other'}`;
+
+            const time = new Date(msg.time).toLocaleTimeString('en-US', {
+                hour: '2-digit',
+                minute: '2-digit'
+            });
+
+            msgDiv.innerHTML = `
+                <div class="message-header">
+                    <span class="sender-name">${isMe ? 'You' : msg.sender}</span>
+                    <span class="message-time">${time}</span>
+                </div>
+                <div class="message-text">${this.escapeHtml(msg.message)}</div>
+            `;
+
+            this.dom.chatMessages.appendChild(msgDiv);
+        });
+
+        // Scroll to bottom
+        this.dom.chatMessages.scrollTop = this.dom.chatMessages.scrollHeight;
+
+        // Update badge
+        if (!this.dom.chatPanel.classList.contains('open')) {
+            const badge = document.getElementById('chatBadge');
+            const unreadCount = parseInt(badge.textContent || '0') + 1;
+            badge.textContent = unreadCount;
+            badge.style.display = 'inline-block';
+        }
+    }
+
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
     }
 
     showPollCreator() {

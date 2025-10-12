@@ -17,6 +17,7 @@ document.addEventListener('DOMContentLoaded', () => {
     const audioCallBtn = document.getElementById('audioCallBtn');
     const oneOnOneBtn = document.getElementById('oneOnOneBtn');
     const groupCallBtn = document.getElementById('groupCallBtn');
+    const professionalAIBtn = document.getElementById('professionalAIBtn');
     const cancelMeetingType = document.getElementById('cancelMeetingType');
 
     console.log('[HOME] Page loaded');
@@ -39,6 +40,13 @@ document.addEventListener('DOMContentLoaded', () => {
     // Handle group call selection
     groupCallBtn.addEventListener('click', () => {
         createMeeting('group');
+    });
+
+    // Handle Professional AI selection
+    professionalAIBtn.addEventListener('click', () => {
+        const hostName = document.getElementById('hostNameInput').value.trim() || 'Oleh';
+        meetingTypeModal.style.display = 'none';
+        window.location.href = `/static/professional-1on1.html?host=${encodeURIComponent(hostName)}`;
     });
 
     // Cancel modal

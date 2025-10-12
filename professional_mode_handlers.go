@@ -67,10 +67,25 @@ type AIAnalysisResponse struct {
 	SuggestedResponses    []string `json:"suggested_responses"`
 }
 
-// Create 100ms Room Handler
+// Create 100ms Room Handler - HOST ONLY (Oleh)
 func handleCreateProfessionalRoom(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// HOST AUTHENTICATION - Only Oleh can create professional meetings
+	cookie, err := r.Cookie("session")
+	if err != nil || cookie.Value == "" {
+		log.Printf("[PROFESSIONAL] ❌ Unauthorized: No session cookie")
+		http.Error(w, "Unauthorized - Host only", http.StatusUnauthorized)
+		return
+	}
+
+	username, err := rdb.Get(ctx, "session:"+cookie.Value).Result()
+	if err != nil || username != "Oleh" {
+		log.Printf("[PROFESSIONAL] ❌ Unauthorized: Not host (user: %s)", username)
+		http.Error(w, "Unauthorized - Professional AI is host-only", http.StatusForbidden)
 		return
 	}
 
@@ -133,10 +148,25 @@ func handleCreateProfessionalRoom(w http.ResponseWriter, r *http.Request) {
 	json.NewEncoder(w).Encode(roomResp)
 }
 
-// Create 100ms Auth Token Handler
+// Create 100ms Auth Token Handler - HOST ONLY (Oleh)
 func handleCreateProfessionalToken(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	// HOST AUTHENTICATION - Only Oleh can create tokens
+	cookie, err := r.Cookie("session")
+	if err != nil || cookie.Value == "" {
+		log.Printf("[PROFESSIONAL] ❌ Unauthorized: No session cookie")
+		http.Error(w, "Unauthorized - Host only", http.StatusUnauthorized)
+		return
+	}
+
+	username, err := rdb.Get(ctx, "session:"+cookie.Value).Result()
+	if err != nil || username != "Oleh" {
+		log.Printf("[PROFESSIONAL] ❌ Unauthorized: Not host (user: %s)", username)
+		http.Error(w, "Unauthorized - Professional AI is host-only", http.StatusForbidden)
 		return
 	}
 
