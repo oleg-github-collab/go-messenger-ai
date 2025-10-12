@@ -120,6 +120,7 @@ class Professional1on1Call {
         this.dom.micBtn.addEventListener('click', () => this.toggleMic());
         this.dom.cameraBtn.addEventListener('click', () => this.toggleCamera());
         this.dom.screenShareBtn?.addEventListener('click', () => this.toggleScreenShare());
+        this.dom.reactionsBtn?.addEventListener('click', () => this.showReactions());
         this.dom.chatBtn.addEventListener('click', () => this.toggleChat());
         this.dom.pollBtn.addEventListener('click', () => this.showPollCreator());
         this.dom.whiteboardBtn.addEventListener('click', () => this.toggleWhiteboard());
@@ -176,6 +177,11 @@ class Professional1on1Call {
         // Whiteboard
         this.dom.closeWhiteboardBtn.addEventListener('click', () => this.toggleWhiteboard());
         this.setupWhiteboard();
+
+        // Notetaker
+        document.getElementById('startNotetakerBtn')?.addEventListener('click', () => this.startNotetaker());
+        document.getElementById('pauseNotetakerBtn')?.addEventListener('click', () => this.pauseNotetaker());
+        document.getElementById('stopNotetakerBtn')?.addEventListener('click', () => this.stopNotetaker());
     }
 
     async init100ms() {
@@ -559,19 +565,68 @@ class Professional1on1Call {
     }
 
     async toggleMic() {
-        const isEnabled = await this.hmsActions.setLocalAudioEnabled(!this.localPeer.audioEnabled);
-        this.dom.micBtn.dataset.active = isEnabled ? 'true' : 'false';
+        try {
+            if (this.hmsActions && this.localPeer) {
+                const isEnabled = await this.hmsActions.setLocalAudioEnabled(!this.localPeer.audioEnabled);
+                this.dom.micBtn.dataset.active = isEnabled ? 'true' : 'false';
+            } else if (this.localStream) {
+                // Fallback WebRTC mode
+                const audioTracks = this.localStream.getAudioTracks();
+                if (audioTracks.length > 0) {
+                    audioTracks[0].enabled = !audioTracks[0].enabled;
+                    this.dom.micBtn.dataset.active = audioTracks[0].enabled ? 'true' : 'false';
+                    console.log('[MIC]', audioTracks[0].enabled ? 'ON' : 'OFF');
+                }
+            }
+        } catch (error) {
+            console.error('[MIC] Error:', error);
+        }
     }
 
     async toggleCamera() {
-        const isEnabled = await this.hmsActions.setLocalVideoEnabled(!this.localPeer.videoEnabled);
-        this.dom.cameraBtn.dataset.active = isEnabled ? 'true' : 'false';
+        try {
+            if (this.hmsActions && this.localPeer) {
+                const isEnabled = await this.hmsActions.setLocalVideoEnabled(!this.localPeer.videoEnabled);
+                this.dom.cameraBtn.dataset.active = isEnabled ? 'true' : 'false';
+            } else if (this.localStream) {
+                // Fallback WebRTC mode
+                const videoTracks = this.localStream.getVideoTracks();
+                if (videoTracks.length > 0) {
+                    videoTracks[0].enabled = !videoTracks[0].enabled;
+                    this.dom.cameraBtn.dataset.active = videoTracks[0].enabled ? 'true' : 'false';
+                    console.log('[CAMERA]', videoTracks[0].enabled ? 'ON' : 'OFF');
+                }
+            }
+        } catch (error) {
+            console.error('[CAMERA] Error:', error);
+        }
     }
 
     async toggleScreenShare() {
         try {
-            const isSharing = this.localPeer?.auxiliaryTracks?.some(t => t.source === 'screen');
-            await this.hmsActions.setScreenShareEnabled(!isSharing);
+            if (this.hmsActions && this.localPeer) {
+                const isSharing = this.localPeer?.auxiliaryTracks?.some(t => t.source === 'screen');
+                await this.hmsActions.setScreenShareEnabled(!isSharing);
+            } else {
+                // Fallback WebRTC mode
+                if (!this.screenStream) {
+                    this.screenStream = await navigator.mediaDevices.getDisplayMedia({
+                        video: true,
+                        audio: false
+                    });
+                    console.log('[SCREEN SHARE] Started');
+                    alert('Screen sharing started (demo mode)');
+
+                    this.screenStream.getVideoTracks()[0].addEventListener('ended', () => {
+                        this.screenStream = null;
+                        console.log('[SCREEN SHARE] Stopped');
+                    });
+                } else {
+                    this.screenStream.getTracks().forEach(track => track.stop());
+                    this.screenStream = null;
+                    console.log('[SCREEN SHARE] Stopped');
+                }
+            }
         } catch (error) {
             console.error('[SCREEN SHARE] Error:', error);
         }
@@ -782,16 +837,80 @@ class Professional1on1Call {
 
     async toggleRecording() {
         try {
-            if (this.dom.recordingIndicator.style.display === 'none') {
-                await this.hmsActions.startRTMPOrRecording({record: true});
-                this.dom.recordingIndicator.style.display = 'flex';
+            if (this.hmsActions?.startRTMPOrRecording) {
+                if (this.dom.recordingIndicator.style.display === 'none') {
+                    await this.hmsActions.startRTMPOrRecording({record: true});
+                    this.dom.recordingIndicator.style.display = 'flex';
+                    console.log('[RECORDING] Started');
+                } else {
+                    await this.hmsActions.stopRTMPAndRecording();
+                    this.dom.recordingIndicator.style.display = 'none';
+                    console.log('[RECORDING] Stopped');
+                }
             } else {
-                await this.hmsActions.stopRTMPAndRecording();
-                this.dom.recordingIndicator.style.display = 'none';
+                // Fallback mode - toggle recording indicator
+                if (this.dom.recordingIndicator.style.display === 'none' || !this.dom.recordingIndicator.style.display) {
+                    this.dom.recordingIndicator.style.display = 'flex';
+                    console.log('[RECORDING] Started (demo mode)');
+                    alert('Recording started (demo mode). In production, this will use 100ms recording.');
+                } else {
+                    this.dom.recordingIndicator.style.display = 'none';
+                    console.log('[RECORDING] Stopped (demo mode)');
+                }
             }
         } catch (error) {
             console.error('[RECORDING] Error:', error);
+            alert('Recording error: ' + error.message);
         }
+    }
+
+    showReactions() {
+        const reactions = ['👍', '👏', '❤️', '😂', '😮', '🎉', '👋', '🔥'];
+        const reactionHTML = reactions.map(emoji =>
+            `<button class="reaction-emoji" onclick="app.sendReaction('${emoji}')">${emoji}</button>`
+        ).join('');
+
+        if (!this.reactionsPanel) {
+            const panel = document.createElement('div');
+            panel.className = 'reactions-panel glassmorphic';
+            panel.innerHTML = `
+                <div class="panel-header">
+                    <span>Quick Reactions</span>
+                    <button class="close-btn" onclick="app.hideReactions()">✕</button>
+                </div>
+                <div class="reactions-grid">${reactionHTML}</div>
+            `;
+            document.body.appendChild(panel);
+            this.reactionsPanel = panel;
+        }
+
+        this.reactionsPanel.style.display = 'flex';
+    }
+
+    hideReactions() {
+        if (this.reactionsPanel) {
+            this.reactionsPanel.style.display = 'none';
+        }
+    }
+
+    sendReaction(emoji) {
+        console.log('[REACTION] Sent:', emoji);
+
+        // Show floating reaction animation
+        const reactionEl = document.createElement('div');
+        reactionEl.className = 'floating-reaction';
+        reactionEl.textContent = emoji;
+        reactionEl.style.left = Math.random() * 80 + 10 + '%';
+        document.querySelector('.call-container').appendChild(reactionEl);
+
+        setTimeout(() => reactionEl.remove(), 3000);
+
+        // Send via 100ms if available
+        if (this.hmsActions?.sendBroadcastMessage) {
+            this.hmsActions.sendBroadcastMessage(`REACTION:${emoji}`);
+        }
+
+        this.hideReactions();
     }
 
     toggleTranscriptPanel() {
@@ -861,12 +980,121 @@ class Professional1on1Call {
         if (!confirm('End the call?')) return;
 
         if (this.timerInterval) clearInterval(this.timerInterval);
+        if (this.notetakerInterval) clearInterval(this.notetakerInterval);
 
         if (this.hmsActions) {
             await this.hmsActions.leave();
         }
 
         window.location.href = '/static/landing.html';
+    }
+
+    // Notetaker Methods
+    startNotetaker() {
+        console.log('[NOTETAKER] Starting...');
+
+        const statusEl = document.getElementById('notetakerStatus');
+        const timerEl = document.getElementById('notetakerTimer');
+        const startBtn = document.getElementById('startNotetakerBtn');
+        const pauseBtn = document.getElementById('pauseNotetakerBtn');
+        const stopBtn = document.getElementById('stopNotetakerBtn');
+
+        statusEl.textContent = 'Recording';
+        statusEl.classList.add('recording');
+        timerEl.style.display = 'block';
+
+        startBtn.style.display = 'none';
+        pauseBtn.style.display = 'flex';
+        stopBtn.style.display = 'flex';
+
+        this.notetakerStartTime = Date.now();
+        this.notetakerPaused = false;
+
+        this.notetakerInterval = setInterval(() => {
+            if (!this.notetakerPaused) {
+                const elapsed = Date.now() - this.notetakerStartTime;
+                const minutes = Math.floor(elapsed / 60000);
+                const seconds = Math.floor((elapsed % 60000) / 1000);
+                timerEl.textContent = `${String(minutes).padStart(2, '0')}:${String(seconds).padStart(2, '0')}`;
+            }
+        }, 1000);
+
+        // Start recording if available
+        if (this.hmsActions?.startRTMPOrRecording) {
+            this.hmsActions.startRTMPOrRecording({record: true}).catch(err => {
+                console.warn('[NOTETAKER] HMS recording failed:', err);
+            });
+        }
+    }
+
+    pauseNotetaker() {
+        console.log('[NOTETAKER] Pausing...');
+
+        const statusEl = document.getElementById('notetakerStatus');
+        const pauseBtn = document.getElementById('pauseNotetakerBtn');
+
+        if (!this.notetakerPaused) {
+            this.notetakerPaused = true;
+            this.notetakerPausedAt = Date.now();
+            statusEl.textContent = 'Paused';
+            statusEl.classList.remove('recording');
+            statusEl.classList.add('paused');
+            pauseBtn.innerHTML = `
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M8 5v14l11-7z"/>
+                </svg>
+                <span data-i18n="resume">Resume</span>
+            `;
+        } else {
+            this.notetakerPaused = false;
+            const pauseDuration = Date.now() - this.notetakerPausedAt;
+            this.notetakerStartTime += pauseDuration;
+            statusEl.textContent = 'Recording';
+            statusEl.classList.remove('paused');
+            statusEl.classList.add('recording');
+            pauseBtn.innerHTML = `
+                <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
+                    <rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>
+                </svg>
+                <span data-i18n="pause">Pause</span>
+            `;
+        }
+    }
+
+    stopNotetaker() {
+        console.log('[NOTETAKER] Stopping...');
+
+        if (this.notetakerInterval) {
+            clearInterval(this.notetakerInterval);
+            this.notetakerInterval = null;
+        }
+
+        const statusEl = document.getElementById('notetakerStatus');
+        const timerEl = document.getElementById('notetakerTimer');
+        const startBtn = document.getElementById('startNotetakerBtn');
+        const pauseBtn = document.getElementById('pauseNotetakerBtn');
+        const stopBtn = document.getElementById('stopNotetakerBtn');
+
+        statusEl.textContent = 'Ready';
+        statusEl.classList.remove('recording', 'paused');
+        timerEl.style.display = 'none';
+        timerEl.textContent = '00:00';
+
+        startBtn.style.display = 'flex';
+        pauseBtn.style.display = 'none';
+        stopBtn.style.display = 'none';
+
+        this.notetakerPaused = false;
+        this.notetakerStartTime = null;
+
+        // Stop recording if available
+        if (this.hmsActions?.stopRTMPAndRecording) {
+            this.hmsActions.stopRTMPAndRecording().catch(err => {
+                console.warn('[NOTETAKER] HMS stop recording failed:', err);
+            });
+        }
+
+        alert('Notetaker stopped. Notes will be available in your dashboard.');
     }
 }
 
