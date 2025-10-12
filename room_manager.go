@@ -416,11 +416,53 @@ func create100msRoom(name, description string) (*RoomResponse, error) {
 	return &roomResp, nil
 }
 
+// Update HMS room ID (called from frontend after direct creation)
+func handleUpdateHMSRoom(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		RoomCode  string `json:"room_code"`
+		HMSRoomID string `json:"hms_room_id"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	// Get room from Redis
+	roomKey := fmt.Sprintf("room:%s", req.RoomCode)
+	roomJSON, err := rdb.Get(ctx, roomKey).Result()
+	if err != nil {
+		http.Error(w, "Room not found", http.StatusNotFound)
+		return
+	}
+
+	var room ProfessionalRoom
+	json.Unmarshal([]byte(roomJSON), &room)
+
+	// Update HMS room ID
+	room.HMS_RoomID = req.HMSRoomID
+
+	// Save back to Redis
+	updatedJSON, _ := json.Marshal(room)
+	rdb.Set(ctx, roomKey, string(updatedJSON), 8*time.Hour)
+
+	log.Printf("[ROOM] ✅ Updated HMS room ID: %s -> %s", req.RoomCode, req.HMSRoomID)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]string{"status": "ok"})
+}
+
 // Register room management routes
 func registerRoomRoutes() {
 	http.HandleFunc("/api/rooms/create", handleCreateRoom)
 	http.HandleFunc("/api/rooms/info", handleGetRoomInfo)
 	http.HandleFunc("/api/rooms/end", handleEndRoom)
+	http.HandleFunc("/api/rooms/update-hms", handleUpdateHMSRoom)
 	// NOTE: /room/ route is handled in main.go to avoid conflicts
 
 	log.Println("[ROOM] ✅ Room management routes registered")

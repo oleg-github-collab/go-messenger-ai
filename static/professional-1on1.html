@@ -518,15 +518,15 @@
         </div>
     </div>
 
-    <!-- 100ms Prebuilt Iframe (official ready-made UI) -->
+    <!-- 100ms Direct Integration (creates room from frontend) -->
     <script>
-        console.log('[100MS] Using Prebuilt iframe - no SDK needed');
+        console.log('[100MS] Using Direct HMS integration');
 
-        // We'll load 100ms prebuilt in iframe
-        window.use100msPrebuilt = true;
+        // Use direct HMS (creates room via Management API from frontend)
+        window.useDirectHMS = true;
     </script>
 
-    <!-- Prebuilt App (no SDK, no custom UI, just iframe) -->
-    <script src="/static/js/professional-1on1/prebuilt-app.js"></script>
+    <!-- Direct HMS App -->
+    <script src="/static/js/professional-1on1/direct-hms.js"></script>
 </body>
 </html>
