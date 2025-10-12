@@ -18,9 +18,10 @@ import (
 
 // 100ms Configuration
 var (
-	HMS_APP_ACCESS_KEY = os.Getenv("HMS_APP_ACCESS_KEY")
-	HMS_APP_SECRET     = os.Getenv("HMS_APP_SECRET")
-	HMS_TEMPLATE_ID    = os.Getenv("HMS_TEMPLATE_ID")
+	HMS_APP_ACCESS_KEY    = os.Getenv("HMS_APP_ACCESS_KEY")
+	HMS_APP_SECRET        = os.Getenv("HMS_APP_SECRET")
+	HMS_TEMPLATE_ID       = os.Getenv("HMS_TEMPLATE_ID")
+	HMS_MANAGEMENT_TOKEN  = os.Getenv("HMS_MANAGEMENT_TOKEN")
 )
 
 // 100ms Room Creation Request
@@ -130,7 +131,7 @@ func handleCreateProfessionalRoom(w http.ResponseWriter, r *http.Request) {
 
 	// Add authentication headers
 	apiReq.Header.Set("Content-Type", "application/json")
-	apiReq.Header.Set("Authorization", "Bearer "+HMS_APP_ACCESS_KEY)
+	apiReq.Header.Set("Authorization", "Bearer "+HMS_MANAGEMENT_TOKEN)
 
 	// Execute request
 	client := &http.Client{Timeout: 10 * time.Second}

@@ -49,14 +49,13 @@ class DirectHMS {
 
     async createHMSRoom() {
         try {
-            console.log('[DIRECT-HMS] Creating HMS room via Management API...');
+            console.log('[DIRECT-HMS] Creating HMS room via backend...');
 
-            const response = await fetch('https://api.100ms.live/v2/rooms', {
+            // Use backend endpoint which has proper Management Token
+            const response = await fetch('/api/professional/create-room', {
                 method: 'POST',
-                headers: {
-                    'Content-Type': 'application/json',
-                    'Authorization': `Bearer ${this.HMS_ACCESS_KEY}`
-                },
+                headers: { 'Content-Type': 'application/json' },
+                credentials: 'include',
                 body: JSON.stringify({
                     name: `Professional-${this.roomCode}`,
                     description: 'AI-powered professional meeting',
@@ -66,7 +65,7 @@ class DirectHMS {
 
             if (!response.ok) {
                 const error = await response.text();
-                throw new Error(`HMS API error: ${response.status} - ${error}`);
+                throw new Error(`Backend error: ${response.status} - ${error}`);
             }
 
             const roomData = await response.json();
@@ -74,7 +73,7 @@ class DirectHMS {
 
             console.log('[DIRECT-HMS] ✅ HMS Room created:', this.hmsRoomId);
 
-            // Save to backend for guests
+            // Save to our room manager
             await this.saveRoomInfo();
 
         } catch (error) {
