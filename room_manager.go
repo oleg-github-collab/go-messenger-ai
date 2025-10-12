@@ -81,17 +81,24 @@ func handleCreateRoom(w http.ResponseWriter, r *http.Request) {
 
 	// Create room in 100ms (if available)
 	hmsRoomID := ""
+	log.Printf("[ROOM] 🔍 HMS_APP_ACCESS_KEY exists: %v", HMS_APP_ACCESS_KEY != "")
+	log.Printf("[ROOM] 🔍 HMS_TEMPLATE_ID: %s", HMS_TEMPLATE_ID)
+
 	if HMS_APP_ACCESS_KEY != "" {
 		// Call 100ms API to create room
 		roomName := fmt.Sprintf("Professional Meeting - %s", roomCode)
+		log.Printf("[ROOM] 🔍 Creating 100ms room: %s", roomName)
+
 		hmsRoom, err := create100msRoom(roomName, "AI-powered professional meeting")
 		if err != nil {
-			log.Printf("[ROOM] ⚠️  100ms room creation failed: %v", err)
+			log.Printf("[ROOM] ❌ 100ms room creation failed: %v", err)
 			// Continue anyway with fallback
 		} else {
 			hmsRoomID = hmsRoom.ID
-			log.Printf("[ROOM] ✅ 100ms room created: %s", hmsRoomID)
+			log.Printf("[ROOM] ✅ 100ms room created: %s (full response: %+v)", hmsRoomID, hmsRoom)
 		}
+	} else {
+		log.Printf("[ROOM] ⚠️  Skipping 100ms room creation - no credentials")
 	}
 
 	// Create room object
