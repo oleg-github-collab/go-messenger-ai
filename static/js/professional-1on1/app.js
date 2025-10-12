@@ -114,6 +114,13 @@ class VideoCallApp {
             const userId = this.isHost ? 'host-oleh' : `guest-${Date.now()}`;
             const role = this.isHost ? 'host' : 'guest';
 
+            console.log('[APP] 🔍 Room info:', this.roomInfo);
+            console.log('[APP] 🔍 HMS room ID:', this.roomInfo?.hms_room_id);
+
+            if (!this.roomInfo || !this.roomInfo.hms_room_id) {
+                throw new Error('Room info not loaded or missing hms_room_id');
+            }
+
             const token = await this.getAuthToken(
                 this.roomInfo.hms_room_id,
                 userId,
