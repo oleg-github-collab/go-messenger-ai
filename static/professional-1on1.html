@@ -518,15 +518,38 @@
         </div>
     </div>
 
-    <!-- 100ms Direct Integration (creates room from frontend) -->
+    <!-- 100ms SDK Bundle (local) -->
+    <script src="/static/js/hms-bundle.js"></script>
+
+    <!-- Professional Meeting SDK -->
+    <script src="/static/js/professional-1on1/hms-sdk-integration.js"></script>
+
+    <!-- UI Controller -->
+    <script src="/static/js/professional-1on1/ui-controller.js"></script>
+
+    <!-- Initialize App -->
     <script>
-        console.log('[100MS] Using Direct HMS integration');
+        console.log('[PROFESSIONAL] Initializing...');
 
-        // Use direct HMS (creates room via Management API from frontend)
-        window.useDirectHMS = true;
+        // Determine if host or guest
+        const pathParts = window.location.pathname.split('/');
+        const isGuest = pathParts[1] === 'guest';
+        const roomCode = isGuest ? pathParts[2] : null;
+
+        // Create UI controller
+        const uiController = new ProfessionalUIController();
+
+        // Initialize when preview "Join" button clicked
+        document.getElementById('joinCallBtn')?.addEventListener('click', async () => {
+            if (isGuest) {
+                const userName = prompt('Enter your name:', 'Guest') || 'Guest';
+                await uiController.initializeAsGuest(roomCode, userName);
+            } else {
+                await uiController.initializeAsHost();
+            }
+        });
+
+        console.log('[PROFESSIONAL] ✅ App ready', { isGuest, roomCode });
     </script>
-
-    <!-- Direct HMS App -->
-    <script src="/static/js/professional-1on1/direct-hms.js"></script>
 </body>
 </html>
