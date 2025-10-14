@@ -458,40 +458,55 @@ class ProfessionalUIController {
 
         const localPeer = peerValues.find(peer => peer.isLocal);
         const remotePeer = peerValues.find(peer => !peer.isLocal);
+        const getTrackByID = (trackId) => {
+            if (!trackId || !this.sdk?.hmsStore || typeof this.sdk.hmsStore.getState !== 'function') {
+                return null;
+            }
+            try {
+                return this.sdk.hmsStore.getState(state => state.tracks ? state.tracks[trackId] : null);
+            } catch (error) {
+                console.warn('[UI Controller] Failed to resolve track by ID', trackId, error);
+                return null;
+            }
+        };
 
         if (localPeer) {
             this.localPeerId = localPeer.id;
-            if (localPeer.videoTrack && this.localVideoEl) {
-                this.sdk.hmsActions.attachVideo(localPeer.videoTrack, this.localVideoEl);
+            const localVideoTrack = getTrackByID(localPeer.videoTrack);
+            const localAudioTrack = getTrackByID(localPeer.audioTrack);
+            if (localVideoTrack && this.localVideoEl && typeof this.sdk?.hmsActions?.attachVideo === 'function') {
+                this.sdk.hmsActions.attachVideo(localVideoTrack, this.localVideoEl);
             }
 
             if (this.localSpeakingEl) {
-                const show = localPeer.isSpeaking || (localPeer.audioTrack && localPeer.audioTrack.enabled);
+                const show = Boolean(localPeer.isSpeaking) || Boolean(localAudioTrack && localAudioTrack.enabled && !localAudioTrack.muted);
                 this.localSpeakingEl.style.display = show ? 'block' : 'none';
             }
         }
 
         if (remotePeer) {
             this.remotePeerId = remotePeer.id;
-            if (remotePeer.videoTrack && this.remoteVideoEl) {
-                this.sdk.hmsActions.attachVideo(remotePeer.videoTrack, this.remoteVideoEl);
+            const remoteVideoTrack = getTrackByID(remotePeer.videoTrack);
+            if (remoteVideoTrack && this.remoteVideoEl && typeof this.sdk?.hmsActions?.attachVideo === 'function') {
+                this.sdk.hmsActions.attachVideo(remoteVideoTrack, this.remoteVideoEl);
                 this.remoteVideoEl.style.display = 'block';
             } else if (this.remoteVideoEl && this.remoteVideoEl.srcObject) {
                 this.remoteVideoEl.srcObject = null;
             }
 
-            if (remotePeer.audioTrack && this.remoteAudioEl) {
-                this.sdk.hmsActions.attachAudio(remotePeer.audioTrack, this.remoteAudioEl);
+            const remoteAudioTrack = getTrackByID(remotePeer.audioTrack);
+            if (remoteAudioTrack && this.remoteAudioEl && typeof this.sdk?.hmsActions?.attachAudio === 'function') {
+                this.sdk.hmsActions.attachAudio(remoteAudioTrack, this.remoteAudioEl);
             } else if (this.remoteAudioEl && this.remoteAudioEl.srcObject) {
                 this.remoteAudioEl.srcObject = null;
             }
 
             if (this.remotePlaceholderEl) {
-                this.remotePlaceholderEl.style.display = remotePeer.videoTrack ? 'none' : 'flex';
+                this.remotePlaceholderEl.style.display = remoteVideoTrack ? 'none' : 'flex';
             }
 
             if (this.remoteSpeakingEl) {
-                const showRemote = remotePeer.isSpeaking || (remotePeer.audioTrack && remotePeer.audioTrack.enabled);
+                const showRemote = Boolean(remotePeer.isSpeaking) || Boolean(remoteAudioTrack && remoteAudioTrack.enabled && !remoteAudioTrack.muted);
                 this.remoteSpeakingEl.style.display = showRemote ? 'block' : 'none';
             }
         } else {
