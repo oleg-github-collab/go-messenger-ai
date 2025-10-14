@@ -19,10 +19,15 @@ class ProfessionalUIController {
         this.previewCameraBtn = document.getElementById('previewCameraBtn');
         this.joinCallBtn = document.getElementById('joinCallBtn');
 
-        // Video containers
-        this.videoContainer = document.querySelector('.video-container');
-        this.localVideoEl = null;
-        this.remoteVideoEl = null;
+        // Live call elements
+        this.localVideoEl = document.getElementById('localVideo');
+        this.localVideoPip = document.getElementById('localVideoPip');
+        this.remoteVideoEl = document.getElementById('remoteVideo');
+        this.remoteVideoContainer = document.getElementById('remoteVideoContainer');
+        this.remotePlaceholderEl = document.getElementById('remotePlaceholder');
+        this.remoteSpeakingEl = document.getElementById('remoteSpeaking');
+        this.localSpeakingEl = document.getElementById('localSpeaking');
+        this.remoteAudioEl = null;
 
         // Control buttons
         this.micBtn = document.getElementById('micBtn');
@@ -45,6 +50,10 @@ class ProfessionalUIController {
         this.previewControlsBound = false;
         this.isJoining = false;
         this.pendingShareLink = null;
+        this.storeSubscriptions = [];
+        this.remotePeerId = null;
+        this.localPeerId = null;
+        this.renderedMessageIds = new Set();
 
         console.log('[UI Controller] Initialized');
     }
@@ -319,6 +328,8 @@ class ProfessionalUIController {
         }
         this.isJoining = true;
 
+        this.clearStoreSubscriptions();
+
         if (this.joinCallBtn) {
             this.joinCallBtn.disabled = true;
             this.joinCallBtn.textContent = 'Joining...';
@@ -343,6 +354,9 @@ class ProfessionalUIController {
             await this.setupVideoUI();
             this.setupEventListeners();
             this.subscribeToRoomUpdates();
+            if (this.renderedMessageIds) {
+                this.renderedMessageIds.clear();
+            }
 
             if (!this.isHost && this.aiPanel) {
                 this.aiPanel.style.display = 'none';
@@ -382,58 +396,93 @@ class ProfessionalUIController {
     async setupVideoUI() {
         console.log('[UI Controller] Setting up video UI');
 
-        // Create video elements if not exist
-        if (!this.videoContainer) {
-            console.error('[UI Controller] Video container not found');
+        if (!this.localVideoEl || !this.remoteVideoEl) {
+            console.error('[UI Controller] Video elements not found');
             return;
         }
 
-        // Clear existing videos
-        this.videoContainer.innerHTML = '';
+        if (this.remoteVideoEl) {
+            this.remoteVideoEl.style.display = 'none';
+            this.remoteVideoEl.srcObject = null;
+        }
 
-        // Subscribe to track updates
-        this.sdk.hmsStore.subscribe(this.onTrackUpdate.bind(this), state => state.peers);
+        if (!this.remoteAudioEl) {
+            this.remoteAudioEl = document.createElement('audio');
+            this.remoteAudioEl.id = 'remoteAudio';
+            this.remoteAudioEl.autoplay = true;
+            this.remoteAudioEl.playsInline = true;
+            this.remoteAudioEl.style.display = 'none';
+
+            if (this.remoteVideoContainer) {
+                this.remoteVideoContainer.appendChild(this.remoteAudioEl);
+            } else {
+                document.body.appendChild(this.remoteAudioEl);
+            }
+        }
+
+        if (this.remotePlaceholderEl) {
+            this.remotePlaceholderEl.style.display = 'flex';
+        }
     }
 
     /**
      * Handle track updates - render video/audio
      */
     onTrackUpdate(peers) {
-        console.log('[UI Controller] Track update, peers:', Object.keys(peers).length);
+        const peerValues = Object.values(peers || {});
+        console.log('[UI Controller] Track update, peers:', peerValues.length);
 
-        Object.values(peers).forEach(peer => {
-            // Get or create video element for this peer
-            let videoEl = document.getElementById(`video-${peer.id}`);
+        const localPeer = peerValues.find(peer => peer.isLocal);
+        const remotePeer = peerValues.find(peer => !peer.isLocal);
 
-            if (!videoEl) {
-                videoEl = document.createElement('div');
-                videoEl.id = `video-${peer.id}`;
-                videoEl.className = peer.isLocal ? 'local-video' : 'remote-video';
-
-                const video = document.createElement('video');
-                video.autoplay = true;
-                video.playsInline = true;
-                video.muted = peer.isLocal; // Mute local to avoid echo
-
-                videoEl.appendChild(video);
-                this.videoContainer.appendChild(videoEl);
-
-                console.log('[UI Controller] Created video element for peer:', peer.name);
+        if (localPeer) {
+            this.localPeerId = localPeer.id;
+            if (localPeer.videoTrack && this.localVideoEl) {
+                this.sdk.hmsActions.attachVideo(localPeer.videoTrack, this.localVideoEl);
             }
 
-            // Attach video track
-            if (peer.videoTrack) {
-                const video = videoEl.querySelector('video');
-                this.sdk.hmsActions.attachVideo(peer.videoTrack, video);
+            if (this.localSpeakingEl) {
+                const show = localPeer.isSpeaking || (localPeer.audioTrack && localPeer.audioTrack.enabled);
+                this.localSpeakingEl.style.display = show ? 'block' : 'none';
+            }
+        }
+
+        if (remotePeer) {
+            this.remotePeerId = remotePeer.id;
+            if (remotePeer.videoTrack && this.remoteVideoEl) {
+                this.sdk.hmsActions.attachVideo(remotePeer.videoTrack, this.remoteVideoEl);
+                this.remoteVideoEl.style.display = 'block';
+            } else if (this.remoteVideoEl && this.remoteVideoEl.srcObject) {
+                this.remoteVideoEl.srcObject = null;
             }
 
-            // Attach audio track
-            if (peer.audioTrack && !peer.isLocal) {
-                const audio = document.createElement('audio');
-                audio.autoplay = true;
-                this.sdk.hmsActions.attachAudio(peer.audioTrack, audio);
+            if (remotePeer.audioTrack && this.remoteAudioEl) {
+                this.sdk.hmsActions.attachAudio(remotePeer.audioTrack, this.remoteAudioEl);
+            } else if (this.remoteAudioEl && this.remoteAudioEl.srcObject) {
+                this.remoteAudioEl.srcObject = null;
             }
-        });
+
+            if (this.remotePlaceholderEl) {
+                this.remotePlaceholderEl.style.display = remotePeer.videoTrack ? 'none' : 'flex';
+            }
+
+            if (this.remoteSpeakingEl) {
+                const showRemote = remotePeer.isSpeaking || (remotePeer.audioTrack && remotePeer.audioTrack.enabled);
+                this.remoteSpeakingEl.style.display = showRemote ? 'block' : 'none';
+            }
+        } else {
+            if (this.remotePlaceholderEl) {
+                this.remotePlaceholderEl.style.display = 'flex';
+            }
+            if (this.remoteVideoEl) {
+                this.remoteVideoEl.style.display = 'none';
+                this.remoteVideoEl.srcObject = null;
+            }
+            if (this.remoteAudioEl) {
+                this.remoteAudioEl.srcObject = null;
+            }
+            this.remotePeerId = null;
+        }
     }
 
     /**
@@ -477,15 +526,46 @@ class ProfessionalUIController {
         console.log('[UI Controller] Event listeners attached');
     }
 
+    clearStoreSubscriptions() {
+        if (!this.storeSubscriptions) {
+            return;
+        }
+
+        this.storeSubscriptions.forEach(unsub => {
+            try {
+                if (typeof unsub === 'function') {
+                    unsub();
+                }
+            } catch (error) {
+                console.warn('[UI Controller] Failed to remove subscription', error);
+            }
+        });
+
+        this.storeSubscriptions = [];
+    }
+
     /**
      * Subscribe to room updates (peers, messages, etc)
      */
     subscribeToRoomUpdates() {
-        // Subscribe to messages
-        this.sdk.hmsStore.subscribe(this.onMessage.bind(this), state => state.messages);
+        if (!this.sdk || !this.sdk.hmsStore || typeof this.sdk.hmsStore.subscribe !== 'function') {
+            console.error('[UI Controller] HMS store not available for subscriptions');
+            return;
+        }
 
-        // Subscribe to peers for participant count
-        this.sdk.hmsStore.subscribe(this.onPeersUpdate.bind(this), state => state.peers);
+        this.clearStoreSubscriptions();
+
+        this.storeSubscriptions.push(
+            this.sdk.hmsStore.subscribe(this.onTrackUpdate.bind(this), state => state.peers)
+        );
+
+        this.storeSubscriptions.push(
+            this.sdk.hmsStore.subscribe(this.onPeersUpdate.bind(this), state => state.peers)
+        );
+
+        this.storeSubscriptions.push(
+            this.sdk.hmsStore.subscribe(this.onMessage.bind(this), state => state.messages)
+        );
 
         console.log('[UI Controller] Subscribed to room updates');
     }
@@ -497,6 +577,12 @@ class ProfessionalUIController {
         if (!messages || messages.length === 0) return;
 
         messages.forEach(msg => {
+            const messageKey = msg.id || `${msg.time}-${msg.senderName}-${msg.message}`;
+            if (this.renderedMessageIds.has(messageKey)) {
+                return;
+            }
+
+            this.renderedMessageIds.add(messageKey);
             this.addChatMessage(msg.senderName, msg.message, msg.time);
         });
     }
@@ -505,14 +591,15 @@ class ProfessionalUIController {
      * Handle peer updates
      */
     onPeersUpdate(peers) {
-        const peerCount = Object.keys(peers).length;
+        const peerMap = peers || {};
+        const peerCount = Object.keys(peerMap).length;
         const participantLabel = document.querySelector('.participant-name');
 
         if (participantLabel) {
             if (peerCount <= 1) {
                 participantLabel.textContent = 'Waiting for guest...';
             } else {
-                const remotePeers = Object.values(peers).filter(p => !p.isLocal);
+                const remotePeers = Object.values(peerMap).filter(p => !p.isLocal);
                 if (remotePeers.length > 0) {
                     participantLabel.textContent = remotePeers[0].name;
                 }
@@ -597,6 +684,10 @@ class ProfessionalUIController {
      */
     async leaveCall() {
         if (confirm('Are you sure you want to leave the call?')) {
+            this.clearStoreSubscriptions();
+            if (this.renderedMessageIds) {
+                this.renderedMessageIds.clear();
+            }
             await this.sdk.leaveRoom();
             window.location.href = this.isHost ? '/home' : '/';
         }

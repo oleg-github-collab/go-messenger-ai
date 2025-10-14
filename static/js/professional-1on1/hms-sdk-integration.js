@@ -14,6 +14,8 @@ class ProfessionalMeetingSDK {
         this.userId = null;
         this.hmsActions = null;
         this.hmsStore = null;
+        this.hmsReactiveStore = null;
+        this.hmsNotifications = null;
         this.isJoined = false;
 
         console.log('[HMS SDK] Initializing Professional Meeting SDK');
@@ -188,8 +190,10 @@ class ProfessionalMeetingSDK {
         }
 
         // Create HMS store
-        this.hmsStore = new window.HMSReactiveStore();
-        this.hmsActions = this.hmsStore.getActions();
+        this.hmsReactiveStore = new window.HMSReactiveStore();
+        this.hmsActions = this.hmsReactiveStore.getActions();
+        this.hmsStore = this.hmsReactiveStore.getStore();
+        this.hmsNotifications = this.hmsReactiveStore.getNotifications();
 
         console.log('[HMS SDK] ✅ SDK initialized');
     }
