@@ -35,6 +35,24 @@
             <div class="preview-actions">
                 <button class="join-btn" id="joinCallBtn">Join Call</button>
             </div>
+            <div class="share-link-card" id="shareLinkContainer" style="display: none;">
+                <h3>Invite your guests</h3>
+                <div class="share-item" id="shareGuestItem">
+                    <label>Guest link (up to 20 people)</label>
+                    <div class="share-input">
+                        <input type="text" id="shareGuestLink" readonly>
+                        <button class="copy-btn" id="copyGuestLinkBtn">Copy</button>
+                    </div>
+                </div>
+                <div class="share-item" id="shareHostItem" style="display: none;">
+                    <label>Your host link</label>
+                    <div class="share-input">
+                        <input type="text" id="shareHostLink" readonly>
+                        <button class="copy-btn" id="copyHostLinkBtn">Copy</button>
+                    </div>
+                </div>
+                <p class="share-status" id="shareLinkStatus"></p>
+            </div>
         </div>
     </div>
 
@@ -531,10 +549,14 @@
     <script>
         console.log('[PROFESSIONAL] Initializing...');
 
-        // Determine if host or guest
-        const pathParts = window.location.pathname.split('/');
-        const isGuest = pathParts[1] === 'guest';
-        const roomCode = isGuest ? pathParts[2] : null;
+        // Determine context from URL
+        const pathSegments = window.location.pathname.split('/').filter(Boolean);
+        const urlParams = new URLSearchParams(window.location.search);
+        const inviteFromPath = pathSegments[0] === 'professional' && pathSegments[1] ? pathSegments[1] : null;
+        const inviteFromParam = urlParams.get('invite');
+        const inviteCode = inviteFromParam || inviteFromPath || null;
+        const isHost = urlParams.get('host') === 'true';
+        const isGuest = !isHost && !!inviteCode;
 
         // Create UI controller
         const uiController = new ProfessionalUIController();
@@ -545,9 +567,9 @@
                     const storedName = localStorage.getItem('professional_guest_name') || 'Guest';
                     const userName = window.prompt('Enter your name:', storedName) || storedName;
                     localStorage.setItem('professional_guest_name', userName);
-                    await uiController.initializeAsGuest(roomCode, userName);
+                    await uiController.initializeAsGuest(inviteCode, userName);
                 } else {
-                    await uiController.initializeAsHost();
+                    await uiController.initializeAsHost(isHost && inviteCode ? inviteCode : null);
                 }
             } catch (error) {
                 console.error('[PROFESSIONAL] ❌ Failed to initialize:', error);
@@ -556,7 +578,7 @@
             }
         })();
 
-        console.log('[PROFESSIONAL] ✅ App ready', { isGuest, roomCode });
+        console.log('[PROFESSIONAL] ✅ App ready', { isGuest, isHost, inviteCode });
     </script>
 </body>
 </html>

@@ -44,10 +44,10 @@ var (
 
 // 100ms Configuration (initialized in init())
 var (
-	HMS_APP_ACCESS_KEY    string
-	HMS_APP_SECRET        string
-	HMS_TEMPLATE_ID       string
-	HMS_MANAGEMENT_TOKEN  string
+	HMS_APP_ACCESS_KEY   string
+	HMS_APP_SECRET       string
+	HMS_TEMPLATE_ID      string
+	HMS_MANAGEMENT_TOKEN string
 )
 
 var (
@@ -66,9 +66,9 @@ var (
 	sfuServer *sfu.SFUServer
 
 	// Daily.co integration
-	dailyClient     *daily.Client
-	pollingService  *daily.PollingService
-	transcriptProc  *transcript.Processor
+	dailyClient    *daily.Client
+	pollingService *daily.PollingService
+	transcriptProc *transcript.Processor
 
 	// Server start time for uptime tracking
 	startTime time.Time
@@ -109,11 +109,11 @@ type Participant struct {
 
 // Message is the WebSocket message format
 type Message struct {
-	Type string          `json:"type"`
-	Data json.RawMessage `json:"data"`
-	Room string          `json:"room"`
-	User string          `json:"user"`
-	UserName string      `json:"userName,omitempty"`
+	Type     string          `json:"type"`
+	Data     json.RawMessage `json:"data"`
+	Room     string          `json:"room"`
+	User     string          `json:"user"`
+	UserName string          `json:"userName,omitempty"`
 }
 
 // NotetakerSession stores active recording session
@@ -1916,12 +1916,12 @@ func main() {
 		}
 
 		response := map[string]interface{}{
-			"status":    status,
-			"redis":     redisOK,
-			"sfu":       sfuOK,
-			"uptime":    time.Since(startTime).Seconds(),
-			"timestamp": time.Now().Unix(),
-			"version":   buildVersion,
+			"status":     status,
+			"redis":      redisOK,
+			"sfu":        sfuOK,
+			"uptime":     time.Since(startTime).Seconds(),
+			"timestamp":  time.Now().Unix(),
+			"version":    buildVersion,
 			"build_date": buildDate,
 		}
 
@@ -1948,6 +1948,28 @@ func main() {
 		log.Printf("[JOIN] 👋 Guest accessing: %s (Room: %s)", r.URL.Path, roomID)
 		serveFile("guest.html")(w, r)
 	})
+
+	professionalHandler := func(w http.ResponseWriter, r *http.Request) {
+		trimmed := strings.Trim(r.URL.Path, "/")
+		parts := strings.Split(trimmed, "/")
+		inviteCode := ""
+		if len(parts) >= 2 {
+			inviteCode = parts[1]
+		}
+
+		if inviteCode != "" {
+			inviteKey := fmt.Sprintf("professional_invite:%s", inviteCode)
+			if _, err := rdb.Get(ctx, inviteKey).Result(); err != nil {
+				log.Printf("[PROFESSIONAL] ⚠️  Invite not found for %s: %v", inviteCode, err)
+			}
+		}
+
+		log.Printf("[PROFESSIONAL] Serving professional mode (invite: %s)", inviteCode)
+		serveFile("professional-1on1.html")(w, r)
+	}
+
+	http.HandleFunc("/professional", professionalHandler)
+	http.HandleFunc("/professional/", professionalHandler)
 
 	// Modular guest page (for testing new structure)
 	http.HandleFunc("/join-modular/", func(w http.ResponseWriter, r *http.Request) {

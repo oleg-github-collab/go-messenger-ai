@@ -17,6 +17,11 @@ class ProfessionalMeetingSDK {
         this.hmsReactiveStore = null;
         this.hmsNotifications = null;
         this.isJoined = false;
+        this.inviteURL = null;
+        this.hostURL = null;
+        this.maxParticipants = 20;
+        this.participantCount = 0;
+        this.participantRegistered = false;
 
         console.log('[HMS SDK] Initializing Professional Meeting SDK');
     }
@@ -25,23 +30,51 @@ class ProfessionalMeetingSDK {
      * Initialize for HOST (Oleh)
      * Creates a new room and gets auth token
      */
-    async initAsHost(userName = 'Oleh') {
+    async initAsHost(userName = 'Oleh', options = {}) {
         console.log('[HMS SDK] Initializing as HOST');
         this.role = 'host';
         this.userName = userName;
         this.userId = 'host-' + Date.now();
+        this.roomCode = options.inviteCode || this.roomCode;
+        this.participantRegistered = false;
 
         try {
-            // Step 1: Create room via backend
-            console.log('[HMS SDK] Step 1: Creating room...');
-            const roomResponse = await this.createRoom();
+            if (this.roomCode) {
+                console.log('[HMS SDK] Step 1: Loading existing invite...');
+                const invite = await this.fetchInviteDetails(this.roomCode);
 
-            if (!roomResponse || !roomResponse.id) {
-                throw new Error('Failed to create room - no room ID returned');
+                if (!invite || !invite.hms_room_id) {
+                    throw new Error('Invite not found or invalid');
+                }
+
+                this.hmsRoomId = invite.hms_room_id;
+                this.inviteURL = invite.invite_url || this.inviteURL;
+                this.hostURL = invite.host_url || this.hostURL;
+                this.maxParticipants = invite.max_participants || this.maxParticipants;
+                this.participantCount = invite.participant_count || this.participantCount;
+                console.log('[HMS SDK] ✅ Invite loaded:', this.roomCode, '→ HMS room', this.hmsRoomId);
+
+                await this.registerParticipant(this.userName, 'host');
+            } else {
+                // Step 1: Create room via backend
+                console.log('[HMS SDK] Step 1: Creating room...');
+                const roomResponse = await this.createRoom();
+
+                if (!roomResponse || !roomResponse.id) {
+                    throw new Error('Failed to create room - no room ID returned');
+                }
+
+                this.hmsRoomId = roomResponse.id;
+                this.roomCode = roomResponse.invite_code || this.roomCode;
+                this.inviteURL = roomResponse.invite_url || this.inviteURL;
+                this.hostURL = roomResponse.host_url || this.hostURL;
+                this.maxParticipants = roomResponse.max_participants || this.maxParticipants;
+                this.participantCount = roomResponse.participant_count || this.participantCount;
+
+                console.log('[HMS SDK] ✅ Room created:', this.hmsRoomId, 'Invite:', this.roomCode);
+
+                await this.registerParticipant(this.userName, 'host');
             }
-
-            this.hmsRoomId = roomResponse.id;
-            console.log('[HMS SDK] ✅ Room created:', this.hmsRoomId);
 
             // Step 2: Get auth token for host
             console.log('[HMS SDK] Step 2: Getting auth token...');
@@ -59,7 +92,9 @@ class ProfessionalMeetingSDK {
             return {
                 success: true,
                 roomId: this.hmsRoomId,
-                shareLink: this.getShareLink()
+                shareLink: this.getShareLink(),
+                hostLink: this.getHostLink(),
+                inviteCode: this.roomCode
             };
 
         } catch (error) {
@@ -78,21 +113,30 @@ class ProfessionalMeetingSDK {
         this.userName = userName || 'Guest';
         this.userId = 'guest-' + Date.now();
         this.roomCode = roomCode;
+        this.participantRegistered = false;
 
         try {
             // Step 1: Get room info from backend
-            console.log('[HMS SDK] Step 1: Getting room info...');
-            const roomInfo = await this.getRoomInfo();
+            console.log('[HMS SDK] Step 1: Getting invite info...');
+            const roomInfo = await this.fetchInviteDetails(this.roomCode);
 
             if (!roomInfo || !roomInfo.hms_room_id) {
                 throw new Error('Room not found or invalid room code');
             }
 
             this.hmsRoomId = roomInfo.hms_room_id;
+            this.inviteURL = roomInfo.invite_url || this.inviteURL;
+            this.hostURL = roomInfo.host_url || this.hostURL;
+            this.maxParticipants = roomInfo.max_participants || this.maxParticipants;
+            this.participantCount = roomInfo.participant_count || this.participantCount;
             console.log('[HMS SDK] ✅ Room found:', this.hmsRoomId);
 
-            // Step 2: Get auth token for guest
-            console.log('[HMS SDK] Step 2: Getting auth token...');
+            // Step 2: Register participant to enforce capacity
+            console.log('[HMS SDK] Step 2: Registering participant...');
+            await this.registerParticipant(this.userName, 'guest');
+
+            // Step 3: Get auth token for guest
+            console.log('[HMS SDK] Step 3: Getting auth token...');
             this.authToken = await this.getAuthToken();
 
             if (!this.authToken) {
@@ -101,7 +145,7 @@ class ProfessionalMeetingSDK {
 
             console.log('[HMS SDK] ✅ Auth token received');
 
-            // Step 3: Initialize HMS SDK
+            // Step 4: Initialize HMS SDK
             await this.initializeSDK();
 
             return {
@@ -134,22 +178,91 @@ class ProfessionalMeetingSDK {
             throw new Error(`Room creation failed: ${response.status} - ${error}`);
         }
 
-        return await response.json();
+        const data = await response.json();
+
+        if (data) {
+            this.roomCode = data.invite_code || this.roomCode;
+            this.inviteURL = data.invite_url || this.inviteURL;
+            this.hostURL = data.host_url || this.hostURL;
+            this.maxParticipants = data.max_participants || this.maxParticipants;
+            this.participantCount = data.participant_count || this.participantCount;
+        }
+
+        return data;
     }
 
     /**
      * Get room info by room code
      */
     async getRoomInfo() {
-        const response = await fetch(`/api/rooms/${this.roomCode}`, {
+        if (!this.roomCode) {
+            throw new Error('No invite code set');
+        }
+
+        return await this.fetchInviteDetails(this.roomCode);
+    }
+
+    async fetchInviteDetails(code) {
+        const response = await fetch(`/api/professional/invite/${code}`, {
             credentials: 'include'
         });
 
         if (!response.ok) {
-            throw new Error('Room not found');
+            const errorText = await response.text();
+            throw new Error(errorText || 'Invite lookup failed');
         }
 
-        return await response.json();
+        const data = await response.json();
+
+        if (data) {
+            this.roomCode = data.code || this.roomCode;
+            this.hmsRoomId = data.hms_room_id || this.hmsRoomId;
+            this.inviteURL = data.invite_url || this.inviteURL;
+            this.hostURL = data.host_url || this.hostURL;
+            if (typeof data.max_participants === 'number') {
+                this.maxParticipants = data.max_participants;
+            }
+            if (typeof data.participant_count === 'number') {
+                this.participantCount = data.participant_count;
+            }
+        }
+
+        return data;
+    }
+
+    async registerParticipant(name, role = this.role || 'guest') {
+        if (!this.roomCode) {
+            throw new Error('No invite code set for registration');
+        }
+
+        const response = await fetch(`/api/professional/invite/${this.roomCode}`, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify({
+                name,
+                role
+            })
+        });
+
+        if (!response.ok) {
+            const errorText = await response.text();
+            throw new Error(errorText || 'Failed to register participant');
+        }
+
+        const data = await response.json();
+
+        if (data) {
+            if (typeof data.participant_count === 'number') {
+                this.participantCount = data.participant_count;
+            }
+            if (typeof data.max_participants === 'number') {
+                this.maxParticipants = data.max_participants;
+            }
+        }
+
+        this.participantRegistered = true;
+        return data;
     }
 
     /**
@@ -249,12 +362,32 @@ class ProfessionalMeetingSDK {
     /**
      * Get share link for guests
      */
-    getShareLink() {
-        if (!this.roomCode) {
+    getShareLink(type = 'guest') {
+        const baseUrl = window.location.origin;
+
+        if (type === 'host') {
+            if (this.hostURL) {
+                return this.hostURL;
+            }
+            if (this.roomCode) {
+                return `${baseUrl}/professional/${this.roomCode}?host=true`;
+            }
             return null;
         }
-        const baseUrl = window.location.origin;
-        return `${baseUrl}/guest/${this.roomCode}`;
+
+        if (this.inviteURL) {
+            return this.inviteURL;
+        }
+
+        if (this.roomCode) {
+            return `${baseUrl}/professional/${this.roomCode}`;
+        }
+
+        return null;
+    }
+
+    getHostLink() {
+        return this.getShareLink('host');
     }
 
     /**

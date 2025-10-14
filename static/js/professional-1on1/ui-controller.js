@@ -28,6 +28,14 @@ class ProfessionalUIController {
         this.remoteSpeakingEl = document.getElementById('remoteSpeaking');
         this.localSpeakingEl = document.getElementById('localSpeaking');
         this.remoteAudioEl = null;
+        this.shareLinkContainer = document.getElementById('shareLinkContainer');
+        this.shareGuestItem = document.getElementById('shareGuestItem');
+        this.shareHostItem = document.getElementById('shareHostItem');
+        this.shareGuestInput = document.getElementById('shareGuestLink');
+        this.shareHostInput = document.getElementById('shareHostLink');
+        this.copyGuestBtn = document.getElementById('copyGuestLinkBtn');
+        this.copyHostBtn = document.getElementById('copyHostLinkBtn');
+        this.shareLinkStatus = document.getElementById('shareLinkStatus');
 
         // Control buttons
         this.micBtn = document.getElementById('micBtn');
@@ -54,6 +62,10 @@ class ProfessionalUIController {
         this.remotePeerId = null;
         this.localPeerId = null;
         this.renderedMessageIds = new Set();
+        this.pendingInviteCode = null;
+        this.shareStatusTimeout = null;
+        this.shareBaseStatus = '';
+        this.isShowingCopyStatus = false;
 
         console.log('[UI Controller] Initialized');
     }
@@ -61,21 +73,28 @@ class ProfessionalUIController {
     /**
      * Initialize as HOST
      */
-    async initializeAsHost() {
+    async initializeAsHost(inviteCode = null) {
         console.log('[UI Controller] Initializing as HOST');
         this.isHost = true;
+        this.pendingInviteCode = inviteCode;
 
         try {
-            this.showLoading('Creating professional room...');
+            const loadingMessage = inviteCode ? 'Loading professional room...' : 'Creating professional room...';
+            this.showLoading(loadingMessage);
             this.updateStep(1);
 
             // Create SDK instance
             this.sdk = new ProfessionalMeetingSDK();
 
             // Initialize as host
-            const result = await this.sdk.initAsHost('Oleh');
-            this.roomCode = result.roomId;
-            this.pendingShareLink = result.shareLink;
+            const result = await this.sdk.initAsHost('Oleh', inviteCode ? { inviteCode } : {});
+            this.roomCode = this.sdk.roomCode || result.roomId;
+            this.pendingShareLink = {
+                guest: this.sdk.getShareLink(),
+                host: this.sdk.getHostLink(),
+                maxParticipants: this.sdk.maxParticipants,
+                participantCount: this.sdk.participantCount
+            };
 
             await this.setupPreviewStage();
             console.log('[UI Controller] ✅ Host preview ready');
@@ -94,6 +113,7 @@ class ProfessionalUIController {
         console.log('[UI Controller] Initializing as GUEST');
         this.isHost = false;
         this.roomCode = roomCode;
+        this.pendingShareLink = null;
 
         try {
             this.showLoading('Joining meeting...');
@@ -129,6 +149,10 @@ class ProfessionalUIController {
         }
         if (this.callContainer) {
             this.callContainer.style.display = 'none';
+        }
+
+        if (!this.isHost && this.shareLinkContainer) {
+            this.shareLinkContainer.style.display = 'none';
         }
 
         if (this.joinCallBtn) {
@@ -632,6 +656,16 @@ class ProfessionalUIController {
                 }
             }
         }
+
+        if (this.isHost && this.shareLinkStatus) {
+            const maxParticipants = this.sdk?.maxParticipants || 20;
+            const slotsLeft = Math.max(0, maxParticipants - peerCount);
+            const baseMessage = `Share with up to ${maxParticipants} participants. ${slotsLeft} slot${slotsLeft === 1 ? '' : 's'} left.`;
+            this.shareBaseStatus = baseMessage;
+            if (!this.isShowingCopyStatus) {
+                this.updateShareStatus(baseMessage);
+            }
+        }
     }
 
     /**
@@ -658,8 +692,113 @@ class ProfessionalUIController {
      * Show share link modal
      */
     showShareLink(shareLink) {
-        // TODO: Show modal with share link
-        console.log('[UI Controller] Share link:', shareLink);
+        if (!this.isHost || !this.shareLinkContainer) {
+            return;
+        }
+
+        const shareData = typeof shareLink === 'object' ? shareLink : { guest: shareLink };
+        const guestLink = shareData.guest || this.sdk?.getShareLink() || '';
+        const hostLink = shareData.host || this.sdk?.getHostLink() || '';
+        const maxParticipants = shareData.maxParticipants || this.sdk?.maxParticipants || 20;
+        const participantCount = shareData.participantCount ?? this.sdk?.participantCount ?? 1;
+        const slotsLeft = Math.max(0, maxParticipants - participantCount);
+
+        if (this.shareGuestInput) {
+            this.shareGuestInput.value = guestLink;
+        }
+
+        if (this.shareHostInput) {
+            this.shareHostInput.value = hostLink;
+        }
+
+        if (this.shareGuestItem) {
+            this.shareGuestItem.style.display = guestLink ? 'block' : 'none';
+        }
+
+        if (this.shareHostItem) {
+            this.shareHostItem.style.display = hostLink ? 'block' : 'none';
+        }
+
+        if (this.copyGuestBtn) {
+            this.copyGuestBtn.onclick = () => this.copyInviteLink(guestLink, 'guest');
+            this.copyGuestBtn.disabled = !guestLink;
+        }
+
+        if (this.copyHostBtn) {
+            this.copyHostBtn.onclick = () => this.copyInviteLink(hostLink, 'host');
+            this.copyHostBtn.disabled = !hostLink;
+        }
+
+        if (this.shareLinkContainer) {
+            this.shareLinkContainer.style.display = guestLink ? 'block' : 'none';
+        }
+
+        const statusMessage = `Share with up to ${maxParticipants} participants. ${slotsLeft} slot${slotsLeft === 1 ? '' : 's'} left.`;
+        this.shareBaseStatus = statusMessage;
+        this.updateShareStatus(statusMessage);
+        this.isShowingCopyStatus = false;
+
+        console.log('[UI Controller] Share link ready:', {
+            guestLink,
+            hostLink,
+            maxParticipants,
+            participantCount,
+            slotsLeft
+        });
+    }
+
+    updateShareStatus(message) {
+        if (!this.shareLinkStatus) {
+            return;
+        }
+
+        this.shareLinkStatus.textContent = message;
+        this.shareLinkStatus.classList.add('visible');
+    }
+
+    showShareStatus(message) {
+        if (!this.shareLinkStatus) {
+            return;
+        }
+
+        this.updateShareStatus(message);
+        this.isShowingCopyStatus = true;
+
+        if (this.shareStatusTimeout) {
+            clearTimeout(this.shareStatusTimeout);
+        }
+
+        if (this.shareBaseStatus) {
+            this.shareStatusTimeout = setTimeout(() => {
+                this.isShowingCopyStatus = false;
+                this.updateShareStatus(this.shareBaseStatus);
+            }, 2400);
+        }
+    }
+
+    async copyInviteLink(link, type = 'guest') {
+        if (!link) {
+            return;
+        }
+
+        try {
+            if (navigator.clipboard && navigator.clipboard.writeText) {
+                await navigator.clipboard.writeText(link);
+            } else {
+                const targetInput = type === 'host' ? this.shareHostInput : this.shareGuestInput;
+                if (targetInput) {
+                    targetInput.focus();
+                    targetInput.select();
+                    document.execCommand('copy');
+                    targetInput.setSelectionRange(0, 0);
+                }
+            }
+
+            this.showShareStatus(type === 'host' ? 'Host link copied!' : 'Guest link copied!');
+        } catch (error) {
+            console.error('[UI Controller] Failed to copy link:', error);
+            this.showShareStatus('Copy failed. Try manually selecting the link.');
+        }
     }
 
     /**

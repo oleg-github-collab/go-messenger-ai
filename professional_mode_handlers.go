@@ -10,6 +10,8 @@ import (
 	"io"
 	"log"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
@@ -60,6 +62,19 @@ type AIAnalysisResponse struct {
 	Recommendation     string   `json:"recommendation"`
 	Urgency            string   `json:"urgency"`
 	SuggestedResponses []string `json:"suggested_responses"`
+}
+
+const (
+	professionalInviteTTL             = 8 * time.Hour
+	professionalInviteMaxParticipants = 20
+)
+
+type ProfessionalInvite struct {
+	Code            string    `json:"code"`
+	HMSRoomID       string    `json:"hms_room_id"`
+	HostName        string    `json:"host_name"`
+	MaxParticipants int       `json:"max_participants"`
+	CreatedAt       time.Time `json:"created_at"`
 }
 
 // Create 100ms Room Handler - HOST ONLY (Oleh)
@@ -165,9 +180,47 @@ func handleCreateProfessionalRoom(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("[PROFESSIONAL] ✅ Room created: %s (full response: %s)", roomResp.ID, string(bodyBytes))
 
-	// Return room details
+	var invite *ProfessionalInvite
+	invite, err = createProfessionalInvite(roomResp.ID, username)
+	if err != nil {
+		log.Printf("[PROFESSIONAL] ⚠️  Failed to create invite: %v", err)
+	}
+
+	baseURL := os.Getenv("BASE_URL")
+	if baseURL == "" {
+		baseURL = "https://messenger.kaminskyi.chat"
+	}
+
+	response := map[string]interface{}{
+		"id":          roomResp.ID,
+		"name":        roomResp.Name,
+		"enabled":     roomResp.Enabled,
+		"description": roomResp.Description,
+		"created_at":  roomResp.CreatedAt,
+	}
+
+	if invite != nil {
+		guestURL := fmt.Sprintf("%s/professional/%s", baseURL, invite.Code)
+		hostURL := fmt.Sprintf("%s/professional/%s?host=true", baseURL, invite.Code)
+
+		participantCount, err := rdb.SCard(ctx, professionalInviteParticipantsKey(invite.Code)).Result()
+		if err != nil {
+			log.Printf("[PROFESSIONAL] ⚠️  Failed to get participant count: %v", err)
+			participantCount = 1
+		}
+
+		response["invite_code"] = invite.Code
+		response["invite_url"] = guestURL
+		response["host_url"] = hostURL
+		response["host_name"] = invite.HostName
+		response["max_participants"] = invite.MaxParticipants
+		response["participant_count"] = participantCount
+		response["expires_at"] = professionalInviteExpiry(invite).Format(time.RFC3339)
+	}
+
+	// Return room details with invite metadata
 	w.Header().Set("Content-Type", "application/json")
-	json.NewEncoder(w).Encode(roomResp)
+	json.NewEncoder(w).Encode(response)
 }
 
 // Create 100ms Auth Token Handler - PUBLIC (guests can get tokens)
@@ -444,6 +497,86 @@ func verifyWebhookSignature(r *http.Request, signature string) bool {
 	return hmac.Equal([]byte(signature), []byte(expectedSignature))
 }
 
+func professionalInviteKey(code string) string {
+	return fmt.Sprintf("professional_invite:%s", code)
+}
+
+func createProfessionalInvite(roomID, hostName string) (*ProfessionalInvite, error) {
+	if roomID == "" {
+		return nil, fmt.Errorf("room id is required for invite creation")
+	}
+
+	var invite *ProfessionalInvite
+	now := time.Now()
+
+	for attempts := 0; attempts < 5; attempts++ {
+		code := generateRoomCode()
+		key := professionalInviteKey(code)
+
+		exists, err := rdb.Exists(ctx, key).Result()
+		if err != nil {
+			return nil, fmt.Errorf("redis availability check failed: %w", err)
+		}
+		if exists > 0 {
+			continue
+		}
+
+		invite = &ProfessionalInvite{
+			Code:            code,
+			HMSRoomID:       roomID,
+			HostName:        hostName,
+			MaxParticipants: professionalInviteMaxParticipants,
+			CreatedAt:       now,
+		}
+
+		payload, err := json.Marshal(invite)
+		if err != nil {
+			return nil, fmt.Errorf("failed to marshal invite: %w", err)
+		}
+
+		if err := rdb.Set(ctx, key, payload, professionalInviteTTL).Err(); err != nil {
+			return nil, fmt.Errorf("failed to store invite: %w", err)
+		}
+
+		participantsKey := fmt.Sprintf("%s:participants", key)
+		if hostName != "" {
+			if err := rdb.SAdd(ctx, participantsKey, hostName).Err(); err != nil {
+				log.Printf("[PROFESSIONAL] ⚠️  Failed to add host to invite participants: %v", err)
+			}
+		}
+		if err := rdb.Expire(ctx, participantsKey, professionalInviteTTL).Err(); err != nil {
+			log.Printf("[PROFESSIONAL] ⚠️  Failed to set participants key expiry: %v", err)
+		}
+
+		return invite, nil
+	}
+
+	return nil, fmt.Errorf("could not allocate unique invite code after multiple attempts")
+}
+
+func loadProfessionalInvite(code string) (*ProfessionalInvite, error) {
+	key := professionalInviteKey(code)
+	data, err := rdb.Get(ctx, key).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	var invite ProfessionalInvite
+	if err := json.Unmarshal([]byte(data), &invite); err != nil {
+		return nil, fmt.Errorf("failed to decode invite data: %w", err)
+	}
+
+	return &invite, nil
+}
+
+func professionalInviteParticipantsKey(code string) string {
+	return fmt.Sprintf("%s:participants", professionalInviteKey(code))
+}
+
+func professionalInviteExpiry(invite *ProfessionalInvite) time.Time {
+	return invite.CreatedAt.Add(professionalInviteTTL)
+}
+
 // Check HMS Configuration - DEBUG endpoint
 func handleCheckHMSConfig(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
@@ -467,6 +600,131 @@ func handleCheckHMSConfig(w http.ResponseWriter, r *http.Request) {
 		}(),
 	}
 	json.NewEncoder(w).Encode(config)
+}
+
+func handleProfessionalInvite(w http.ResponseWriter, r *http.Request) {
+	codePath := strings.TrimPrefix(r.URL.Path, "/api/professional/invite/")
+	codePath = strings.Trim(codePath, "/")
+
+	if codePath == "" {
+		http.Error(w, "Invite code is required", http.StatusBadRequest)
+		return
+	}
+
+	parts := strings.Split(codePath, "/")
+	code := parts[0]
+
+	invite, err := loadProfessionalInvite(code)
+	if err != nil {
+		log.Printf("[PROFESSIONAL] ❌ Invite not found: %s (%v)", code, err)
+		http.Error(w, "Invite not found", http.StatusNotFound)
+		return
+	}
+
+	participantsKey := professionalInviteParticipantsKey(invite.Code)
+	baseURL := os.Getenv("BASE_URL")
+	if baseURL == "" {
+		baseURL = "https://messenger.kaminskyi.chat"
+	}
+
+	switch r.Method {
+	case http.MethodGet:
+		participants, err := rdb.SMembers(ctx, participantsKey).Result()
+		if err != nil {
+			log.Printf("[PROFESSIONAL] ⚠️  Failed to list participants: %v", err)
+			participants = []string{}
+		}
+
+		participantCount := len(participants)
+		guestURL := fmt.Sprintf("%s/professional/%s", baseURL, invite.Code)
+		hostURL := fmt.Sprintf("%s/professional/%s?host=true", baseURL, invite.Code)
+
+		availableSlots := invite.MaxParticipants - participantCount
+		if availableSlots < 0 {
+			availableSlots = 0
+		}
+
+		response := map[string]interface{}{
+			"code":              invite.Code,
+			"hms_room_id":       invite.HMSRoomID,
+			"host_name":         invite.HostName,
+			"max_participants":  invite.MaxParticipants,
+			"participant_count": participantCount,
+			"participants":      participants,
+			"invite_url":        guestURL,
+			"host_url":          hostURL,
+			"expires_at":        professionalInviteExpiry(invite).Format(time.RFC3339),
+			"available_slots":   availableSlots,
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(response)
+	case http.MethodPost:
+		var req struct {
+			Name string `json:"name"`
+			Role string `json:"role"`
+		}
+
+		if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+			http.Error(w, "Invalid request body", http.StatusBadRequest)
+			return
+		}
+
+		name := strings.TrimSpace(req.Name)
+		if name == "" {
+			http.Error(w, "Name is required", http.StatusBadRequest)
+			return
+		}
+
+		role := strings.ToLower(strings.TrimSpace(req.Role))
+		if role == "" {
+			role = "guest"
+		}
+
+		count, err := rdb.SCard(ctx, participantsKey).Result()
+		if err != nil {
+			log.Printf("[PROFESSIONAL] ⚠️  Failed to count participants: %v", err)
+			http.Error(w, "Could not verify room capacity", http.StatusInternalServerError)
+			return
+		}
+
+		if role != "host" && int(count) >= invite.MaxParticipants {
+			http.Error(w, "Room is full", http.StatusConflict)
+			return
+		}
+
+		if err := rdb.SAdd(ctx, participantsKey, name).Err(); err != nil {
+			log.Printf("[PROFESSIONAL] ❌ Failed to add participant: %v", err)
+			http.Error(w, "Failed to register participant", http.StatusInternalServerError)
+			return
+		}
+		if err := rdb.Expire(ctx, participantsKey, professionalInviteTTL).Err(); err != nil {
+			log.Printf("[PROFESSIONAL] ⚠️  Failed to refresh participants TTL: %v", err)
+		}
+
+		newCount, err := rdb.SCard(ctx, participantsKey).Result()
+		if err != nil {
+			newCount = count + 1
+		}
+
+		availableSlots := invite.MaxParticipants - int(newCount)
+		if availableSlots < 0 {
+			availableSlots = 0
+		}
+
+		w.Header().Set("Content-Type", "application/json")
+		json.NewEncoder(w).Encode(map[string]interface{}{
+			"success":           true,
+			"name":              name,
+			"role":              role,
+			"hms_room_id":       invite.HMSRoomID,
+			"participant_count": newCount,
+			"max_participants":  invite.MaxParticipants,
+			"available_slots":   availableSlots,
+		})
+	default:
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+	}
 }
 
 // getHMSManagementToken returns a management token from env or generates one using app credentials.
@@ -506,6 +764,7 @@ func registerProfessionalModeRoutes() {
 	http.HandleFunc("/api/analyze-transcript", handleAnalyzeTranscript)
 	http.HandleFunc("/api/professional/webhook", handleProfessionalWebhook)
 	http.HandleFunc("/api/professional/config", handleCheckHMSConfig) // DEBUG
+	http.HandleFunc("/api/professional/invite/", handleProfessionalInvite)
 
 	log.Println("[PROFESSIONAL] ✅ Routes registered")
 }
