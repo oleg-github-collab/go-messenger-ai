@@ -539,15 +539,22 @@
         // Create UI controller
         const uiController = new ProfessionalUIController();
 
-        // Initialize when preview "Join" button clicked
-        document.getElementById('joinCallBtn')?.addEventListener('click', async () => {
-            if (isGuest) {
-                const userName = prompt('Enter your name:', 'Guest') || 'Guest';
-                await uiController.initializeAsGuest(roomCode, userName);
-            } else {
-                await uiController.initializeAsHost();
+        (async () => {
+            try {
+                if (isGuest) {
+                    const storedName = localStorage.getItem('professional_guest_name') || 'Guest';
+                    const userName = window.prompt('Enter your name:', storedName) || storedName;
+                    localStorage.setItem('professional_guest_name', userName);
+                    await uiController.initializeAsGuest(roomCode, userName);
+                } else {
+                    await uiController.initializeAsHost();
+                }
+            } catch (error) {
+                console.error('[PROFESSIONAL] ❌ Failed to initialize:', error);
+                alert('Failed to initialize professional mode: ' + (error?.message || 'unknown error'));
+                window.location.href = isGuest ? '/' : '/home';
             }
-        });
+        })();
 
         console.log('[PROFESSIONAL] ✅ App ready', { isGuest, roomCode });
     </script>

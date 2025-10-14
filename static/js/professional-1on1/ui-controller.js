@@ -122,12 +122,21 @@ class ProfessionalUIController {
             this.callContainer.style.display = 'none';
         }
 
+        if (this.joinCallBtn) {
+            this.joinCallBtn.disabled = true;
+            this.joinCallBtn.textContent = 'Preparing...';
+        }
+
         await this.startPreviewStream();
 
         if (this.joinCallBtn) {
             this.joinCallBtn.disabled = false;
             this.joinCallBtn.textContent = 'Join Call';
             this.joinCallBtn.onclick = () => this.handleJoin();
+        }
+
+        if (this.isHost && this.pendingShareLink) {
+            this.showShareLink(this.pendingShareLink);
         }
     }
 
