@@ -433,12 +433,35 @@ func verifyWebhookSignature(r *http.Request, signature string) bool {
 	return hmac.Equal([]byte(signature), []byte(expectedSignature))
 }
 
+// Check HMS Configuration - DEBUG endpoint
+func handleCheckHMSConfig(w http.ResponseWriter, r *http.Request) {
+	w.Header().Set("Content-Type", "application/json")
+	config := map[string]interface{}{
+		"HMS_APP_ACCESS_KEY_set":    HMS_APP_ACCESS_KEY != "",
+		"HMS_APP_ACCESS_KEY_length": len(HMS_APP_ACCESS_KEY),
+		"HMS_APP_SECRET_set":        HMS_APP_SECRET != "",
+		"HMS_APP_SECRET_length":     len(HMS_APP_SECRET),
+		"HMS_TEMPLATE_ID_set":       HMS_TEMPLATE_ID != "",
+		"HMS_TEMPLATE_ID":           HMS_TEMPLATE_ID,
+		"HMS_MANAGEMENT_TOKEN_set":  HMS_MANAGEMENT_TOKEN != "",
+		"HMS_MANAGEMENT_TOKEN_length": len(HMS_MANAGEMENT_TOKEN),
+		"HMS_MANAGEMENT_TOKEN_preview": func() string {
+			if len(HMS_MANAGEMENT_TOKEN) > 20 {
+				return HMS_MANAGEMENT_TOKEN[:20] + "..."
+			}
+			return HMS_MANAGEMENT_TOKEN
+		}(),
+	}
+	json.NewEncoder(w).Encode(config)
+}
+
 // Register Professional Mode Routes
 func registerProfessionalModeRoutes() {
 	http.HandleFunc("/api/professional/create-room", handleCreateProfessionalRoom)
 	http.HandleFunc("/api/professional/create-token", handleCreateProfessionalToken)
 	http.HandleFunc("/api/analyze-transcript", handleAnalyzeTranscript)
 	http.HandleFunc("/api/professional/webhook", handleProfessionalWebhook)
+	http.HandleFunc("/api/professional/config", handleCheckHMSConfig) // DEBUG
 
 	log.Println("[PROFESSIONAL] ✅ Routes registered")
 }
