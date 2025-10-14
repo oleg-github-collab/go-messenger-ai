@@ -583,17 +583,34 @@ class ProfessionalUIController {
     /**
      * Handle chat messages
      */
-    onMessage(messages) {
-        if (!messages || messages.length === 0) return;
+    onMessage(messagesState) {
+        const normalizeMessageList = (source) => {
+            if (!source) return [];
+            if (Array.isArray(source)) return source;
+            if (Array.isArray(source.messages)) return source.messages;
+            if (Array.isArray(source.broadcastMessages)) return source.broadcastMessages;
+            if (Array.isArray(source.privateMessages)) return source.privateMessages;
+            if (typeof source === 'object') {
+                return Object.values(source).filter(item => item && typeof item === 'object' && 'message' in item);
+            }
+            return [];
+        };
+
+        const messages = normalizeMessageList(messagesState);
+        if (messages.length === 0) return;
 
         messages.forEach(msg => {
-            const messageKey = msg.id || `${msg.time}-${msg.senderName}-${msg.message}`;
-            if (this.renderedMessageIds.has(messageKey)) {
+            const sender = msg.senderName || msg.sender || 'Anonymous';
+            const text = msg.message || msg.text || '';
+            const timestamp = msg.time || msg.timestamp || Date.now();
+            const messageKey = msg.id || `${timestamp}-${sender}-${text}`;
+
+            if (!text || this.renderedMessageIds.has(messageKey)) {
                 return;
             }
 
             this.renderedMessageIds.add(messageKey);
-            this.addChatMessage(msg.senderName, msg.message, msg.time);
+            this.addChatMessage(sender, text, timestamp);
         });
     }
 
