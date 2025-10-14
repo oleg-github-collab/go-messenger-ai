@@ -13,6 +13,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/google/uuid"
 )
 
 // 100ms Room Creation Request
@@ -46,19 +47,19 @@ type TokenResponse struct {
 
 // Transcription Analysis Request
 type TranscriptAnalysisRequest struct {
-	Speaker    string    `json:"speaker"`
-	Text       string    `json:"text"`
-	Timestamp  time.Time `json:"timestamp"`
-	MeetingID  string    `json:"meetingId"`
+	Speaker   string    `json:"speaker"`
+	Text      string    `json:"text"`
+	Timestamp time.Time `json:"timestamp"`
+	MeetingID string    `json:"meetingId"`
 }
 
 // AI Analysis Response
 type AIAnalysisResponse struct {
-	Category              string   `json:"category"`
-	Color                 string   `json:"color"`
-	Recommendation        string   `json:"recommendation"`
-	Urgency               string   `json:"urgency"`
-	SuggestedResponses    []string `json:"suggested_responses"`
+	Category           string   `json:"category"`
+	Color              string   `json:"color"`
+	Recommendation     string   `json:"recommendation"`
+	Urgency            string   `json:"urgency"`
+	SuggestedResponses []string `json:"suggested_responses"`
 }
 
 // Create 100ms Room Handler - HOST ONLY (Oleh)
@@ -102,14 +103,15 @@ func handleCreateProfessionalRoom(w http.ResponseWriter, r *http.Request) {
 		templateID = req.TemplateID
 	}
 
-	// Check if Management Token is set
-	if HMS_MANAGEMENT_TOKEN == "" {
-		log.Printf("[PROFESSIONAL] ❌ HMS_MANAGEMENT_TOKEN not set in environment")
-		http.Error(w, "100ms not configured (missing Management Token)", http.StatusServiceUnavailable)
+	// Resolve management token (env or generated on-demand)
+	managementToken, err := getHMSManagementToken()
+	if err != nil {
+		log.Printf("[PROFESSIONAL] ❌ Unable to resolve 100ms management token: %v", err)
+		http.Error(w, "100ms not configured (management token unavailable)", http.StatusServiceUnavailable)
 		return
 	}
 
-	log.Printf("[PROFESSIONAL] Creating room: %s (template: %s, token length: %d)", req.Name, templateID, len(HMS_MANAGEMENT_TOKEN))
+	log.Printf("[PROFESSIONAL] Creating room: %s (template: %s)", req.Name, templateID)
 
 	// Call 100ms API to create room
 	roomData := map[string]interface{}{
@@ -131,7 +133,7 @@ func handleCreateProfessionalRoom(w http.ResponseWriter, r *http.Request) {
 
 	// Add authentication headers
 	apiReq.Header.Set("Content-Type", "application/json")
-	apiReq.Header.Set("Authorization", "Bearer "+HMS_MANAGEMENT_TOKEN)
+	apiReq.Header.Set("Authorization", "Bearer "+managementToken)
 
 	// Execute request
 	client := &http.Client{Timeout: 10 * time.Second}
@@ -362,7 +364,7 @@ func containsAny(text string, keywords []string) bool {
 
 func containsSubstring(s, substr string) bool {
 	return len(s) >= len(substr) && s[:len(substr)] == substr ||
-		   (len(s) > len(substr) && containsSubstring(s[1:], substr))
+		(len(s) > len(substr) && containsSubstring(s[1:], substr))
 }
 
 // 100ms Webhook Handler (for recording/transcription events)
@@ -437,22 +439,55 @@ func verifyWebhookSignature(r *http.Request, signature string) bool {
 func handleCheckHMSConfig(w http.ResponseWriter, r *http.Request) {
 	w.Header().Set("Content-Type", "application/json")
 	config := map[string]interface{}{
-		"HMS_APP_ACCESS_KEY_set":    HMS_APP_ACCESS_KEY != "",
-		"HMS_APP_ACCESS_KEY_length": len(HMS_APP_ACCESS_KEY),
-		"HMS_APP_SECRET_set":        HMS_APP_SECRET != "",
-		"HMS_APP_SECRET_length":     len(HMS_APP_SECRET),
-		"HMS_TEMPLATE_ID_set":       HMS_TEMPLATE_ID != "",
-		"HMS_TEMPLATE_ID":           HMS_TEMPLATE_ID,
-		"HMS_MANAGEMENT_TOKEN_set":  HMS_MANAGEMENT_TOKEN != "",
+		"HMS_APP_ACCESS_KEY_set":      HMS_APP_ACCESS_KEY != "",
+		"HMS_APP_ACCESS_KEY_length":   len(HMS_APP_ACCESS_KEY),
+		"HMS_APP_SECRET_set":          HMS_APP_SECRET != "",
+		"HMS_APP_SECRET_length":       len(HMS_APP_SECRET),
+		"HMS_TEMPLATE_ID_set":         HMS_TEMPLATE_ID != "",
+		"HMS_TEMPLATE_ID":             HMS_TEMPLATE_ID,
+		"HMS_MANAGEMENT_TOKEN_set":    HMS_MANAGEMENT_TOKEN != "",
 		"HMS_MANAGEMENT_TOKEN_length": len(HMS_MANAGEMENT_TOKEN),
-		"HMS_MANAGEMENT_TOKEN_preview": func() string {
-			if len(HMS_MANAGEMENT_TOKEN) > 20 {
-				return HMS_MANAGEMENT_TOKEN[:20] + "..."
+		"HMS_MANAGEMENT_TOKEN_source": func() string {
+			if HMS_MANAGEMENT_TOKEN != "" {
+				return "env"
 			}
-			return HMS_MANAGEMENT_TOKEN
+			if HMS_APP_ACCESS_KEY != "" && HMS_APP_SECRET != "" {
+				return "generated"
+			}
+			return "unavailable"
 		}(),
 	}
 	json.NewEncoder(w).Encode(config)
+}
+
+// getHMSManagementToken returns a management token from env or generates one using app credentials.
+func getHMSManagementToken() (string, error) {
+	if HMS_MANAGEMENT_TOKEN != "" {
+		return HMS_MANAGEMENT_TOKEN, nil
+	}
+
+	if HMS_APP_ACCESS_KEY == "" || HMS_APP_SECRET == "" {
+		return "", fmt.Errorf("missing HMS_APP_ACCESS_KEY or HMS_APP_SECRET")
+	}
+
+	now := time.Now().Unix()
+	claims := jwt.MapClaims{
+		"access_key": HMS_APP_ACCESS_KEY,
+		"type":       "management",
+		"version":    2,
+		"iat":        now,
+		"nbf":        now,
+		"exp":        now + (60 * 60), // 1 hour validity
+		"jti":        uuid.NewString(),
+	}
+
+	token := jwt.NewWithClaims(jwt.SigningMethodHS256, claims)
+	signedToken, err := token.SignedString([]byte(HMS_APP_SECRET))
+	if err != nil {
+		return "", fmt.Errorf("failed to sign management token: %w", err)
+	}
+
+	return signedToken, nil
 }
 
 // Register Professional Mode Routes
