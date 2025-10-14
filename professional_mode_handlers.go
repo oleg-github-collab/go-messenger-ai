@@ -234,6 +234,14 @@ func generateHMSToken(roomID, userID, role, userName string) (string, error) {
 		return "", fmt.Errorf("HMS credentials not configured")
 	}
 
+	if roomID == "" {
+		return "", fmt.Errorf("room_id is required")
+	}
+
+	if userID == "" {
+		return "", fmt.Errorf("user_id is required")
+	}
+
 	// Create JWT claims according to 100ms spec
 	// https://www.100ms.live/docs/server-side/v2/introduction/authentication-and-tokens
 	now := time.Now().Unix()
@@ -247,6 +255,7 @@ func generateHMSToken(roomID, userID, role, userName string) (string, error) {
 		"iat":        now,
 		"nbf":        now,
 		"exp":        now + 86400, // 24 hours
+		"jti":        uuid.NewString(),
 	}
 
 	// Add user name if provided

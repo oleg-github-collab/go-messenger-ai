@@ -13,6 +13,11 @@ class ProfessionalUIController {
         this.previewScreen = document.getElementById('previewScreen');
         this.loadingScreen = document.getElementById('loadingScreen');
         this.callContainer = document.getElementById('callContainer');
+        this.previewVideoEl = document.getElementById('previewVideo');
+        this.previewPlaceholder = document.getElementById('previewPlaceholder');
+        this.previewMicBtn = document.getElementById('previewMicBtn');
+        this.previewCameraBtn = document.getElementById('previewCameraBtn');
+        this.joinCallBtn = document.getElementById('joinCallBtn');
 
         // Video containers
         this.videoContainer = document.querySelector('.video-container');
@@ -33,6 +38,14 @@ class ProfessionalUIController {
         // AI Panel (host only)
         this.aiPanel = document.querySelector('.ai-panel');
 
+        // Preview state
+        this.previewStream = null;
+        this.previewAudioEnabled = true;
+        this.previewVideoEnabled = true;
+        this.previewControlsBound = false;
+        this.isJoining = false;
+        this.pendingShareLink = null;
+
         console.log('[UI Controller] Initialized');
     }
 
@@ -44,7 +57,6 @@ class ProfessionalUIController {
         this.isHost = true;
 
         try {
-            // Show loading
             this.showLoading('Creating professional room...');
             this.updateStep(1);
 
@@ -54,31 +66,10 @@ class ProfessionalUIController {
             // Initialize as host
             const result = await this.sdk.initAsHost('Oleh');
             this.roomCode = result.roomId;
+            this.pendingShareLink = result.shareLink;
 
-            this.updateStep(2);
-            this.showLoading('Setting up video...');
-
-            // Join room
-            await this.sdk.joinRoom();
-
-            this.updateStep(3);
-            this.showLoading('Activating AI features...');
-
-            // Setup UI
-            await this.setupVideoUI();
-            this.setupEventListeners();
-            this.subscribeToRoomUpdates();
-
-            // Show share link
-            this.showShareLink(result.shareLink);
-
-            // Show call UI
-            setTimeout(() => {
-                this.hideLoading();
-                this.showCallUI();
-            }, 500);
-
-            console.log('[UI Controller] ✅ Host initialized successfully');
+            await this.setupPreviewStage();
+            console.log('[UI Controller] ✅ Host preview ready');
 
         } catch (error) {
             console.error('[UI Controller] ❌ Host initialization failed:', error);
@@ -96,7 +87,6 @@ class ProfessionalUIController {
         this.roomCode = roomCode;
 
         try {
-            // Show loading
             this.showLoading('Joining meeting...');
             this.updateStep(1);
 
@@ -106,36 +96,274 @@ class ProfessionalUIController {
             // Initialize as guest
             await this.sdk.initAsGuest(roomCode, userName);
 
-            this.updateStep(2);
-            this.showLoading('Setting up video...');
-
-            // Join room
-            await this.sdk.joinRoom();
-
-            this.updateStep(3);
-
-            // Setup UI
-            await this.setupVideoUI();
-            this.setupEventListeners();
-            this.subscribeToRoomUpdates();
-
-            // Hide AI panel for guests
-            if (this.aiPanel) {
-                this.aiPanel.style.display = 'none';
-            }
-
-            // Show call UI
-            setTimeout(() => {
-                this.hideLoading();
-                this.showCallUI();
-            }, 500);
-
-            console.log('[UI Controller] ✅ Guest initialized successfully');
+            await this.setupPreviewStage();
+            console.log('[UI Controller] ✅ Guest preview ready');
 
         } catch (error) {
             console.error('[UI Controller] ❌ Guest initialization failed:', error);
             alert('Failed to join room: ' + error.message);
             window.location.href = '/';
+        }
+    }
+
+    /**
+     * Prepare pre-join preview UI and media
+     */
+    async setupPreviewStage() {
+        this.bindPreviewControls();
+
+        if (this.previewScreen) {
+            this.previewScreen.style.display = 'flex';
+        }
+        if (this.loadingScreen) {
+            this.loadingScreen.style.display = 'none';
+        }
+        if (this.callContainer) {
+            this.callContainer.style.display = 'none';
+        }
+
+        await this.startPreviewStream();
+
+        if (this.joinCallBtn) {
+            this.joinCallBtn.disabled = false;
+            this.joinCallBtn.textContent = 'Join Call';
+            this.joinCallBtn.onclick = () => this.handleJoin();
+        }
+    }
+
+    /**
+     * Bind preview controls (mic/camera toggles)
+     */
+    bindPreviewControls() {
+        if (this.previewControlsBound) {
+            return;
+        }
+
+        if (this.previewMicBtn) {
+            this.previewMicBtn.addEventListener('click', () => this.togglePreviewAudio());
+        }
+
+        if (this.previewCameraBtn) {
+            this.previewCameraBtn.addEventListener('click', () => this.togglePreviewVideo());
+        }
+
+        this.previewControlsBound = true;
+    }
+
+    /**
+     * Start local media preview
+     */
+    async startPreviewStream() {
+        this.previewAudioEnabled = true;
+        this.previewVideoEnabled = true;
+
+        const baseConstraints = {
+            video: {
+                width: { ideal: 1280 },
+                height: { ideal: 720 },
+                facingMode: 'user'
+            },
+            audio: {
+                echoCancellation: true,
+                noiseSuppression: true,
+                autoGainControl: true
+            }
+        };
+
+        const applyPreviewState = (hasVideo, hasAudio) => {
+            this.previewVideoEnabled = hasVideo;
+            this.previewAudioEnabled = hasAudio;
+
+            if (this.previewCameraBtn) {
+                this.previewCameraBtn.dataset.active = hasVideo ? 'true' : 'false';
+            }
+            if (this.previewMicBtn) {
+                this.previewMicBtn.dataset.active = hasAudio ? 'true' : 'false';
+            }
+
+            if (this.previewVideoEl) {
+                if (hasVideo) {
+                    this.previewVideoEl.style.display = 'block';
+                } else {
+                    this.previewVideoEl.style.display = 'none';
+                }
+            }
+            if (this.previewPlaceholder) {
+                this.previewPlaceholder.style.display = hasVideo ? 'none' : 'flex';
+            }
+        };
+
+        try {
+            this.previewStream = await navigator.mediaDevices.getUserMedia(baseConstraints);
+        } catch (error) {
+            console.warn('[UI Controller] ⚠️ Preview (audio+video) failed, retrying with video only:', error);
+            try {
+                this.previewStream = await navigator.mediaDevices.getUserMedia({
+                    video: baseConstraints.video,
+                    audio: false
+                });
+                applyPreviewState(true, false);
+            } catch (videoError) {
+                console.error('[UI Controller] ❌ Failed to start camera preview:', videoError);
+                this.previewStream = null;
+                applyPreviewState(false, false);
+                if (this.previewPlaceholder) {
+                    this.previewPlaceholder.style.display = 'flex';
+                    const placeholderText = this.previewPlaceholder.querySelector('p');
+                    if (placeholderText) {
+                        placeholderText.textContent = 'Camera unavailable';
+                    }
+                }
+                if (this.joinCallBtn) {
+                    this.joinCallBtn.textContent = 'Join without camera';
+                }
+                return;
+            }
+        }
+
+        if (this.previewStream) {
+            const hasVideo = this.previewStream.getVideoTracks().length > 0;
+            const hasAudio = this.previewStream.getAudioTracks().length > 0;
+            applyPreviewState(hasVideo, hasAudio);
+
+            if (this.previewVideoEl && hasVideo) {
+                this.previewVideoEl.srcObject = this.previewStream;
+                await this.previewVideoEl.play().catch(() => {});
+            }
+        }
+    }
+
+    /**
+     * Stop preview media stream
+     */
+    stopPreviewStream() {
+        if (this.previewStream) {
+            this.previewStream.getTracks().forEach(track => track.stop());
+            this.previewStream = null;
+        }
+        if (this.previewVideoEl) {
+            this.previewVideoEl.srcObject = null;
+        }
+    }
+
+    /**
+     * Toggle preview audio state
+     */
+    togglePreviewAudio() {
+        if (!this.previewStream || this.previewStream.getAudioTracks().length === 0) {
+            console.warn('[UI Controller] No audio track available for preview');
+            this.previewAudioEnabled = false;
+            if (this.previewMicBtn) {
+                this.previewMicBtn.dataset.active = 'false';
+            }
+            return;
+        }
+
+        this.previewAudioEnabled = !this.previewAudioEnabled;
+
+        this.previewStream.getAudioTracks().forEach(track => {
+            track.enabled = this.previewAudioEnabled;
+        });
+
+        if (this.previewMicBtn) {
+            this.previewMicBtn.dataset.active = this.previewAudioEnabled ? 'true' : 'false';
+        }
+    }
+
+    /**
+     * Toggle preview video state
+     */
+    togglePreviewVideo() {
+        if (!this.previewStream || this.previewStream.getVideoTracks().length === 0) {
+            console.warn('[UI Controller] No video track available for preview');
+            this.previewVideoEnabled = false;
+            if (this.previewCameraBtn) {
+                this.previewCameraBtn.dataset.active = 'false';
+            }
+            return;
+        }
+
+        this.previewVideoEnabled = !this.previewVideoEnabled;
+
+        this.previewStream.getVideoTracks().forEach(track => {
+            track.enabled = this.previewVideoEnabled;
+        });
+
+        if (this.previewCameraBtn) {
+            this.previewCameraBtn.dataset.active = this.previewVideoEnabled ? 'true' : 'false';
+        }
+
+        if (this.previewVideoEl) {
+            this.previewVideoEl.style.display = this.previewVideoEnabled ? 'block' : 'none';
+        }
+        if (this.previewPlaceholder) {
+            this.previewPlaceholder.style.display = this.previewVideoEnabled ? 'none' : 'flex';
+        }
+    }
+
+    /**
+     * Handle joining the call after preview
+     */
+    async handleJoin() {
+        if (this.isJoining) {
+            return;
+        }
+        this.isJoining = true;
+
+        if (this.joinCallBtn) {
+            this.joinCallBtn.disabled = true;
+            this.joinCallBtn.textContent = 'Joining...';
+        }
+
+        const joinPreferences = {
+            audioEnabled: this.previewAudioEnabled,
+            videoEnabled: this.previewVideoEnabled
+        };
+
+        try {
+            this.showLoading('Setting up video...');
+            this.updateStep(2);
+
+            this.stopPreviewStream();
+
+            await this.sdk.joinRoom(joinPreferences);
+
+            this.updateStep(3);
+            this.showLoading('Activating AI features...');
+
+            await this.setupVideoUI();
+            this.setupEventListeners();
+            this.subscribeToRoomUpdates();
+
+            if (!this.isHost && this.aiPanel) {
+                this.aiPanel.style.display = 'none';
+            }
+
+            if (this.isHost && this.pendingShareLink) {
+                this.showShareLink(this.pendingShareLink);
+            }
+
+            if (this.micBtn) {
+                this.micBtn.classList.toggle('active', joinPreferences.audioEnabled);
+            }
+            if (this.cameraBtn) {
+                this.cameraBtn.classList.toggle('active', joinPreferences.videoEnabled);
+            }
+
+            this.hideLoading();
+            this.showCallUI();
+
+            console.log('[UI Controller] ✅ Joined call successfully');
+        } catch (error) {
+            console.error('[UI Controller] ❌ Failed to join after preview:', error);
+            alert('Failed to join room: ' + error.message);
+            window.location.href = this.isHost ? '/home' : '/';
+        } finally {
+            this.isJoining = false;
+            if (this.joinCallBtn) {
+                this.joinCallBtn.disabled = false;
+                this.joinCallBtn.textContent = 'Join Call';
+            }
         }
     }
 

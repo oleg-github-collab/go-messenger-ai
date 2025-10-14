@@ -197,7 +197,12 @@ class ProfessionalMeetingSDK {
     /**
      * Join the room
      */
-    async joinRoom() {
+    async joinRoom(preferences = {}) {
+        const {
+            audioEnabled = true,
+            videoEnabled = true
+        } = preferences;
+
         if (!this.authToken) {
             throw new Error('Cannot join room: no auth token');
         }
@@ -207,7 +212,11 @@ class ProfessionalMeetingSDK {
         try {
             await this.hmsActions.join({
                 userName: this.userName,
-                authToken: this.authToken
+                authToken: this.authToken,
+                settings: {
+                    isAudioMuted: !audioEnabled,
+                    isVideoMuted: !videoEnabled
+                }
             });
 
             this.isJoined = true;
