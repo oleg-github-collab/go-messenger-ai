@@ -192,6 +192,9 @@ class ProfessionalMeetingSDK {
         // Create HMS store
         this.hmsReactiveStore = new window.HMSReactiveStore();
         this.hmsActions = this.hmsReactiveStore.getActions();
+        if (typeof this.hmsReactiveStore.triggerOnSubscribe === 'function') {
+            this.hmsReactiveStore.triggerOnSubscribe();
+        }
         this.hmsStore = this.hmsReactiveStore.getStore();
         this.hmsNotifications = this.hmsReactiveStore.getNotifications();
 

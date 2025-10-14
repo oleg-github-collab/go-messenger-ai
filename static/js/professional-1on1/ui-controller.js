@@ -548,23 +548,33 @@ class ProfessionalUIController {
      * Subscribe to room updates (peers, messages, etc)
      */
     subscribeToRoomUpdates() {
-        if (!this.sdk || !this.sdk.hmsStore || typeof this.sdk.hmsStore.subscribe !== 'function') {
+        const storeAPI = this.sdk?.hmsReactiveStore;
+        const hmsStore = typeof storeAPI?.getStore === 'function'
+            ? storeAPI.getStore()
+            : this.sdk?.hmsStore;
+
+        if (!hmsStore || typeof hmsStore.subscribe !== 'function') {
             console.error('[UI Controller] HMS store not available for subscriptions');
             return;
         }
 
+        this.sdk.hmsStore = hmsStore;
+
         this.clearStoreSubscriptions();
 
+        const selectPeers = (state) => state?.peers || {};
+        const selectMessages = (state) => state?.messages || [];
+
         this.storeSubscriptions.push(
-            this.sdk.hmsStore.subscribe(this.onTrackUpdate.bind(this), state => state.peers)
+            hmsStore.subscribe(this.onTrackUpdate.bind(this), selectPeers)
         );
 
         this.storeSubscriptions.push(
-            this.sdk.hmsStore.subscribe(this.onPeersUpdate.bind(this), state => state.peers)
+            hmsStore.subscribe(this.onPeersUpdate.bind(this), selectPeers)
         );
 
         this.storeSubscriptions.push(
-            this.sdk.hmsStore.subscribe(this.onMessage.bind(this), state => state.messages)
+            hmsStore.subscribe(this.onMessage.bind(this), selectMessages)
         );
 
         console.log('[UI Controller] Subscribed to room updates');
