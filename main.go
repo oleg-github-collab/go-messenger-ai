@@ -42,12 +42,12 @@ var (
 	openAIAPIKey = getEnv("OPENAI_API_KEY", "")
 )
 
-// 100ms Configuration
+// 100ms Configuration (initialized in init())
 var (
-	HMS_APP_ACCESS_KEY    = os.Getenv("HMS_APP_ACCESS_KEY")
-	HMS_APP_SECRET        = os.Getenv("HMS_APP_SECRET")
-	HMS_TEMPLATE_ID       = os.Getenv("HMS_TEMPLATE_ID")
-	HMS_MANAGEMENT_TOKEN  = os.Getenv("HMS_MANAGEMENT_TOKEN")
+	HMS_APP_ACCESS_KEY    string
+	HMS_APP_SECRET        string
+	HMS_TEMPLATE_ID       string
+	HMS_MANAGEMENT_TOKEN  string
 )
 
 var (
@@ -1768,6 +1768,18 @@ func saveTranscriptHandler(w http.ResponseWriter, r *http.Request) {
 func main() {
 	flag.Parse()
 
+	// Initialize 100ms Configuration from environment
+	HMS_APP_ACCESS_KEY = os.Getenv("HMS_APP_ACCESS_KEY")
+	HMS_APP_SECRET = os.Getenv("HMS_APP_SECRET")
+	HMS_TEMPLATE_ID = os.Getenv("HMS_TEMPLATE_ID")
+	HMS_MANAGEMENT_TOKEN = os.Getenv("HMS_MANAGEMENT_TOKEN")
+
+	log.Printf("[INIT] 🔧 Initializing environment variables...")
+	log.Printf("[INIT] 100ms Access Key: %v (length: %d)", HMS_APP_ACCESS_KEY != "", len(HMS_APP_ACCESS_KEY))
+	log.Printf("[INIT] 100ms Secret: %v (length: %d)", HMS_APP_SECRET != "", len(HMS_APP_SECRET))
+	log.Printf("[INIT] 100ms Template: %v (%s)", HMS_TEMPLATE_ID != "", HMS_TEMPLATE_ID)
+	log.Printf("[INIT] 100ms Management Token: %v (length: %d)", HMS_MANAGEMENT_TOKEN != "", len(HMS_MANAGEMENT_TOKEN))
+
 	// Support Railway PORT
 	if port := os.Getenv("PORT"); port != "" && *addr == ":8080" {
 		*addr = ":" + port
@@ -1790,12 +1802,6 @@ func main() {
 	} else {
 		log.Printf("[DAILY] ⚠️  Daily.co not configured (optional)")
 	}
-
-	// Log 100ms configuration status
-	log.Printf("[100MS] HMS_APP_ACCESS_KEY: %v", HMS_APP_ACCESS_KEY != "")
-	log.Printf("[100MS] HMS_APP_SECRET: %v", HMS_APP_SECRET != "")
-	log.Printf("[100MS] HMS_TEMPLATE_ID: %v", HMS_TEMPLATE_ID != "")
-	log.Printf("[100MS] HMS_MANAGEMENT_TOKEN: %v (length: %d)", HMS_MANAGEMENT_TOKEN != "", len(HMS_MANAGEMENT_TOKEN))
 
 	// Initialize transcript processor
 	transcriptProc = transcript.NewProcessor(&redisAdapter{rdb: rdb})
