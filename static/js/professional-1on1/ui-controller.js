@@ -73,6 +73,7 @@ class ProfessionalUIController {
         [this.micBtn, this.cameraBtn, this.speakerBtn, this.raiseHandBtn].forEach(btn => {
             if (btn) {
                 btn.disabled = true;
+                btn.classList.remove('active');
             }
         });
 
@@ -494,6 +495,7 @@ class ProfessionalUIController {
             const localVideoTrack = getTrackByID(localPeer.videoTrack);
             const localAudioTrack = getTrackByID(localPeer.audioTrack);
             if (localVideoTrack && this.localVideoEl && typeof this.sdk?.hmsActions?.attachVideo === 'function') {
+                this.logDebug('Attaching local video track', localVideoTrack?.id || localPeer.videoTrack);
                 this.sdk.hmsActions.attachVideo(localVideoTrack, this.localVideoEl);
             }
 
@@ -508,6 +510,7 @@ class ProfessionalUIController {
             const remoteVideoTrack = getTrackByID(remotePeer.videoTrack);
             const remoteAudioTrack = getTrackByID(remotePeer.audioTrack);
             if (remoteVideoTrack && this.remoteVideoEl && typeof this.sdk?.hmsActions?.attachVideo === 'function') {
+                this.logDebug('Attaching remote video track', remoteVideoTrack?.id || remotePeer.videoTrack);
                 this.sdk.hmsActions.attachVideo(remoteVideoTrack, this.remoteVideoEl);
                 this.remoteVideoEl.style.display = 'block';
             } else if (this.remoteVideoEl && this.remoteVideoEl.srcObject) {
@@ -515,6 +518,7 @@ class ProfessionalUIController {
             }
 
             if (remoteAudioTrack && this.remoteAudioEl && typeof this.sdk?.hmsActions?.attachAudio === 'function') {
+                this.logDebug('Attaching remote audio track', remoteAudioTrack?.id || remotePeer.audioTrack);
                 this.sdk.hmsActions.attachAudio(remoteAudioTrack, this.remoteAudioEl);
             } else if (this.remoteAudioEl && this.remoteAudioEl.srcObject) {
                 this.remoteAudioEl.srcObject = null;
@@ -560,6 +564,7 @@ class ProfessionalUIController {
                     return;
                 }
                 try {
+                    this.logDebug('Mic toggle requested');
                     const enabled = await this.sdk.toggleAudio();
                     this.micBtn.classList.toggle('active', enabled);
                     this.logDebug('Mic state', enabled);
@@ -577,6 +582,7 @@ class ProfessionalUIController {
                     return;
                 }
                 try {
+                    this.logDebug('Camera toggle requested');
                     const enabled = await this.sdk.toggleVideo();
                     this.cameraBtn.classList.toggle('active', enabled);
                     this.logDebug('Camera state', enabled);
@@ -595,6 +601,7 @@ class ProfessionalUIController {
                         return;
                     }
                     try {
+                        this.logDebug('Sending chat message');
                         await this.sdk.sendMessage(this.chatInput.value.trim());
                         this.chatInput.value = '';
                         this.logDebug('Chat message sent');
@@ -935,6 +942,24 @@ class ProfessionalUIController {
                 btn.disabled = false;
             }
         });
+
+        if (this.sdk?.hmsStore) {
+            try {
+                const state = this.sdk.hmsStore.getState(s => ({
+                    audio: s.localPeer?.audioEnabled,
+                    video: s.localPeer?.videoEnabled
+                }));
+                if (this.micBtn) {
+                    this.micBtn.classList.toggle('active', Boolean(state.audio));
+                }
+                if (this.cameraBtn) {
+                    this.cameraBtn.classList.toggle('active', Boolean(state.video));
+                }
+            } catch (error) {
+                this.logWarn('Unable to sync control state from store', error);
+            }
+        }
+
         this.logDebug('Call controls enabled');
     }
 
