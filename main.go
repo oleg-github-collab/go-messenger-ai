@@ -92,6 +92,7 @@ type Room struct {
 	ID           string
 	HostID       string
 	HostName     string
+	HMS_RoomID   string
 	Participants map[*websocket.Conn]*Participant
 	WaitingRoom  map[string]*Participant
 	CreatedAt    time.Time
