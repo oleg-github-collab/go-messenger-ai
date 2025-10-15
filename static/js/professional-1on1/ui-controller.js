@@ -67,6 +67,7 @@ class ProfessionalUIController {
         this.shareBaseStatus = '';
         this.isShowingCopyStatus = false;
         this.controlsBound = false;
+        this.trackRetryTimers = { video: {}, audio: {} };
 
         window.__PRO_UI__ = this;
 
@@ -472,64 +473,42 @@ class ProfessionalUIController {
         const localPeer = peerValues.find(peer => peer.isLocal);
         const remotePeer = peerValues.find(peer => !peer.isLocal);
 
-        const getTrackByID = (trackId) => {
-            if (!trackId || !this.sdk?.hmsStore || typeof this.sdk.hmsStore.getState !== 'function') {
-                return null;
-            }
-            try {
-                return this.sdk.hmsStore.getState(state => {
-                    if (!state) return null;
-                    if (state.tracks && state.tracks[trackId]) return state.tracks[trackId];
-                    if (state.videoTracks && state.videoTracks[trackId]) return state.videoTracks[trackId];
-                    if (state.audioTracks && state.audioTracks[trackId]) return state.audioTracks[trackId];
-                    return null;
-                });
-            } catch (error) {
-                this.logWarn('Failed to resolve track by ID', trackId, error);
-                return null;
-            }
-        };
-
         if (localPeer) {
             this.localPeerId = localPeer.id;
-            const localVideoTrack = getTrackByID(localPeer.videoTrack);
-            const localAudioTrack = getTrackByID(localPeer.audioTrack);
-            if (localVideoTrack && this.localVideoEl && typeof this.sdk?.hmsActions?.attachVideo === 'function') {
-                this.logDebug('Attaching local video track', localVideoTrack?.id || localPeer.videoTrack);
-                this.sdk.hmsActions.attachVideo(localVideoTrack, this.localVideoEl);
+            if (localPeer.videoTrack && this.localVideoEl && typeof this.sdk?.hmsActions?.attachVideo === 'function') {
+                this.logDebug('Attaching local video track', localPeer.videoTrack);
+                this.safeAttachVideo(localPeer.videoTrack, this.localVideoEl, 'local');
             }
 
             if (this.localSpeakingEl) {
-                const show = Boolean(localPeer.isSpeaking) || Boolean(localAudioTrack && localAudioTrack.enabled && !localAudioTrack.muted);
+                const show = Boolean(localPeer.isSpeaking) || Boolean(this.isTrackEnabled(localPeer.audioTrack));
                 this.localSpeakingEl.style.display = show ? 'block' : 'none';
             }
         }
 
         if (remotePeer) {
             this.remotePeerId = remotePeer.id;
-            const remoteVideoTrack = getTrackByID(remotePeer.videoTrack);
-            const remoteAudioTrack = getTrackByID(remotePeer.audioTrack);
-            if (remoteVideoTrack && this.remoteVideoEl && typeof this.sdk?.hmsActions?.attachVideo === 'function') {
-                this.logDebug('Attaching remote video track', remoteVideoTrack?.id || remotePeer.videoTrack);
-                this.sdk.hmsActions.attachVideo(remoteVideoTrack, this.remoteVideoEl);
+            if (remotePeer.videoTrack && this.remoteVideoEl && typeof this.sdk?.hmsActions?.attachVideo === 'function') {
+                this.logDebug('Attaching remote video track', remotePeer.videoTrack);
+                this.safeAttachVideo(remotePeer.videoTrack, this.remoteVideoEl, 'remote');
                 this.remoteVideoEl.style.display = 'block';
             } else if (this.remoteVideoEl && this.remoteVideoEl.srcObject) {
                 this.remoteVideoEl.srcObject = null;
             }
 
-            if (remoteAudioTrack && this.remoteAudioEl && typeof this.sdk?.hmsActions?.attachAudio === 'function') {
-                this.logDebug('Attaching remote audio track', remoteAudioTrack?.id || remotePeer.audioTrack);
-                this.sdk.hmsActions.attachAudio(remoteAudioTrack, this.remoteAudioEl);
+            if (remotePeer.audioTrack && this.remoteAudioEl && typeof this.sdk?.hmsActions?.attachAudio === 'function') {
+                this.logDebug('Attaching remote audio track', remotePeer.audioTrack);
+                this.safeAttachAudio(remotePeer.audioTrack, this.remoteAudioEl, 'remote');
             } else if (this.remoteAudioEl && this.remoteAudioEl.srcObject) {
                 this.remoteAudioEl.srcObject = null;
             }
 
             if (this.remotePlaceholderEl) {
-                this.remotePlaceholderEl.style.display = remoteVideoTrack ? 'none' : 'flex';
+                this.remotePlaceholderEl.style.display = this.isTrackEnabled(remotePeer.videoTrack) ? 'none' : 'flex';
             }
 
             if (this.remoteSpeakingEl) {
-                const showRemote = Boolean(remotePeer.isSpeaking) || Boolean(remoteAudioTrack && remoteAudioTrack.enabled && !remoteAudioTrack.muted);
+                const showRemote = Boolean(remotePeer.isSpeaking) || Boolean(this.isTrackEnabled(remotePeer.audioTrack));
                 this.remoteSpeakingEl.style.display = showRemote ? 'block' : 'none';
             }
         } else {
@@ -638,6 +617,14 @@ class ProfessionalUIController {
         });
 
         this.storeSubscriptions = [];
+
+        Object.keys(this.trackRetryTimers.video).forEach(trackId => {
+            clearTimeout(this.trackRetryTimers.video[trackId]);
+        });
+        Object.keys(this.trackRetryTimers.audio).forEach(trackId => {
+            clearTimeout(this.trackRetryTimers.audio[trackId]);
+        });
+        this.trackRetryTimers = { video: {}, audio: {} };
     }
 
     /**
@@ -660,6 +647,7 @@ class ProfessionalUIController {
 
         const selectPeers = (state) => state?.peers || {};
         const selectMessages = (state) => state?.messages || [];
+        const selectTracks = (state) => state?.tracks || {};
 
         this.storeSubscriptions.push(
             hmsStore.subscribe(this.onTrackUpdate.bind(this), selectPeers)
@@ -671,6 +659,17 @@ class ProfessionalUIController {
 
         this.storeSubscriptions.push(
             hmsStore.subscribe(this.onMessage.bind(this), selectMessages)
+        );
+
+        this.storeSubscriptions.push(
+            hmsStore.subscribe(() => {
+                try {
+                    const peerMap = this.sdk.hmsStore.getState(state => state?.peers || {});
+                    this.onTrackUpdate(peerMap);
+                } catch (error) {
+                    this.logWarn('Track subscription refresh failed', error);
+                }
+            }, selectTracks)
         );
 
         this.logDebug('Subscribed to HMS store updates');
@@ -961,6 +960,100 @@ class ProfessionalUIController {
         }
 
         this.logDebug('Call controls enabled');
+    }
+
+    safeAttachVideo(trackId, element, label = 'video') {
+        if (!trackId || !element || !this.sdk?.hmsActions || !this.sdk?.hmsStore) {
+            return;
+        }
+
+        const trackExists = this.sdk.hmsStore.getState(s => {
+            const track = s?.tracks?.[trackId] || s?.videoTracks?.[trackId];
+            return Boolean(track);
+        });
+
+        if (!trackExists) {
+            this.logDebug(`Track ${trackId} not ready for attach (${label})`);
+            this.scheduleTrackRetry('video', trackId, () => this.safeAttachVideo(trackId, element, label));
+            return;
+        }
+
+        try {
+            this.clearTrackRetry('video', trackId);
+            this.sdk.hmsActions.attachVideo(trackId, element);
+            this.logDebug(`Attached ${label} video track`, trackId);
+        } catch (error) {
+            this.logError(`attachVideo failed for ${label}`, error);
+            this.scheduleTrackRetry('video', trackId, () => this.safeAttachVideo(trackId, element, label), true);
+        }
+    }
+
+    safeAttachAudio(trackId, element, label = 'audio') {
+        if (!trackId || !element || !this.sdk?.hmsActions || !this.sdk?.hmsStore) {
+            return;
+        }
+
+        const trackExists = this.sdk.hmsStore.getState(s => {
+            const track = s?.tracks?.[trackId] || s?.audioTracks?.[trackId];
+            return Boolean(track);
+        });
+
+        if (!trackExists) {
+            this.logDebug(`Track ${trackId} not ready for attach (${label})`);
+            this.scheduleTrackRetry('audio', trackId, () => this.safeAttachAudio(trackId, element, label));
+            return;
+        }
+
+        try {
+            this.clearTrackRetry('audio', trackId);
+            this.sdk.hmsActions.attachAudio(trackId, element);
+            this.logDebug(`Attached ${label} audio track`, trackId);
+        } catch (error) {
+            this.logError(`attachAudio failed for ${label}`, error);
+            this.scheduleTrackRetry('audio', trackId, () => this.safeAttachAudio(trackId, element, label), true);
+        }
+    }
+
+    isTrackEnabled(trackId) {
+        if (!trackId || !this.sdk?.hmsStore) {
+            return false;
+        }
+
+        try {
+            const track = this.sdk.hmsStore.getState(s => s?.tracks?.[trackId] || s?.videoTracks?.[trackId] || s?.audioTracks?.[trackId]);
+            if (!track) return false;
+            if (track.type === 'audio') {
+                return track.enabled !== false && track.muted !== true;
+            }
+            return track.enabled !== false;
+        } catch (error) {
+            this.logWarn('Unable to read track state', trackId, error);
+            return false;
+        }
+    }
+
+    scheduleTrackRetry(type, trackId, callback, immediate = false) {
+        if (!trackId) return;
+        const registry = this.trackRetryTimers[type];
+        if (!registry) return;
+        if (registry[trackId]) {
+            return;
+        }
+
+        const delay = immediate ? 300 : 600;
+        registry[trackId] = setTimeout(() => {
+            delete registry[trackId];
+            callback();
+        }, delay);
+    }
+
+    clearTrackRetry(type, trackId) {
+        if (!trackId) return;
+        const registry = this.trackRetryTimers[type];
+        if (registry && registry[trackId]) {
+            clearTimeout(registry[trackId]);
+            delete registry[trackId];
+        }
     }
 
     logDebug(...args) {
