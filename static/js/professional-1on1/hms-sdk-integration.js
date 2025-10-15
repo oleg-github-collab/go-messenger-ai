@@ -24,6 +24,7 @@ class ProfessionalMeetingSDK {
         this.participantRegistered = false;
         this.isScreenSharing = false;
         this.isRecording = false;
+        this.activeRecordingMode = null;
 
         console.log('[HMS SDK] Initializing Professional Meeting SDK');
     }
@@ -447,15 +448,15 @@ class ProfessionalMeetingSDK {
         if (!this.hmsActions) return;
         try {
             if (enable) {
-                if (typeof this.hmsActions.startScreenShare === 'function') {
-                    await this.hmsActions.startScreenShare();
+                if (typeof this.hmsActions.startScreenshare === 'function') {
+                    await this.hmsActions.startScreenshare();
                     this.isScreenSharing = true;
                 } else {
-                    throw new Error('Screenshare is not supported in this build');
+                    throw new Error('Screenshare is not supported in this plan.');
                 }
             } else {
-                if (typeof this.hmsActions.stopScreenShare === 'function') {
-                    await this.hmsActions.stopScreenShare();
+                if (typeof this.hmsActions.stopScreenshare === 'function') {
+                    await this.hmsActions.stopScreenshare();
                 }
                 this.isScreenSharing = false;
             }
@@ -466,7 +467,9 @@ class ProfessionalMeetingSDK {
     }
 
     async toggleRecording(enable) {
-        if (!this.hmsActions) return;
+        if (!this.hmsActions) {
+            return { success: false, mode: null };
+        }
         try {
             if (enable) {
                 if (typeof this.hmsActions.startRTMPOrRecording === 'function') {
@@ -476,17 +479,29 @@ class ProfessionalMeetingSDK {
                         rtmpURLs: []
                     });
                     this.isRecording = true;
-                } else {
-                    throw new Error('Recording is not supported in this build');
+                    this.activeRecordingMode = 'cloud';
+                    return { success: true, mode: 'cloud' };
                 }
+                const err = new Error('Cloud recording is not available on this account.');
+                err.code = 'CLOUD_RECORDING_UNAVAILABLE';
+                throw err;
             } else {
-                if (typeof this.hmsActions.stopRTMPAndRecording === 'function') {
+                if (this.activeRecordingMode === 'cloud' &&
+                    typeof this.hmsActions.stopRTMPAndRecording === 'function' &&
+                    this.isRecording) {
                     await this.hmsActions.stopRTMPAndRecording();
                 }
                 this.isRecording = false;
+                const previousMode = this.activeRecordingMode || 'cloud';
+                this.activeRecordingMode = null;
+                return { success: true, mode: previousMode };
             }
         } catch (error) {
             this.isRecording = false;
+            this.activeRecordingMode = null;
+            if (!error.code) {
+                error.code = 'CLOUD_RECORDING_FAILED';
+            }
             throw error;
         }
     }

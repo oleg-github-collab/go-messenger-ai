@@ -55,6 +55,14 @@
                 <p class="share-status" id="shareLinkStatus"></p>
             </div>
         </div>
+
+        <div class="reactions-panel" id="reactionsPanel" style="display: none;">
+            <button class="reaction-btn" data-reaction="👏">👏</button>
+            <button class="reaction-btn" data-reaction="👍">👍</button>
+            <button class="reaction-btn" data-reaction="🔥">🔥</button>
+            <button class="reaction-btn" data-reaction="🎉">🎉</button>
+            <button class="reaction-btn" data-reaction="❤️">❤️</button>
+        </div>
     </div>
 
     <!-- Loading Screen -->
@@ -140,6 +148,7 @@
                         <p>Share the link to start your professional meeting</p>
                     </div>
                 </div>
+                <div class="reaction-overlay" id="reactionOverlay"></div>
 
                 <!-- Speaking Indicator -->
                 <div class="speaking-border" id="remoteSpeaking" style="display: none;"></div>

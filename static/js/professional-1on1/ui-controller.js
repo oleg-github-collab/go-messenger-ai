@@ -66,6 +66,7 @@ class ProfessionalUIController {
         // Chat
         this.chatMessages = document.querySelector('.chat-messages');
         this.chatInput = document.getElementById('chatInput');
+        this.chatBadge = document.getElementById('chatBadge');
 
         // AI Panel (host only)
         this.aiPanel = document.querySelector('.ai-panel');
@@ -95,6 +96,14 @@ class ProfessionalUIController {
         this.isScreenSharing = false;
         this.isRemoteAudioMuted = false;
         this.reactionTimeout = null;
+        this.reactionOverlay = document.getElementById('reactionOverlay');
+        this.isRecording = false;
+        this.recordingMode = null;
+        this.localRecorder = null;
+        this.localRecordingChunks = [];
+        this.localRecordingStart = null;
+        this.localRecordingTracks = [];
+        this.latestLocalRecordingId = null;
 
         window.__PRO_UI__ = this;
 
@@ -115,6 +124,211 @@ class ProfessionalUIController {
         }
 
         console.log('[UI Controller] Initialized');
+    }
+
+    applyRecordingUI(isRecording, mode = 'cloud') {
+        if (this.recordBtn) {
+            this.recordBtn.classList.toggle('active', isRecording);
+            this.recordBtn.dataset.active = isRecording ? 'true' : 'false';
+        }
+
+        if (this.recordingIndicatorEl) {
+            this.recordingIndicatorEl.style.display = isRecording ? 'flex' : 'none';
+            const label = this.recordingIndicatorEl.querySelector('span:last-child');
+            if (label) {
+                label.textContent = mode === 'local' ? 'REC · LOCAL' : 'REC';
+            }
+        }
+    }
+
+    async startLocalRecording() {
+        if (typeof window.MediaRecorder === 'undefined') {
+            throw new Error('MediaRecorder API is not supported in this browser.');
+        }
+        if (this.localRecorder) {
+            this.logWarn('Local recorder already active, ignoring duplicate start');
+            return 'local';
+        }
+
+        const combinedStream = new MediaStream();
+        const clonedTracks = [];
+
+        const addTracks = stream => {
+            stream.getTracks().forEach(track => {
+                try {
+                    const clone = track.clone();
+                    clonedTracks.push(clone);
+                    combinedStream.addTrack(clone);
+                } catch (error) {
+                    this.logWarn('Failed to clone track for recording', error);
+                }
+            });
+        };
+
+        const remoteStream = this.remoteVideoEl?.srcObject;
+        if (remoteStream instanceof MediaStream) {
+            addTracks(remoteStream);
+        }
+
+        const localStream = this.localVideoEl?.srcObject;
+        if (localStream instanceof MediaStream) {
+            addTracks(localStream);
+        }
+
+        if (!combinedStream.getTracks().length) {
+            throw new Error('No media tracks available for local recording.');
+        }
+
+        const preferredTypes = [
+            'video/webm;codecs=vp9,opus',
+            'video/webm;codecs=vp8,opus',
+            'video/webm'
+        ];
+        const mimeType = preferredTypes.find(type => {
+            return typeof MediaRecorder.isTypeSupported === 'function' && MediaRecorder.isTypeSupported(type);
+        });
+
+        const options = mimeType ? { mimeType } : undefined;
+        const recorder = new MediaRecorder(combinedStream, options);
+        this.localRecordingChunks = [];
+
+        recorder.addEventListener('dataavailable', event => {
+            if (event.data && event.data.size > 0) {
+                this.localRecordingChunks.push(event.data);
+            }
+        });
+
+        recorder.addEventListener('error', event => {
+            this.logError('Local recorder error', event.error || event);
+        });
+
+        recorder.start(2000);
+
+        this.localRecorder = recorder;
+        this.localRecordingTracks = clonedTracks;
+        this.localRecordingStart = Date.now();
+
+        this.logDebug('Local MediaRecorder started', mimeType || 'default');
+        return 'local';
+    }
+
+    async stopLocalRecording() {
+        if (!this.localRecorder) {
+            this.logDebug('Local recorder already stopped');
+            return;
+        }
+
+        await new Promise((resolve, reject) => {
+            const recorder = this.localRecorder;
+
+            const handleStop = async () => {
+                try {
+                    const blob = new Blob(this.localRecordingChunks, { type: recorder.mimeType || 'video/webm' });
+                    await this.uploadLocalRecording(blob);
+                    resolve();
+                } catch (error) {
+                    reject(error);
+                } finally {
+                    this.localRecordingTracks.forEach(track => {
+                        try {
+                            track.stop();
+                        } catch (trackError) {
+                            this.logWarn('Failed to stop cloned track', trackError);
+                        }
+                    });
+                    this.localRecordingTracks = [];
+                    this.localRecorder = null;
+                    this.localRecordingChunks = [];
+                    this.localRecordingStart = null;
+                }
+            };
+
+            recorder.addEventListener('stop', handleStop, { once: true });
+            recorder.addEventListener('error', event => {
+                reject(event.error || new Error('MediaRecorder error'));
+            }, { once: true });
+
+            try {
+                recorder.stop();
+            } catch (error) {
+                reject(error);
+            }
+        });
+    }
+
+    async uploadLocalRecording(blob) {
+        if (!blob || !blob.size) {
+            this.logWarn('Local recording blob empty, skipping upload');
+            return;
+        }
+
+        const arrayBuffer = await blob.arrayBuffer();
+        const base64Data = this.arrayBufferToBase64(arrayBuffer);
+        const durationSeconds = this.localRecordingStart
+            ? Math.max(1, Math.round((Date.now() - this.localRecordingStart) / 1000))
+            : 0;
+
+        const payload = {
+            meetingId: this.sdk?.hmsRoomId || this.roomCode,
+            roomCode: this.roomCode,
+            hostId: this.sdk?.userId || 'host',
+            mimeType: blob.type || 'video/webm',
+            size: blob.size,
+            durationSeconds,
+            startedAt: this.localRecordingStart ? new Date(this.localRecordingStart).toISOString() : new Date().toISOString(),
+            endedAt: new Date().toISOString(),
+            data: base64Data,
+            participants: this.getParticipantNames()
+        };
+
+        const response = await fetch('/api/recordings/upload', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(payload)
+        });
+
+        if (!response.ok) {
+            const message = await response.text();
+            throw new Error(`Failed to upload recording: ${response.status} ${message}`);
+        }
+
+        const result = await response.json();
+        this.latestLocalRecordingId = result?.recordingId || null;
+        this.logInfo('Local recording uploaded', result);
+    }
+
+    arrayBufferToBase64(buffer) {
+        let binary = '';
+        const bytes = new Uint8Array(buffer);
+        const chunkSize = 0x8000;
+        for (let i = 0; i < bytes.length; i += chunkSize) {
+            const chunk = bytes.subarray(i, Math.min(i + chunkSize, bytes.length));
+            binary += String.fromCharCode.apply(null, chunk);
+        }
+        return btoa(binary);
+    }
+
+    getParticipantNames() {
+        const names = new Set();
+        if (this.sdk?.userName) {
+            names.add(this.sdk.userName);
+        }
+        if (typeof this.sdk?.getRemotePeers === 'function') {
+            try {
+                const remotePeers = this.sdk.getRemotePeers();
+                remotePeers.forEach(peer => {
+                    if (peer?.name) {
+                        names.add(peer.name);
+                    } else if (peer?.userName) {
+                        names.add(peer.userName);
+                    }
+                });
+            } catch (error) {
+                this.logWarn('Failed to collect remote peer names', error);
+            }
+        }
+        return Array.from(names);
     }
 
     /**
@@ -705,6 +919,8 @@ class ProfessionalUIController {
         this.endCallBtn?.addEventListener('click', () => this.leaveCall());
         document.getElementById('backBtn')?.addEventListener('click', () => this.leaveCall());
 
+        this.setupReactionButtons();
+
         this.controlsBound = true;
         this.logDebug('Event listeners attached');
     }
@@ -786,6 +1002,18 @@ class ProfessionalUIController {
                 this.whiteboardBtn.dataset.active = 'false';
             }
         }
+        if (this.reactionsPanel) {
+            this.reactionsPanel.classList.remove('visible');
+            this.reactionsPanel.style.display = 'none';
+        }
+        if (this.reactionOverlay) {
+            this.reactionOverlay.classList.remove('visible');
+            this.reactionOverlay.textContent = '';
+        }
+        if (this.chatBadge) {
+            this.chatBadge.style.display = 'none';
+            this.chatBadge.textContent = '0';
+        }
     }
 
     /**
@@ -865,8 +1093,21 @@ class ProfessionalUIController {
                 return;
             }
 
+            if (text.startsWith('REACTION::')) {
+                const reaction = text.replace('REACTION::', '');
+                this.renderedMessageIds.add(messageKey);
+                this.showReactionOverlay(reaction, sender);
+                return;
+            }
+
             this.renderedMessageIds.add(messageKey);
             this.addChatMessage(sender, text, timestamp);
+
+            if (this.chatBadge && sender !== this.sdk?.userName) {
+                const current = parseInt(this.chatBadge.textContent || '0', 10) || 0;
+                this.chatBadge.textContent = String(current + 1);
+                this.chatBadge.style.display = 'inline-flex';
+            }
         });
     }
 
@@ -906,11 +1147,12 @@ class ProfessionalUIController {
     addChatMessage(sender, message, timestamp) {
         if (!this.chatMessages) return;
 
+        const displaySender = sender === this.sdk?.userName ? 'You' : sender;
         const msgDiv = document.createElement('div');
         msgDiv.className = 'chat-message';
         msgDiv.innerHTML = `
             <div class="message-header">
-                <strong>${sender}</strong>
+                <strong>${displaySender}</strong>
                 <span class="message-time">${new Date(timestamp).toLocaleTimeString()}</span>
             </div>
             <div class="message-text">${message}</div>
@@ -1243,6 +1485,12 @@ class ProfessionalUIController {
         }
         this.notetakerPauseBtn?.setAttribute('disabled', 'disabled');
         this.notetakerStopBtn?.setAttribute('disabled', 'disabled');
+        if (this.notetakerPauseBtn) {
+            this.notetakerPauseBtn.dataset.active = 'false';
+        }
+        if (this.notetakerStopBtn) {
+            this.notetakerStopBtn.dataset.active = 'false';
+        }
         this.recordBtn?.setAttribute('disabled', 'disabled');
         if (this.recordBtn) {
             this.recordBtn.dataset.active = 'false';
@@ -1291,9 +1539,9 @@ class ProfessionalUIController {
             this.chatBtn.dataset.active = !hidden ? 'true' : 'false';
         }
         if (!hidden) {
-            const badge = document.getElementById('chatBadge');
-            if (badge) {
-                badge.style.display = 'none';
+            if (this.chatBadge) {
+                this.chatBadge.style.display = 'none';
+                this.chatBadge.textContent = '0';
             }
         }
     }
@@ -1323,6 +1571,7 @@ class ProfessionalUIController {
             alert('Reactions are coming soon.');
             return;
         }
+        this.setupReactionButtons();
         const visible = this.reactionsPanel.classList.toggle('visible');
         this.reactionsPanel.style.display = visible ? 'flex' : 'none';
         if (this.reactionsBtn) {
@@ -1338,6 +1587,44 @@ class ProfessionalUIController {
         }
     }
 
+    setupReactionButtons() {
+        if (!this.reactionsPanel || this.reactionsPanel.dataset.bound === 'true') {
+            return;
+        }
+        this.reactionsPanel.querySelectorAll('.reaction-btn').forEach(btn => {
+            btn.addEventListener('click', () => {
+                const reaction = btn.dataset.reaction;
+                if (reaction) {
+                    this.sendReaction(reaction);
+                }
+                this.toggleReactions();
+            });
+        });
+        this.reactionsPanel.dataset.bound = 'true';
+    }
+
+    async sendReaction(reaction) {
+        this.showReactionOverlay(reaction, 'You');
+        if (!this.sdk) return;
+        try {
+            await this.sdk.sendMessage(`REACTION::${reaction}`);
+        } catch (error) {
+            this.logWarn('Failed to send reaction', error);
+        }
+    }
+
+    showReactionOverlay(reaction, sender) {
+        if (!this.reactionOverlay) {
+            return;
+        }
+        this.reactionOverlay.textContent = reaction;
+        this.reactionOverlay.classList.add('visible');
+        clearTimeout(this.reactionTimeout);
+        this.reactionTimeout = setTimeout(() => {
+            this.reactionOverlay.classList.remove('visible');
+        }, 2200);
+    }
+
     async toggleRecording() {
         if (!this.isHost) {
             alert('Only the host can control recording.');
@@ -1347,25 +1634,54 @@ class ProfessionalUIController {
             this.logWarn('Recording ignored - SDK not initialized');
             return;
         }
+
+        const enable = !this.isRecording;
+
+        if (enable) {
+            try {
+                const result = await this.sdk.toggleRecording(true);
+                this.recordingMode = result?.mode || 'cloud';
+                this.isRecording = true;
+                this.applyRecordingUI(true, this.recordingMode);
+                this.logDebug('Recording started', this.recordingMode);
+                return;
+            } catch (error) {
+                this.logWarn('Cloud recording unavailable, attempting local fallback', error);
+                if (error?.code === 'CLOUD_RECORDING_UNAVAILABLE' || /not available/i.test(error?.message || '')) {
+                    try {
+                        await this.startLocalRecording();
+                        this.isRecording = true;
+                        this.recordingMode = 'local';
+                        this.applyRecordingUI(true, 'local');
+                        alert('Cloud recording is not available on this plan. Started a local recording instead — it will upload when you stop.');
+                        return;
+                    } catch (fallbackError) {
+                        this.logError('Local recording fallback failed', fallbackError);
+                    }
+                } else {
+                    this.logError('Recording toggle failed', error);
+                }
+                this.applyRecordingUI(false);
+                this.isRecording = false;
+                this.recordingMode = null;
+                alert('Recording is not available in this environment.');
+                return;
+            }
+        }
+
+        // Stop recording
         try {
-            this.isRecording = !this.isRecording;
-            await this.sdk.toggleRecording(this.isRecording);
-            this.recordBtn?.classList.toggle('active', this.isRecording);
-            if (this.recordBtn) {
-                this.recordBtn.dataset.active = this.isRecording ? 'true' : 'false';
+            if (this.recordingMode === 'cloud') {
+                await this.sdk.toggleRecording(false);
+            } else if (this.recordingMode === 'local') {
+                await this.stopLocalRecording();
             }
-            if (this.recordingIndicatorEl) {
-                this.recordingIndicatorEl.style.display = this.isRecording ? 'flex' : 'none';
-            }
-            this.logDebug('Recording state', this.isRecording);
         } catch (error) {
+            this.logError('Failed to stop recording', error);
+        } finally {
             this.isRecording = false;
-            this.recordBtn?.classList.remove('active');
-            if (this.recordingIndicatorEl) {
-                this.recordingIndicatorEl.style.display = 'none';
-            }
-            this.logError('Recording toggle failed', error);
-            alert('Recording is not available in this environment.');
+            this.recordingMode = null;
+            this.applyRecordingUI(false);
         }
     }
 
@@ -1430,12 +1746,17 @@ class ProfessionalUIController {
         }
         try {
             if (this.isHost && this.sdk?.hmsRoomId) {
+                const payload = { room_id: this.sdk.hmsRoomId };
+                if (this.latestLocalRecordingId) {
+                    payload.recording_asset_id = this.latestLocalRecordingId;
+                }
                 await fetch('/api/notetaker/stop', {
                     method: 'POST',
                     headers: {'Content-Type': 'application/json'},
                     credentials: 'include',
-                    body: JSON.stringify({ room_id: this.sdk.hmsRoomId })
+                    body: JSON.stringify(payload)
                 });
+                this.latestLocalRecordingId = null;
             }
         } catch (error) {
             this.logError('Notetaker stop failed', error);
@@ -1463,6 +1784,9 @@ class ProfessionalUIController {
                 this.notetakerStartBtn.style.display = 'none';
                 this.notetakerPauseBtn.style.display = 'flex';
                 this.notetakerStopBtn.style.display = 'flex';
+                this.notetakerStartBtn.dataset.active = 'false';
+                this.notetakerPauseBtn.dataset.active = 'true';
+                this.notetakerStopBtn.dataset.active = 'true';
                 if (this.recordingIndicatorEl) {
                     this.recordingIndicatorEl.style.display = 'flex';
                 }
@@ -1479,6 +1803,9 @@ class ProfessionalUIController {
                 this.notetakerStatusEl.textContent = 'Paused';
                 this.notetakerStatusEl.classList.remove('recording');
                 this.notetakerStatusEl.classList.add('paused');
+                this.notetakerStartBtn.dataset.active = 'false';
+                this.notetakerPauseBtn.dataset.active = 'true';
+                this.notetakerStopBtn.dataset.active = 'true';
                 if (this.recordingIndicatorEl) {
                     this.recordingIndicatorEl.style.display = 'flex';
                 }
@@ -1499,6 +1826,9 @@ class ProfessionalUIController {
                 this.notetakerStartBtn.style.display = 'flex';
                 this.notetakerPauseBtn.style.display = 'none';
                 this.notetakerStopBtn.style.display = 'none';
+                this.notetakerStartBtn.dataset.active = 'true';
+                this.notetakerPauseBtn.dataset.active = 'false';
+                this.notetakerStopBtn.dataset.active = 'false';
                 if (this.notetakerPauseBtn) {
                     this.notetakerPauseBtn.innerHTML = `
                         <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
@@ -1524,6 +1854,10 @@ class ProfessionalUIController {
         const minutes = Math.floor(elapsed / 60000).toString().padStart(2, '0');
         const seconds = Math.floor((elapsed % 60000) / 1000).toString().padStart(2, '0');
         this.notetakerTimerEl.textContent = `${minutes}:${seconds}`;
+    }
+
+    logInfo(...args) {
+        console.info('[UI Controller][INFO]', ...args);
     }
 
     logDebug(...args) {

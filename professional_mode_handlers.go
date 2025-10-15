@@ -77,6 +77,14 @@ type ProfessionalInvite struct {
 	CreatedAt       time.Time `json:"created_at"`
 }
 
+func professionalInviteKey(code string) string {
+	return fmt.Sprintf("professional_invite:%s", code)
+}
+
+func professionalInviteHMSKey(hmsRoomID string) string {
+	return fmt.Sprintf("professional_invite_hms:%s", hmsRoomID)
+}
+
 // Create 100ms Room Handler - HOST ONLY (Oleh)
 func handleCreateProfessionalRoom(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
@@ -497,10 +505,6 @@ func verifyWebhookSignature(r *http.Request, signature string) bool {
 	return hmac.Equal([]byte(signature), []byte(expectedSignature))
 }
 
-func professionalInviteKey(code string) string {
-	return fmt.Sprintf("professional_invite:%s", code)
-}
-
 func createProfessionalInvite(roomID, hostName string) (*ProfessionalInvite, error) {
 	if roomID == "" {
 		return nil, fmt.Errorf("room id is required for invite creation")
@@ -538,6 +542,10 @@ func createProfessionalInvite(roomID, hostName string) (*ProfessionalInvite, err
 			return nil, fmt.Errorf("failed to store invite: %w", err)
 		}
 
+		if err := rdb.Set(ctx, professionalInviteHMSKey(roomID), code, professionalInviteTTL).Err(); err != nil {
+			log.Printf("[PROFESSIONAL] ⚠️  Failed to store HMS invite mapping: %v", err)
+		}
+
 		participantsKey := fmt.Sprintf("%s:participants", key)
 		if hostName != "" {
 			if err := rdb.SAdd(ctx, participantsKey, hostName).Err(); err != nil {
@@ -567,6 +575,14 @@ func loadProfessionalInvite(code string) (*ProfessionalInvite, error) {
 	}
 
 	return &invite, nil
+}
+
+func loadProfessionalInviteByHMS(hmsRoomID string) (*ProfessionalInvite, error) {
+	code, err := rdb.Get(ctx, professionalInviteHMSKey(hmsRoomID)).Result()
+	if err != nil {
+		return nil, err
+	}
+	return loadProfessionalInvite(code)
 }
 
 func professionalInviteParticipantsKey(code string) string {

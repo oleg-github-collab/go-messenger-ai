@@ -34,6 +34,7 @@ const (
 	validPassword = "QwertY24$"
 	sessionTTL    = 24 * time.Hour
 	meetingTTL    = 8 * time.Hour
+	notetakerTTL  = 7 * 24 * time.Hour
 	buildVersion  = "v1.1.0-role-presets-ui" // UPDATED: Interactive role preset buttons
 	buildDate     = "2025-10-08"
 )
@@ -118,11 +119,16 @@ type Message struct {
 
 // NotetakerSession stores active recording session
 type NotetakerSession struct {
-	RoomID       string    `json:"room_id"`
-	AudioChunks  [][]byte  `json:"-"`
-	StartTime    time.Time `json:"start_time"`
-	Participants []string  `json:"participants"`
-	mu           sync.Mutex
+	RoomID           string     `json:"room_id"`
+	HostID           string     `json:"host_id"`
+	Participants     []string   `json:"participants,omitempty"`
+	StartTime        time.Time  `json:"start_time"`
+	EndTime          *time.Time `json:"end_time,omitempty"`
+	DurationSeconds  int64      `json:"duration_seconds,omitempty"`
+	Status           string     `json:"status"`
+	Transcript       string     `json:"transcript,omitempty"`
+	RecordingAssetID string     `json:"recording_asset_id,omitempty"`
+	LastUpdated      time.Time  `json:"last_updated"`
 }
 
 // TranscriptSegment represents a piece of transcript
@@ -144,9 +150,8 @@ type MeetingAnalysis struct {
 }
 
 var (
-	rooms             = make(map[string]*Room)
-	notetakerSessions = make(map[string]*NotetakerSession)
-	mu                sync.RWMutex
+	rooms = make(map[string]*Room)
+	mu    sync.RWMutex
 )
 
 var upgrader = websocket.Upgrader{
@@ -1350,6 +1355,82 @@ func sfuWSHandler(w http.ResponseWriter, r *http.Request) {
 
 // AI Notetaker Handlers
 
+func notetakerSessionKey(roomID string) string {
+	return fmt.Sprintf("notetaker:session:%s", roomID)
+}
+
+func loadNotetakerSession(roomID string) (*NotetakerSession, error) {
+	if roomID == "" {
+		return nil, fmt.Errorf("room id required")
+	}
+
+	data, err := rdb.Get(ctx, notetakerSessionKey(roomID)).Result()
+	if err != nil {
+		return nil, err
+	}
+
+	var session NotetakerSession
+	if err := json.Unmarshal([]byte(data), &session); err != nil {
+		return nil, err
+	}
+
+	return &session, nil
+}
+
+func saveNotetakerSession(session *NotetakerSession) error {
+	if session == nil {
+		return fmt.Errorf("session cannot be nil")
+	}
+
+	session.LastUpdated = time.Now().UTC()
+
+	payload, err := json.Marshal(session)
+	if err != nil {
+		return err
+	}
+
+	return rdb.Set(ctx, notetakerSessionKey(session.RoomID), payload, notetakerTTL).Err()
+}
+
+func saveNotetakerAudio(roomID, raw string) (string, error) {
+	if raw == "" {
+		return "", nil
+	}
+
+	mimeType := "audio/webm"
+	payload := raw
+
+	if strings.HasPrefix(raw, "data:") {
+		if comma := strings.Index(raw, ","); comma != -1 {
+			meta := raw[:comma]
+			payload = raw[comma+1:]
+			if semi := strings.Index(meta, ";"); semi != -1 {
+				mimeType = strings.TrimPrefix(meta[:semi], "data:")
+			}
+		}
+	}
+
+	audioID := fmt.Sprintf("%s:%d", roomID, time.Now().UnixNano())
+	key := fmt.Sprintf("notetaker:audio:%s", audioID)
+
+	record := map[string]string{
+		"mime_type":  mimeType,
+		"data":       payload,
+		"created_at": time.Now().UTC().Format(time.RFC3339),
+	}
+
+	bytes, err := json.Marshal(record)
+	if err != nil {
+		return "", err
+	}
+
+	if err := rdb.Set(ctx, key, bytes, 7*24*time.Hour).Err(); err != nil {
+		return "", err
+	}
+
+	return audioID, nil
+}
+
 func startNotetakerHandler(w http.ResponseWriter, r *http.Request) {
 	if r.Method != http.MethodPost {
 		http.Error(w, "method not allowed", http.StatusMethodNotAllowed)
@@ -1366,52 +1447,89 @@ func startNotetakerHandler(w http.ResponseWriter, r *http.Request) {
 
 	// SECURITY: Verify user is host of this room
 	userID := r.Header.Get("X-User-ID")
+	sessionKey := req.RoomID
+	hmsRoomID := ""
+	hostIdentifier := ""
+
 	mu.Lock()
 	room, roomExists := rooms[req.RoomID]
 	mu.Unlock()
 
-	if roomExists && room.HostID != userID {
-		log.Printf("[NOTETAKER] ❌ Unauthorized: user %s is not host of room %s", userID, req.RoomID)
-		http.Error(w, "unauthorized: only host can start notetaker", http.StatusForbidden)
-		return
-	}
-
-	// If room not in memory, check Redis
-	if !roomExists {
-		meeting, err := getMeeting(req.RoomID)
-		if err != nil || meeting == nil {
-			http.Error(w, "room not found", http.StatusNotFound)
-			return
-		}
-		if meeting["host_user_id"].(string) != userID {
-			log.Printf("[NOTETAKER] ❌ Unauthorized: user %s is not host of room %s (Redis)", userID, req.RoomID)
+	if roomExists {
+		hostIdentifier = room.HostID
+		hmsRoomID = room.HMS_RoomID
+		if hostIdentifier != "" && hostIdentifier != userID {
+			log.Printf("[NOTETAKER] ❌ Unauthorized: user %s is not host of room %s", userID, req.RoomID)
 			http.Error(w, "unauthorized: only host can start notetaker", http.StatusForbidden)
 			return
 		}
+	} else {
+		meeting, err := getMeeting(req.RoomID)
+		if err == nil && meeting != nil {
+			hostIdentifier = meeting["host_user_id"].(string)
+			if hostIdentifier != "" && hostIdentifier != userID {
+				log.Printf("[NOTETAKER] ❌ Unauthorized: user %s is not host of room %s (Redis)", userID, req.RoomID)
+				http.Error(w, "unauthorized: only host can start notetaker", http.StatusForbidden)
+				return
+			}
+			if val, ok := meeting["hms_room_id"].(string); ok {
+				hmsRoomID = val
+			}
+		} else {
+			invite, inviteErr := loadProfessionalInvite(req.RoomID)
+			if inviteErr != nil {
+				invite, inviteErr = loadProfessionalInviteByHMS(req.RoomID)
+			}
+			if inviteErr != nil {
+				http.Error(w, "room not found", http.StatusNotFound)
+				return
+			}
+			hostIdentifier = invite.HostName
+			hmsRoomID = invite.HMSRoomID
+			sessionKey = invite.HMSRoomID
+			if hostIdentifier != "" && hostIdentifier != userID {
+				log.Printf("[NOTETAKER] ❌ Unauthorized: user %s is not host for professional room %s", userID, req.RoomID)
+				http.Error(w, "unauthorized: only host can start notetaker", http.StatusForbidden)
+				return
+			}
+		}
 	}
 
-	mu.Lock()
-	if _, exists := notetakerSessions[req.RoomID]; exists {
-		mu.Unlock()
+	if hmsRoomID == "" {
+		hmsRoomID = req.RoomID
+	}
+
+	existingSession, err := loadNotetakerSession(sessionKey)
+	if err == nil && existingSession != nil && existingSession.Status == "recording" {
 		http.Error(w, "notetaker already active", http.StatusConflict)
+		return
+	}
+	if err != nil && err != redis.Nil {
+		log.Printf("[NOTETAKER] ❌ Failed to check existing session: %v", err)
+		http.Error(w, "failed to start notetaker", http.StatusInternalServerError)
 		return
 	}
 
 	session := &NotetakerSession{
-		RoomID:       req.RoomID,
-		AudioChunks:  make([][]byte, 0),
-		StartTime:    time.Now(),
-		Participants: make([]string, 0),
+		RoomID:       sessionKey,
+		HostID:       userID,
+		Participants: []string{userID},
+		StartTime:    time.Now().UTC(),
+		Status:       "recording",
 	}
-	notetakerSessions[req.RoomID] = session
-	mu.Unlock()
 
-	log.Printf("[NOTETAKER] 🎙️ Started for room %s by host %s", req.RoomID, userID)
+	if err := saveNotetakerSession(session); err != nil {
+		log.Printf("[NOTETAKER] ❌ Failed to persist session: %v", err)
+		http.Error(w, "failed to start notetaker", http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("[NOTETAKER] 🎙️ Started for room %s by host %s", sessionKey, userID)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
 		"success":    true,
-		"room_id":    req.RoomID,
+		"room_id":    sessionKey,
 		"start_time": session.StartTime,
 	})
 }
@@ -1423,66 +1541,106 @@ func stopNotetakerHandler(w http.ResponseWriter, r *http.Request) {
 	}
 
 	var req struct {
-		RoomID     string `json:"room_id"`
-		AudioData  string `json:"audio_data"` // base64 encoded audio
-		Transcript string `json:"transcript"` // client-side transcript if available
+		RoomID           string `json:"room_id"`
+		AudioData        string `json:"audio_data"`
+		Transcript       string `json:"transcript"`
+		RecordingAssetID string `json:"recording_asset_id"`
 	}
 	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
 		http.Error(w, "invalid request", http.StatusBadRequest)
 		return
 	}
 
-	// SECURITY: Verify user is host of this room
 	userID := r.Header.Get("X-User-ID")
+	sessionKey := req.RoomID
+	authorized := false
+
 	mu.Lock()
 	room, roomExists := rooms[req.RoomID]
 	mu.Unlock()
 
-	if roomExists && room.HostID != userID {
-		log.Printf("[NOTETAKER] ❌ Unauthorized stop: user %s is not host of room %s", userID, req.RoomID)
+	if roomExists && room.HostID == userID {
+		authorized = true
+	} else {
+		if meeting, err := getMeeting(req.RoomID); err == nil && meeting != nil {
+			if host, ok := meeting["host_user_id"].(string); ok && host == userID {
+				authorized = true
+			}
+			if val, ok := meeting["hms_room_id"].(string); ok && val != "" {
+				sessionKey = val
+			}
+		}
+
+		if !authorized {
+			if invite, err := loadProfessionalInvite(req.RoomID); err == nil {
+				if invite.HostName == userID {
+					authorized = true
+					sessionKey = invite.HMSRoomID
+				}
+			} else if invite, err := loadProfessionalInviteByHMS(req.RoomID); err == nil {
+				if invite.HostName == userID {
+					authorized = true
+					sessionKey = invite.HMSRoomID
+				}
+			}
+		}
+	}
+
+	if !authorized {
 		http.Error(w, "unauthorized: only host can stop notetaker", http.StatusForbidden)
 		return
 	}
-
-	// If room not in memory, check Redis
-	if !roomExists {
-		meeting, err := getMeeting(req.RoomID)
-		if err != nil || meeting == nil {
-			http.Error(w, "room not found", http.StatusNotFound)
+	session, err := loadNotetakerSession(sessionKey)
+	if err != nil {
+		if err == redis.Nil {
+			http.Error(w, "notetaker session not found", http.StatusNotFound)
 			return
 		}
-		if meeting["host_user_id"].(string) != userID {
-			log.Printf("[NOTETAKER] ❌ Unauthorized stop: user %s is not host of room %s (Redis)", userID, req.RoomID)
-			http.Error(w, "unauthorized: only host can stop notetaker", http.StatusForbidden)
-			return
-		}
-	}
-
-	mu.Lock()
-	session, exists := notetakerSessions[req.RoomID]
-	if !exists {
-		mu.Unlock()
-		http.Error(w, "notetaker session not found", http.StatusNotFound)
+		log.Printf("[NOTETAKER] ❌ Failed to load session: %v", err)
+		http.Error(w, "failed to stop notetaker", http.StatusInternalServerError)
 		return
 	}
-	delete(notetakerSessions, req.RoomID)
-	mu.Unlock()
 
 	duration := time.Since(session.StartTime)
-	log.Printf("[NOTETAKER] 🛑 Stopped for room %s by host %s (duration: %v)", req.RoomID, userID, duration)
+	endTime := time.Now().UTC()
+	session.Status = "stopped"
+	session.EndTime = &endTime
+	session.DurationSeconds = int64(duration.Seconds())
 
-	// Use provided transcript or return empty
 	transcript := req.Transcript
 	if transcript == "" {
 		transcript = "No transcript available"
 	}
+	session.Transcript = transcript
+
+	if req.AudioData != "" {
+		audioID, audioErr := saveNotetakerAudio(sessionKey, req.AudioData)
+		if audioErr != nil {
+			log.Printf("[NOTETAKER] ⚠️  Failed to persist audio for %s: %v", sessionKey, audioErr)
+		} else if audioID != "" {
+			session.RecordingAssetID = audioID
+		}
+	}
+
+	if req.RecordingAssetID != "" {
+		session.RecordingAssetID = req.RecordingAssetID
+	}
+
+	if err := saveNotetakerSession(session); err != nil {
+		log.Printf("[NOTETAKER] ❌ Failed to update session: %v", err)
+		http.Error(w, "failed to stop notetaker", http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("[NOTETAKER] 🛑 Stopped for room %s by host %s (duration: %v)", sessionKey, userID, duration)
 
 	w.Header().Set("Content-Type", "application/json")
 	json.NewEncoder(w).Encode(map[string]interface{}{
-		"success":    true,
-		"room_id":    req.RoomID,
-		"duration":   duration.String(),
-		"transcript": transcript,
+		"success":            true,
+		"room_id":            sessionKey,
+		"duration":           duration.String(),
+		"transcript":         transcript,
+		"recording_asset_id": session.RecordingAssetID,
 	})
 }
 
@@ -1493,22 +1651,47 @@ func notetakerStatusHandler(w http.ResponseWriter, r *http.Request) {
 		return
 	}
 
-	mu.RLock()
-	session, active := notetakerSessions[roomID]
-	mu.RUnlock()
+	session, err := loadNotetakerSession(roomID)
+	if err == redis.Nil {
+		if invite, inviteErr := loadProfessionalInvite(roomID); inviteErr == nil {
+			session, err = loadNotetakerSession(invite.HMSRoomID)
+		} else if invite, inviteErr := loadProfessionalInviteByHMS(roomID); inviteErr == nil {
+			session, err = loadNotetakerSession(invite.HMSRoomID)
+		}
+	}
+
+	if err != nil {
+		if err == redis.Nil {
+			w.Header().Set("Content-Type", "application/json")
+			json.NewEncoder(w).Encode(map[string]interface{}{"active": false})
+			return
+		}
+		log.Printf("[NOTETAKER] ❌ Status lookup failed: %v", err)
+		http.Error(w, "failed to load notetaker status", http.StatusInternalServerError)
+		return
+	}
+
+	active := session != nil && session.Status == "recording"
+	response := map[string]interface{}{
+		"active": active,
+	}
+
+	if session != nil {
+		response["status"] = session.Status
+		response["start_time"] = session.StartTime
+		if active {
+			response["duration"] = time.Since(session.StartTime).String()
+		} else if session.DurationSeconds > 0 {
+			dur := time.Duration(session.DurationSeconds) * time.Second
+			response["duration"] = dur.String()
+		}
+		if session.RecordingAssetID != "" {
+			response["recording_asset_id"] = session.RecordingAssetID
+		}
+	}
 
 	w.Header().Set("Content-Type", "application/json")
-	if active {
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"active":     true,
-			"start_time": session.StartTime,
-			"duration":   time.Since(session.StartTime).String(),
-		})
-	} else {
-		json.NewEncoder(w).Encode(map[string]interface{}{
-			"active": false,
-		})
-	}
+	json.NewEncoder(w).Encode(response)
 }
 
 func analyzeTranscriptHandler(w http.ResponseWriter, r *http.Request) {

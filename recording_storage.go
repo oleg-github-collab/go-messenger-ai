@@ -1,6 +1,7 @@
 package main
 
 import (
+	"encoding/base64"
 	"encoding/json"
 	"fmt"
 	"io"
@@ -8,6 +9,7 @@ import (
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 )
 
@@ -48,16 +50,17 @@ func checkStorageSpace() {
 
 // Save Recording Metadata
 type RecordingMetadata struct {
-	ID          string    `json:"id"`
-	MeetingID   string    `json:"meeting_id"`
-	StartTime   time.Time `json:"start_time"`
-	EndTime     time.Time `json:"end_time"`
-	Duration    int64     `json:"duration"` // seconds
-	FileURL     string    `json:"file_url"`
-	LocalPath   string    `json:"local_path"`
-	Size        int64     `json:"size"` // bytes
-	Status      string    `json:"status"` // uploading, completed, failed
+	ID           string    `json:"id"`
+	MeetingID    string    `json:"meeting_id"`
+	StartTime    time.Time `json:"start_time"`
+	EndTime      time.Time `json:"end_time"`
+	Duration     int64     `json:"duration"` // seconds
+	FileURL      string    `json:"file_url"`
+	LocalPath    string    `json:"local_path"`
+	Size         int64     `json:"size"`   // bytes
+	Status       string    `json:"status"` // uploading, completed, failed
 	Participants []string  `json:"participants"`
+	MimeType     string    `json:"mime_type,omitempty"`
 }
 
 // Handle 100ms Recording Webhook
@@ -159,6 +162,138 @@ func downloadRecording(recordingURL, roomID, sessionID string) {
 		LocalPath: localPath,
 		Size:      size,
 		Status:    "completed",
+		MimeType:  "video/mp4",
+	})
+}
+
+func handleUploadRecording(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		MeetingID       string   `json:"meetingId"`
+		RoomCode        string   `json:"roomCode"`
+		HostID          string   `json:"hostId"`
+		MimeType        string   `json:"mimeType"`
+		Size            int64    `json:"size"`
+		DurationSeconds int64    `json:"durationSeconds"`
+		StartedAt       string   `json:"startedAt"`
+		EndedAt         string   `json:"endedAt"`
+		Data            string   `json:"data"`
+		Participants    []string `json:"participants"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid payload", http.StatusBadRequest)
+		return
+	}
+
+	if req.Data == "" {
+		http.Error(w, "Recording data missing", http.StatusBadRequest)
+		return
+	}
+
+	userID := r.Header.Get("X-User-ID")
+	if req.HostID == "" {
+		req.HostID = userID
+	}
+
+	meetingID := req.MeetingID
+	if meetingID == "" {
+		meetingID = req.RoomCode
+	}
+	if meetingID == "" {
+		meetingID = fmt.Sprintf("local-%d", time.Now().Unix())
+	}
+
+	startedAt := time.Now()
+	if req.StartedAt != "" {
+		if ts, err := time.Parse(time.RFC3339, req.StartedAt); err == nil {
+			startedAt = ts
+		}
+	}
+
+	endedAt := time.Now()
+	if req.EndedAt != "" {
+		if ts, err := time.Parse(time.RFC3339, req.EndedAt); err == nil {
+			endedAt = ts
+		}
+	}
+
+	data := req.Data
+	if strings.HasPrefix(data, "data:") {
+		if comma := strings.Index(data, ","); comma != -1 {
+			data = data[comma+1:]
+		}
+	}
+
+	bytes, err := base64.StdEncoding.DecodeString(data)
+	if err != nil {
+		http.Error(w, "Failed to decode recording", http.StatusBadRequest)
+		return
+	}
+
+	ext := ".webm"
+	switch req.MimeType {
+	case "video/mp4", "audio/mp4":
+		ext = ".mp4"
+	case "audio/mpeg":
+		ext = ".mp3"
+	case "audio/ogg":
+		ext = ".ogg"
+	case "audio/wav", "audio/x-wav":
+		ext = ".wav"
+	case "audio/webm", "video/webm":
+		ext = ".webm"
+	case "audio/aac":
+		ext = ".aac"
+	}
+
+	if req.MimeType == "" {
+		req.MimeType = "video/webm"
+	}
+
+	recordingID := fmt.Sprintf("local-%d", time.Now().UnixNano())
+	filename := fmt.Sprintf("%s%s", recordingID, ext)
+	localPath := filepath.Join(RECORDINGS_PATH, filename)
+
+	if err := os.WriteFile(localPath, bytes, 0644); err != nil {
+		log.Printf("[RECORDING] ❌ Failed to write local recording: %v", err)
+		http.Error(w, "Failed to store recording", http.StatusInternalServerError)
+		return
+	}
+
+	if req.DurationSeconds == 0 {
+		req.DurationSeconds = int64(endedAt.Sub(startedAt).Seconds())
+		if req.DurationSeconds < 0 {
+			req.DurationSeconds = 0
+		}
+	}
+
+	metadata := RecordingMetadata{
+		ID:           recordingID,
+		MeetingID:    meetingID,
+		StartTime:    startedAt,
+		EndTime:      endedAt,
+		Duration:     req.DurationSeconds,
+		FileURL:      fmt.Sprintf("/api/recordings/get?id=%s", recordingID),
+		LocalPath:    localPath,
+		Size:         int64(len(bytes)),
+		Status:       "completed",
+		Participants: req.Participants,
+		MimeType:     req.MimeType,
+	}
+
+	saveRecordingMetadata(metadata)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success":     true,
+		"recordingId": recordingID,
+		"mimeType":    req.MimeType,
+		"size":        metadata.Size,
 	})
 }
 
@@ -207,8 +342,21 @@ func handleGetRecording(w http.ResponseWriter, r *http.Request) {
 	}
 
 	// Serve file
-	w.Header().Set("Content-Type", "video/mp4")
-	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=\"%s.mp4\"", recordingID))
+	contentType := metadata.MimeType
+	if contentType == "" {
+		contentType = "application/octet-stream"
+	}
+	filename := filepath.Base(metadata.LocalPath)
+	if filename == "" {
+		ext := filepath.Ext(metadata.LocalPath)
+		if ext == "" {
+			ext = ".bin"
+		}
+		filename = recordingID + ext
+	}
+
+	w.Header().Set("Content-Type", contentType)
+	w.Header().Set("Content-Disposition", fmt.Sprintf("inline; filename=\"%s\"", filename))
 	http.ServeFile(w, r, metadata.LocalPath)
 }
 
@@ -292,6 +440,7 @@ func registerRecordingRoutes() {
 	http.HandleFunc("/api/recordings/get", handleGetRecording)
 	http.HandleFunc("/api/recordings/list", handleListRecordings)
 	http.HandleFunc("/api/recordings/delete", authMiddleware(handleDeleteRecording))
+	http.HandleFunc("/api/recordings/upload", authMiddleware(handleUploadRecording))
 
 	// Initialize storage
 	initRecordingsStorage()
