@@ -22,6 +22,8 @@ class ProfessionalMeetingSDK {
         this.maxParticipants = 20;
         this.participantCount = 0;
         this.participantRegistered = false;
+        this.isScreenSharing = false;
+        this.isRecording = false;
 
         console.log('[HMS SDK] Initializing Professional Meeting SDK');
     }
@@ -439,6 +441,54 @@ class ProfessionalMeetingSDK {
         await this.hmsActions.setLocalVideoEnabled(enabled);
         console.debug('[HMS SDK] Local video set to', enabled);
         return enabled;
+    }
+
+    async toggleScreenshare(enable) {
+        if (!this.hmsActions) return;
+        try {
+            if (enable) {
+                if (typeof this.hmsActions.startScreenShare === 'function') {
+                    await this.hmsActions.startScreenShare();
+                    this.isScreenSharing = true;
+                } else {
+                    throw new Error('Screenshare is not supported in this build');
+                }
+            } else {
+                if (typeof this.hmsActions.stopScreenShare === 'function') {
+                    await this.hmsActions.stopScreenShare();
+                }
+                this.isScreenSharing = false;
+            }
+        } catch (error) {
+            this.isScreenSharing = false;
+            throw error;
+        }
+    }
+
+    async toggleRecording(enable) {
+        if (!this.hmsActions) return;
+        try {
+            if (enable) {
+                if (typeof this.hmsActions.startRTMPOrRecording === 'function') {
+                    await this.hmsActions.startRTMPOrRecording({
+                        meetingURL: window.location.href,
+                        record: true,
+                        rtmpURLs: []
+                    });
+                    this.isRecording = true;
+                } else {
+                    throw new Error('Recording is not supported in this build');
+                }
+            } else {
+                if (typeof this.hmsActions.stopRTMPAndRecording === 'function') {
+                    await this.hmsActions.stopRTMPAndRecording();
+                }
+                this.isRecording = false;
+            }
+        } catch (error) {
+            this.isRecording = false;
+            throw error;
+        }
     }
 
     /**
