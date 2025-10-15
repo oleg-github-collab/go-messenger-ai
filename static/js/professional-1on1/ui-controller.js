@@ -66,6 +66,15 @@ class ProfessionalUIController {
         this.shareStatusTimeout = null;
         this.shareBaseStatus = '';
         this.isShowingCopyStatus = false;
+        this.controlsBound = false;
+
+        window.__PRO_UI__ = this;
+
+        [this.micBtn, this.cameraBtn, this.speakerBtn, this.raiseHandBtn].forEach(btn => {
+            if (btn) {
+                btn.disabled = true;
+            }
+        });
 
         console.log('[UI Controller] Initialized');
     }
@@ -85,6 +94,7 @@ class ProfessionalUIController {
 
             // Create SDK instance
             this.sdk = new ProfessionalMeetingSDK();
+            window.__PRO_SDK__ = this.sdk;
 
             // Initialize as host
             const result = await this.sdk.initAsHost('Oleh', inviteCode ? { inviteCode } : {});
@@ -121,6 +131,7 @@ class ProfessionalUIController {
 
             // Create SDK instance
             this.sdk = new ProfessionalMeetingSDK();
+            window.__PRO_SDK__ = this.sdk;
 
             // Initialize as guest
             await this.sdk.initAsGuest(roomCode, userName);
@@ -381,6 +392,7 @@ class ProfessionalUIController {
             if (this.renderedMessageIds) {
                 this.renderedMessageIds.clear();
             }
+            this.enableCallControls();
 
             if (!this.isHost && this.aiPanel) {
                 this.aiPanel.style.display = 'none';
@@ -454,44 +466,66 @@ class ProfessionalUIController {
      */
     onTrackUpdate(peers) {
         const peerValues = Object.values(peers || {});
-        console.log('[UI Controller] Track update, peers:', peerValues.length);
+        this.logDebug('Track update', peerValues.length);
 
         const localPeer = peerValues.find(peer => peer.isLocal);
         const remotePeer = peerValues.find(peer => !peer.isLocal);
 
+        const getTrackByID = (trackId) => {
+            if (!trackId || !this.sdk?.hmsStore || typeof this.sdk.hmsStore.getState !== 'function') {
+                return null;
+            }
+            try {
+                return this.sdk.hmsStore.getState(state => {
+                    if (!state) return null;
+                    if (state.tracks && state.tracks[trackId]) return state.tracks[trackId];
+                    if (state.videoTracks && state.videoTracks[trackId]) return state.videoTracks[trackId];
+                    if (state.audioTracks && state.audioTracks[trackId]) return state.audioTracks[trackId];
+                    return null;
+                });
+            } catch (error) {
+                this.logWarn('Failed to resolve track by ID', trackId, error);
+                return null;
+            }
+        };
+
         if (localPeer) {
             this.localPeerId = localPeer.id;
-            if (localPeer.videoTrack && this.localVideoEl && typeof this.sdk?.hmsActions?.attachVideo === 'function') {
-                this.sdk.hmsActions.attachVideo(localPeer.videoTrack, this.localVideoEl);
+            const localVideoTrack = getTrackByID(localPeer.videoTrack);
+            const localAudioTrack = getTrackByID(localPeer.audioTrack);
+            if (localVideoTrack && this.localVideoEl && typeof this.sdk?.hmsActions?.attachVideo === 'function') {
+                this.sdk.hmsActions.attachVideo(localVideoTrack, this.localVideoEl);
             }
 
             if (this.localSpeakingEl) {
-                const show = Boolean(localPeer.isSpeaking);
+                const show = Boolean(localPeer.isSpeaking) || Boolean(localAudioTrack && localAudioTrack.enabled && !localAudioTrack.muted);
                 this.localSpeakingEl.style.display = show ? 'block' : 'none';
             }
         }
 
         if (remotePeer) {
             this.remotePeerId = remotePeer.id;
-            if (remotePeer.videoTrack && this.remoteVideoEl && typeof this.sdk?.hmsActions?.attachVideo === 'function') {
-                this.sdk.hmsActions.attachVideo(remotePeer.videoTrack, this.remoteVideoEl);
+            const remoteVideoTrack = getTrackByID(remotePeer.videoTrack);
+            const remoteAudioTrack = getTrackByID(remotePeer.audioTrack);
+            if (remoteVideoTrack && this.remoteVideoEl && typeof this.sdk?.hmsActions?.attachVideo === 'function') {
+                this.sdk.hmsActions.attachVideo(remoteVideoTrack, this.remoteVideoEl);
                 this.remoteVideoEl.style.display = 'block';
             } else if (this.remoteVideoEl && this.remoteVideoEl.srcObject) {
                 this.remoteVideoEl.srcObject = null;
             }
 
-            if (remotePeer.audioTrack && this.remoteAudioEl && typeof this.sdk?.hmsActions?.attachAudio === 'function') {
-                this.sdk.hmsActions.attachAudio(remotePeer.audioTrack, this.remoteAudioEl);
+            if (remoteAudioTrack && this.remoteAudioEl && typeof this.sdk?.hmsActions?.attachAudio === 'function') {
+                this.sdk.hmsActions.attachAudio(remoteAudioTrack, this.remoteAudioEl);
             } else if (this.remoteAudioEl && this.remoteAudioEl.srcObject) {
                 this.remoteAudioEl.srcObject = null;
             }
 
             if (this.remotePlaceholderEl) {
-                this.remotePlaceholderEl.style.display = remotePeer.videoTrack ? 'none' : 'flex';
+                this.remotePlaceholderEl.style.display = remoteVideoTrack ? 'none' : 'flex';
             }
 
             if (this.remoteSpeakingEl) {
-                const showRemote = Boolean(remotePeer.isSpeaking);
+                const showRemote = Boolean(remotePeer.isSpeaking) || Boolean(remoteAudioTrack && remoteAudioTrack.enabled && !remoteAudioTrack.muted);
                 this.remoteSpeakingEl.style.display = showRemote ? 'block' : 'none';
             }
         } else {
@@ -513,21 +547,42 @@ class ProfessionalUIController {
      * Setup event listeners for controls
      */
     setupEventListeners() {
+        if (this.controlsBound) {
+            this.logDebug('Controls already initialized, skipping rebinding');
+            return;
+        }
+
         // Mic toggle
         if (this.micBtn) {
             this.micBtn.addEventListener('click', async () => {
-                const enabled = await this.sdk.toggleAudio();
-                this.micBtn.classList.toggle('active', enabled);
-                console.log('[UI Controller] Mic:', enabled ? 'ON' : 'OFF');
+                if (!this.sdk) {
+                    this.logWarn('Mic toggle ignored - SDK not initialized');
+                    return;
+                }
+                try {
+                    const enabled = await this.sdk.toggleAudio();
+                    this.micBtn.classList.toggle('active', enabled);
+                    this.logDebug('Mic state', enabled);
+                } catch (error) {
+                    this.logError('Mic toggle failed', error);
+                }
             });
         }
 
         // Camera toggle
         if (this.cameraBtn) {
             this.cameraBtn.addEventListener('click', async () => {
-                const enabled = await this.sdk.toggleVideo();
-                this.cameraBtn.classList.toggle('active', enabled);
-                console.log('[UI Controller] Camera:', enabled ? 'ON' : 'OFF');
+                if (!this.sdk) {
+                    this.logWarn('Camera toggle ignored - SDK not initialized');
+                    return;
+                }
+                try {
+                    const enabled = await this.sdk.toggleVideo();
+                    this.cameraBtn.classList.toggle('active', enabled);
+                    this.logDebug('Camera state', enabled);
+                } catch (error) {
+                    this.logError('Camera toggle failed', error);
+                }
             });
         }
 
@@ -535,8 +590,17 @@ class ProfessionalUIController {
         if (this.chatInput) {
             this.chatInput.addEventListener('keypress', async (e) => {
                 if (e.key === 'Enter' && this.chatInput.value.trim()) {
-                    await this.sdk.sendMessage(this.chatInput.value.trim());
-                    this.chatInput.value = '';
+                    if (!this.sdk) {
+                        this.logWarn('Chat send ignored - SDK not initialized');
+                        return;
+                    }
+                    try {
+                        await this.sdk.sendMessage(this.chatInput.value.trim());
+                        this.chatInput.value = '';
+                        this.logDebug('Chat message sent');
+                    } catch (error) {
+                        this.logError('Chat send failed', error);
+                    }
                 }
             });
         }
@@ -547,7 +611,8 @@ class ProfessionalUIController {
             backBtn.addEventListener('click', () => this.leaveCall());
         }
 
-        console.log('[UI Controller] Event listeners attached');
+        this.controlsBound = true;
+        this.logDebug('Event listeners attached');
     }
 
     clearStoreSubscriptions() {
@@ -578,7 +643,7 @@ class ProfessionalUIController {
             : this.sdk?.hmsStore;
 
         if (!hmsStore || typeof hmsStore.subscribe !== 'function') {
-            console.error('[UI Controller] HMS store not available for subscriptions');
+            this.logError('HMS store not available for subscriptions', new Error('subscribe missing'));
             return;
         }
 
@@ -601,7 +666,7 @@ class ProfessionalUIController {
             hmsStore.subscribe(this.onMessage.bind(this), selectMessages)
         );
 
-        console.log('[UI Controller] Subscribed to room updates');
+        this.logDebug('Subscribed to HMS store updates');
     }
 
     /**
@@ -738,7 +803,7 @@ class ProfessionalUIController {
         this.updateShareStatus(statusMessage);
         this.isShowingCopyStatus = false;
 
-        console.log('[UI Controller] Share link ready:', {
+        this.logDebug('Share link ready', {
             guestLink,
             hostLink,
             maxParticipants,
@@ -853,6 +918,7 @@ class ProfessionalUIController {
      */
     async leaveCall() {
         if (confirm('Are you sure you want to leave the call?')) {
+            this.logDebug('Leave call confirmed');
             this.clearStoreSubscriptions();
             if (this.renderedMessageIds) {
                 this.renderedMessageIds.clear();
@@ -860,6 +926,28 @@ class ProfessionalUIController {
             await this.sdk.leaveRoom();
             window.location.href = this.isHost ? '/home' : '/';
         }
+    }
+
+    enableCallControls() {
+        const controls = [this.micBtn, this.cameraBtn, this.speakerBtn, this.raiseHandBtn];
+        controls.forEach(btn => {
+            if (btn) {
+                btn.disabled = false;
+            }
+        });
+        this.logDebug('Call controls enabled');
+    }
+
+    logDebug(...args) {
+        console.debug('[UI Controller][DEBUG]', ...args);
+    }
+
+    logWarn(...args) {
+        console.warn('[UI Controller][WARN]', ...args);
+    }
+
+    logError(message, error) {
+        console.error('[UI Controller][ERROR]', message, error);
     }
 }
 

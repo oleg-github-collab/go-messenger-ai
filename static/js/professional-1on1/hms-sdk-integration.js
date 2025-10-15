@@ -426,6 +426,7 @@ class ProfessionalMeetingSDK {
         if (!this.hmsActions) return;
         const enabled = !this.hmsStore.getState(state => state.localPeer?.audioEnabled);
         await this.hmsActions.setLocalAudioEnabled(enabled);
+        console.debug('[HMS SDK] Local audio set to', enabled);
         return enabled;
     }
 
@@ -436,6 +437,7 @@ class ProfessionalMeetingSDK {
         if (!this.hmsActions) return;
         const enabled = !this.hmsStore.getState(state => state.localPeer?.videoEnabled);
         await this.hmsActions.setLocalVideoEnabled(enabled);
+        console.debug('[HMS SDK] Local video set to', enabled);
         return enabled;
     }
 
@@ -445,6 +447,7 @@ class ProfessionalMeetingSDK {
     async sendMessage(message) {
         if (!this.hmsActions) return;
         await this.hmsActions.sendBroadcastMessage(message);
+        console.debug('[HMS SDK] Broadcast message sent');
     }
 }
 
