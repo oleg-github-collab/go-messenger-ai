@@ -239,6 +239,11 @@
         height: 100vh;
         overflow: hidden;
         background: #000;
+        touch-action: manipulation;
+    }
+
+    body.fullscreen-active {
+        background: #000;
     }
 
     /* Main container */
@@ -251,6 +256,7 @@
         display: flex;
         flex-direction: column;
         background: #000;
+        transition: opacity 0.24s ease;
     }
 
     /* Top bar - minimal */
@@ -300,6 +306,7 @@
         background: #000;
         overflow: hidden;
         padding-bottom: 220px;
+        cursor: pointer;
     }
 
     /* Remote video - full screen */
@@ -549,6 +556,39 @@
     .custom-alert,
     .custom-confirm {
         z-index: 10000;
+    }
+
+    .call-container.controls-hidden .top-bar,
+    .call-container.controls-hidden .bottom-controls,
+    .call-container.controls-hidden .notetaker-panel,
+    .call-container.controls-hidden .ai-panel {
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.24s ease, transform 0.24s ease;
+    }
+
+    .call-container.controls-hidden .top-bar {
+        transform: translateY(-48px);
+    }
+
+    .call-container.controls-hidden .bottom-controls {
+        transform: translateY(180px);
+    }
+
+    .call-container.controls-hidden .notetaker-panel {
+        transform: translateY(160px);
+    }
+
+    .call-container.controls-hidden .ai-panel {
+        transform: translateY(40px);
+    }
+
+    .call-container.controls-visible .top-bar,
+    .call-container.controls-visible .bottom-controls,
+    .call-container.controls-visible .notetaker-panel,
+    .call-container.controls-visible .ai-panel {
+        opacity: 1;
+        transform: translateY(0);
     }
 }
 

@@ -105,6 +105,14 @@ class ProfessionalUIController {
         this.localRecordingTracks = [];
         this.latestLocalRecordingId = null;
         this.notetakerStatusPoll = null;
+        this.controlsVisible = true;
+        this.controlsAutoHideTimer = null;
+        this.engagementInitialized = false;
+        this.wakeLock = null;
+        this.boundHandleInteraction = this.handleUserInteraction.bind(this);
+        this.boundHandleStageTap = this.handleStageTap.bind(this);
+        this.boundFullscreenChange = this.onFullscreenChange.bind(this);
+        this.boundVisibilityChange = this.handleVisibilityChange.bind(this);
 
         window.__PRO_UI__ = this;
 
@@ -670,6 +678,7 @@ class ProfessionalUIController {
 
             this.hideLoading();
             this.showCallUI();
+            this.initializeEngagementFeatures();
 
             console.log('[UI Controller] ✅ Joined call successfully');
         } catch (error) {
@@ -718,6 +727,223 @@ class ProfessionalUIController {
 
         if (this.remotePlaceholderEl) {
             this.remotePlaceholderEl.style.display = 'flex';
+        }
+    }
+
+    initializeEngagementFeatures() {
+        if (this.engagementInitialized) {
+            return;
+        }
+
+        if (this.callContainer) {
+            ['pointerdown', 'mousemove', 'touchstart', 'keydown'].forEach(eventName => {
+                this.callContainer.addEventListener(eventName, this.boundHandleInteraction, { passive: true });
+            });
+            this.callContainer.classList.add('controls-visible');
+        }
+
+        if (this.remoteVideoContainer) {
+            this.remoteVideoContainer.addEventListener('click', this.boundHandleStageTap, { passive: true });
+        }
+
+        if (typeof document !== 'undefined') {
+            document.addEventListener('fullscreenchange', this.boundFullscreenChange);
+            document.addEventListener('webkitfullscreenchange', this.boundFullscreenChange);
+            document.addEventListener('visibilitychange', this.boundVisibilityChange);
+        }
+
+        this.showControls(true);
+        this.startControlsAutoHideTimer();
+        this.requestWakeLock();
+        this.engagementInitialized = true;
+    }
+
+    cleanupEngagementFeatures() {
+        if (!this.engagementInitialized) {
+            return;
+        }
+
+        if (this.callContainer) {
+            ['pointerdown', 'mousemove', 'touchstart', 'keydown'].forEach(eventName => {
+                this.callContainer.removeEventListener(eventName, this.boundHandleInteraction);
+            });
+            this.callContainer.classList.remove('controls-hidden');
+            this.callContainer.classList.remove('controls-visible');
+        }
+
+        if (this.remoteVideoContainer) {
+            this.remoteVideoContainer.removeEventListener('click', this.boundHandleStageTap);
+        }
+
+        if (typeof document !== 'undefined') {
+            document.removeEventListener('fullscreenchange', this.boundFullscreenChange);
+            document.removeEventListener('webkitfullscreenchange', this.boundFullscreenChange);
+            document.removeEventListener('visibilitychange', this.boundVisibilityChange);
+        }
+
+        this.stopControlsAutoHideTimer();
+        this.releaseWakeLock();
+        this.engagementInitialized = false;
+    }
+
+    handleUserInteraction() {
+        this.showControls();
+    }
+
+    handleStageTap() {
+        this.showControls();
+        if (!this.isFullscreenActive() && this.isMobileViewport()) {
+            this.enterFullscreen();
+        } else if (this.controlsVisible) {
+            this.hideControls();
+        } else {
+            this.showControls();
+        }
+    }
+
+    isMobileViewport() {
+        if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') {
+            return false;
+        }
+        return window.matchMedia('(max-width: 1024px)').matches;
+    }
+
+    showControls(force = false) {
+        if (!this.callContainer) return;
+        this.controlsVisible = true;
+        this.callContainer.classList.add('controls-visible');
+        this.callContainer.classList.remove('controls-hidden');
+        if (force) {
+            this.startControlsAutoHideTimer();
+        } else {
+            this.restartControlsAutoHideTimer();
+        }
+    }
+
+    hideControls() {
+        if (!this.callContainer) return;
+        if (this.isOverlayActive()) {
+            return;
+        }
+        this.controlsVisible = false;
+        this.callContainer.classList.add('controls-hidden');
+        this.callContainer.classList.remove('controls-visible');
+        this.stopControlsAutoHideTimer();
+    }
+
+    isOverlayActive() {
+        if (this.chatPanel && !this.chatPanel.classList.contains('hidden') && this.chatPanel.style.display !== 'none') {
+            return true;
+        }
+        if (this.pollModal && this.pollModal.classList.contains('visible')) {
+            return true;
+        }
+        if (this.aiPanel && this.aiPanel.style.display !== 'none') {
+            return true;
+        }
+        if (this.customAlertVisible()) {
+            return true;
+        }
+        return false;
+    }
+
+    customAlertVisible() {
+        const alertEl = document.getElementById('customAlert');
+        const confirmEl = document.getElementById('customConfirm');
+        return (alertEl && alertEl.style.display !== 'none') || (confirmEl && confirmEl.style.display !== 'none');
+    }
+
+    startControlsAutoHideTimer() {
+        this.stopControlsAutoHideTimer();
+        this.controlsAutoHideTimer = setTimeout(() => this.hideControls(), 6000);
+    }
+
+    restartControlsAutoHideTimer() {
+        this.stopControlsAutoHideTimer();
+        this.controlsAutoHideTimer = setTimeout(() => this.hideControls(), 6000);
+    }
+
+    stopControlsAutoHideTimer() {
+        if (this.controlsAutoHideTimer) {
+            clearTimeout(this.controlsAutoHideTimer);
+            this.controlsAutoHideTimer = null;
+        }
+    }
+
+    isFullscreenActive() {
+        return Boolean(document.fullscreenElement || document.webkitFullscreenElement);
+    }
+
+    async enterFullscreen() {
+        if (!this.remoteVideoContainer) return;
+        try {
+            if (this.remoteVideoContainer.requestFullscreen) {
+                await this.remoteVideoContainer.requestFullscreen();
+            } else if (this.remoteVideoContainer.webkitRequestFullscreen) {
+                await this.remoteVideoContainer.webkitRequestFullscreen();
+            }
+        } catch (error) {
+            this.logWarn('Fullscreen request failed', error);
+        }
+    }
+
+    async exitFullscreen() {
+        if (!this.isFullscreenActive()) return;
+        try {
+            if (document.exitFullscreen) {
+                await document.exitFullscreen();
+            } else if (document.webkitExitFullscreen) {
+                await document.webkitExitFullscreen();
+            }
+        } catch (error) {
+            this.logWarn('Fullscreen exit failed', error);
+        }
+    }
+
+    onFullscreenChange() {
+        if (this.isFullscreenActive()) {
+            document.body.classList.add('fullscreen-active');
+            this.callContainer?.classList.add('fullscreen-active');
+        } else {
+            document.body.classList.remove('fullscreen-active');
+            this.callContainer?.classList.remove('fullscreen-active');
+            this.showControls(true);
+        }
+    }
+
+    handleVisibilityChange() {
+        if (document.visibilityState === 'visible') {
+            this.requestWakeLock();
+        } else {
+            this.releaseWakeLock();
+        }
+    }
+
+    async requestWakeLock() {
+        if (!('wakeLock' in navigator) || typeof navigator.wakeLock.request !== 'function') {
+            return;
+        }
+        try {
+            if (this.wakeLock) {
+                await this.wakeLock.release();
+            }
+            this.wakeLock = await navigator.wakeLock.request('screen');
+            this.wakeLock.addEventListener('release', () => {
+                this.wakeLock = null;
+            });
+        } catch (error) {
+            this.logWarn('Wake lock request failed', error);
+        }
+    }
+
+    async releaseWakeLock() {
+        if (this.wakeLock) {
+            try {
+                await this.wakeLock.release();
+            } catch (error) {
+                this.logWarn('Wake lock release failed', error);
+            }
+            this.wakeLock = null;
         }
     }
 
@@ -950,6 +1176,7 @@ class ProfessionalUIController {
 
         this.stopCallTimer();
         this.stopNotetakerStatusPolling();
+        this.cleanupEngagementFeatures();
         this.isScreenSharing = false;
         this.isRecording = false;
         this.isRemoteAudioMuted = false;
@@ -1488,6 +1715,17 @@ class ProfessionalUIController {
             this.logDebug(`Attached ${label} video track`, track.id || trackId);
         } catch (error) {
             this.logError(`attachVideo failed for ${label}`, error);
+            if (track?.nativeTrack) {
+                try {
+                    const stream = new MediaStream([track.nativeTrack]);
+                    element.srcObject = stream;
+                    element.play?.().catch(() => {});
+                    this.logDebug('Fallback video stream applied');
+                    return;
+                } catch (fallbackError) {
+                    this.logWarn('Fallback video attach failed', fallbackError);
+                }
+            }
             this.scheduleTrackRetry('video', trackRef, () => this.safeAttachVideo(trackRef, element, label), true);
         }
     }
@@ -1620,6 +1858,7 @@ class ProfessionalUIController {
 
     toggleChatPanel() {
         if (!this.chatPanel) return;
+        this.showControls(true);
         const hidden = this.chatPanel.classList.toggle('hidden');
         this.chatPanel.style.display = hidden ? 'none' : 'flex';
         this.chatBtn?.classList.toggle('active', !hidden);
@@ -1636,6 +1875,7 @@ class ProfessionalUIController {
 
     togglePollModal() {
         if (!this.pollModal) return;
+        this.showControls(true);
         const visible = this.pollModal.classList.toggle('visible');
         this.pollModal.style.display = visible ? 'flex' : 'none';
         this.pollBtn?.classList.toggle('active', visible);
@@ -1646,6 +1886,7 @@ class ProfessionalUIController {
 
     toggleWhiteboard() {
         if (!this.whiteboardContainer) return;
+        this.showControls(true);
         const visible = this.whiteboardContainer.classList.toggle('visible');
         this.whiteboardContainer.style.display = visible ? 'flex' : 'none';
         this.whiteboardBtn?.classList.toggle('active', visible);
@@ -1659,6 +1900,7 @@ class ProfessionalUIController {
             alert('Reactions are coming soon.');
             return;
         }
+        this.showControls(true);
         this.setupReactionButtons();
         const visible = this.reactionsPanel.classList.toggle('visible');
         this.reactionsPanel.style.display = visible ? 'flex' : 'none';
@@ -1732,6 +1974,7 @@ class ProfessionalUIController {
                 this.isRecording = true;
                 this.applyRecordingUI(true, this.recordingMode);
                 this.logDebug('Recording started', this.recordingMode);
+                this.requestWakeLock();
                 return;
             } catch (error) {
                 this.logWarn('Cloud recording unavailable, attempting local fallback', error);
@@ -1741,6 +1984,7 @@ class ProfessionalUIController {
                         this.isRecording = true;
                         this.recordingMode = 'local';
                         this.applyRecordingUI(true, 'local');
+                        this.requestWakeLock();
                         alert('Cloud recording is not available on this plan. Started a local recording instead — it will upload when you stop.');
                         return;
                     } catch (fallbackError) {
@@ -1770,6 +2014,7 @@ class ProfessionalUIController {
             this.isRecording = false;
             this.recordingMode = null;
             this.applyRecordingUI(false);
+            this.requestWakeLock();
         }
     }
 

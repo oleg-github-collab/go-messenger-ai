@@ -306,13 +306,14 @@ body {
     border-radius: var(--radius-xl);
     overflow: hidden;
     position: relative;
-    background: rgba(0, 0, 0, 0.5);
+    background: #000;
 }
 
 .remote-video-container video {
     width: 100%;
     height: 100%;
     object-fit: cover;
+    background: #000;
 }
 
 .reaction-overlay {
@@ -822,6 +823,65 @@ body {
 
 .mobile-only {
     display: none;
+}
+
+.call-container {
+    transition: opacity var(--transition-normal);
+}
+
+.call-container.controls-hidden .top-bar,
+.call-container.controls-hidden .bottom-controls,
+.call-container.controls-hidden .notetaker-panel,
+.call-container.controls-hidden .ai-panel,
+.call-container.controls-hidden .chat-panel,
+.call-container.controls-hidden .transcript-panel,
+.call-container.controls-hidden .custom-alert,
+.call-container.controls-hidden .custom-confirm {
+    opacity: 0;
+    pointer-events: none;
+    transition: opacity var(--transition-normal), transform var(--transition-normal);
+}
+
+.call-container.controls-hidden .top-bar {
+    transform: translateY(-40px);
+}
+
+.call-container.controls-hidden .bottom-controls {
+    transform: translateY(120px);
+}
+
+.call-container.controls-hidden .notetaker-panel {
+    transform: translateY(140px);
+}
+
+.call-container.controls-hidden .chat-panel,
+.call-container.controls-hidden .transcript-panel,
+.call-container.controls-hidden .custom-alert,
+.call-container.controls-hidden .custom-confirm {
+    transform: translateY(30px);
+}
+
+.call-container.controls-visible .top-bar,
+.call-container.controls-visible .bottom-controls,
+.call-container.controls-visible .notetaker-panel {
+    opacity: 1;
+    transform: translateY(0);
+}
+
+.call-container.fullscreen-active {
+    background: #000;
+}
+
+.call-container.fullscreen-active .top-bar {
+    padding-top: calc(var(--spacing-md) + env(safe-area-inset-top, 0));
+}
+
+.call-container.fullscreen-active .bottom-controls {
+    padding-bottom: calc(var(--spacing-md) + env(safe-area-inset-bottom, 0));
+}
+
+body.fullscreen-active {
+    background: #000;
 }
 
 /* AI Recommendation Modal */
