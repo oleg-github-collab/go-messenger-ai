@@ -1734,40 +1734,37 @@ class ProfessionalUIController {
 
         try {
             this.clearTrackRetry('video', trackRef);
-            if (this.sdk?.hmsActions?.attachVideo) {
-                try {
-                    this.sdk.hmsActions.attachVideo(track, element);
-                    element.dataset.trackId = track.id || trackId || '';
-                    element.playsInline = true;
-                    element.muted = label === 'local';
-                    element.style.display = 'block';
-                    element.play?.().catch(err => this.logWarn('Video play() failed', err));
-                    this.logDebug(`Attached ${label} video track via HMS`, track.id || trackId);
-                    return;
-                } catch (attachError) {
-                    this.logWarn('HMS attachVideo failed, falling back', attachError);
-                }
-            }
 
-            const stream = this.getMediaStreamForTrack(track, 'video', label);
-            if (!stream) {
-                this.logDebug('Video stream unavailable yet', trackId);
+            const media = this.getTrackMedia(track, 'video', label);
+            if (!media) {
+                this.logDebug('Video media unavailable yet', trackId);
                 this.scheduleTrackRetry('video', trackRef, () => this.safeAttachVideo(trackRef, element, label));
                 return;
             }
+
+            const { stream, mediaTrack } = media;
+            if (!stream || !mediaTrack) {
+                this.logDebug('Video media incomplete', { trackId, hasStream: !!stream, hasTrack: !!mediaTrack });
+                this.scheduleTrackRetry('video', trackRef, () => this.safeAttachVideo(trackRef, element, label));
+                return;
+            }
+
             if (element.dataset.trackId === (track.id || trackId) && element.srcObject === stream) {
                 return;
             }
+
             element.srcObject = stream;
             element.dataset.trackId = track.id || trackId || '';
             element.playsInline = true;
             element.muted = label === 'local';
             element.style.display = 'block';
             element.play?.().catch(err => this.logWarn('Video play() failed', err));
+
             this.logDebug(`Attached ${label} video track`, {
                 trackId: track.id || trackId,
                 label,
-                tracks: stream.getVideoTracks().length
+                readyState: mediaTrack.readyState,
+                enabled: mediaTrack.enabled
             });
         } catch (error) {
             this.logError(`Failed to attach ${label} video`, error);
@@ -1791,466 +1788,109 @@ class ProfessionalUIController {
 
         try {
             this.clearTrackRetry('audio', trackRef);
-            if (this.sdk?.hmsActions?.attachAudio) {
-                try {
-                    this.sdk.hmsActions.attachAudio(track, element);
-                    element.dataset.trackId = track.id || trackId || '';
-                    element.autoplay = true;
-                    element.playsInline = true;
-                    element.muted = label === 'local';
-                    element.play?.().catch(err => this.logWarn('Audio play() failed', err));
-                    this.logDebug(`Attached ${label} audio track via HMS`, track.id || trackId);
-                    return;
-                } catch (attachError) {
-                    this.logWarn('HMS attachAudio failed, falling back', attachError);
-                }
-            }
 
-            const stream = this.getMediaStreamForTrack(track, 'audio', label);
-            if (!stream) {
-                this.logDebug('Audio stream unavailable yet', trackId);
+            const media = this.getTrackMedia(track, 'audio', label);
+            if (!media) {
+                this.logDebug('Audio media unavailable yet', trackId);
                 this.scheduleTrackRetry('audio', trackRef, () => this.safeAttachAudio(trackRef, element, label));
                 return;
             }
+
+            const { stream, mediaTrack } = media;
+            if (!stream || !mediaTrack) {
+                this.logDebug('Audio media incomplete', { trackId, hasStream: !!stream, hasTrack: !!mediaTrack });
+                this.scheduleTrackRetry('audio', trackRef, () => this.safeAttachAudio(trackRef, element, label));
+                return;
+            }
+
             if (element.dataset.trackId === (track.id || trackId) && element.srcObject === stream) {
                 return;
             }
+
             element.srcObject = stream;
             element.dataset.trackId = track.id || trackId || '';
             element.autoplay = true;
             element.playsInline = true;
             element.muted = label === 'local';
             element.play?.().catch(err => this.logWarn('Audio play() failed', err));
-            this.logDebug(`Attached ${label} audio track via native stream`, track.id || trackId);
+            this.logDebug(`Attached ${label} audio track`, {
+                trackId: track.id || trackId,
+                label,
+                readyState: mediaTrack.readyState,
+                enabled: mediaTrack.enabled
+            });
         } catch (error) {
             this.logError(`Failed to attach ${label} audio`, error);
             this.scheduleTrackRetry('audio', trackRef, () => this.safeAttachAudio(trackRef, element, label), true);
         }
     }
 
-    getMediaStreamForTrack(track, type = 'video', label = 'remote') {
+    getTrackMedia(track, type = 'video', label = 'remote') {
         if (!track) {
             return null;
         }
 
+        const isVideo = type === 'video';
+        const matchesKind = mediaTrack => !!mediaTrack && mediaTrack.kind === type && mediaTrack.readyState === 'live';
+
         const candidates = [];
-
-        if (label === 'local') {
-            if (this.localVideoEl?.srcObject instanceof MediaStream) {
-                candidates.push(this.localVideoEl.srcObject);
+        const pushCandidate = (stream, mediaTrack) => {
+            if (!stream || !mediaTrack || !matchesKind(mediaTrack)) {
+                return;
             }
-            if (this.previewStream instanceof MediaStream) {
-                candidates.push(this.previewStream);
-            }
-        }
+            candidates.push({ stream, mediaTrack });
+        };
 
-        const nativeTrack = track.nativeTrack || track.track || track.sourceTrack || track.mediaStreamTrack;
-        if (nativeTrack && nativeTrack.readyState !== 'ended') {
+        const ensureStream = mediaTrack => {
+            if (!matchesKind(mediaTrack)) return;
+            pushCandidate(new MediaStream([mediaTrack]), mediaTrack);
+        };
+
+        const inspectStream = stream => {
+            if (!(stream instanceof MediaStream)) return;
+            const tracks = isVideo ? stream.getVideoTracks() : stream.getAudioTracks();
+            if (!tracks || tracks.length === 0) return;
+            pushCandidate(stream, tracks[0]);
+        };
+
+        ensureStream(track.nativeTrack || track.track || track.sourceTrack || track.mediaStreamTrack);
+        inspectStream(track.stream);
+        inspectStream(track.mediaStream);
+        inspectStream(track.nativeStream);
+
+        const resolvedId = track.id || track.trackId || track.streamId;
+        if (resolvedId && this.sdk?.hmsStore) {
             try {
-                candidates.push(new MediaStream([nativeTrack]));
-            } catch (error) {
-                this.logWarn('Failed to build MediaStream from native track', error);
-            }
-        }
-
-        if (track.stream instanceof MediaStream) {
-            candidates.push(track.stream);
-        }
-        if (track.mediaStream instanceof MediaStream) {
-            candidates.push(track.mediaStream);
-        }
-        if (track.nativeStream instanceof MediaStream) {
-            candidates.push(track.nativeStream);
-        }
-
-        const trackId = track.id || track.trackId;
-        if (trackId && this.sdk?.hmsStore) {
-            try {
-                const storeTrack = this.sdk.hmsStore.getState(state => {
-                    const collections = [
-                        state?.videoTracks,
-                        state?.audioTracks,
-                        state?.tracks
-                    ];
-                    for (const collection of collections) {
-                        if (!collection) continue;
-                        if (typeof collection.get === 'function' && collection.has(trackId)) {
-                            return collection.get(trackId);
-                        }
-                        if (collection && typeof collection === 'object' && trackId in collection) {
-                            return collection[trackId];
-                        }
-                    }
-                    return null;
-                });
-
-                if (storeTrack) {
-                    if (storeTrack.stream instanceof MediaStream) {
-                        candidates.push(storeTrack.stream);
-                    }
-                    if (storeTrack.mediaStream instanceof MediaStream) {
-                        candidates.push(storeTrack.mediaStream);
-                    }
+                const state = this.sdk.hmsStore.getState(s => s);
+                const collections = [state?.videoTracks, state?.audioTracks, state?.tracks];
+                for (const collection of collections) {
+                    if (!collection) continue;
+                    const entry = typeof collection.get === 'function'
+                        ? collection.get(resolvedId)
+                        : collection?.[resolvedId];
+                    if (!entry) continue;
+                    ensureStream(entry.nativeTrack || entry.track || entry.sourceTrack || entry.mediaStreamTrack);
+                    inspectStream(entry.stream);
+                    inspectStream(entry.mediaStream);
+                    inspectStream(entry.nativeStream);
                 }
             } catch (error) {
-                this.logWarn('Failed to resolve track from store', error);
+                this.logWarn('Failed to inspect HMS store for track media', error);
             }
+        }
+
+        if (label === 'local') {
+            inspectStream(this.localVideoEl?.srcObject);
+            inspectStream(this.previewStream);
         }
 
         for (const candidate of candidates) {
-            if (!(candidate instanceof MediaStream)) {
-                continue;
-            }
-            if (type === 'video' && candidate.getVideoTracks().length > 0) {
-                return candidate;
-            }
-            if (type === 'audio' && candidate.getAudioTracks().length > 0) {
+            if (candidate?.stream && candidate?.mediaTrack) {
                 return candidate;
             }
         }
 
         return null;
-    }
-
-    isTrackEnabled(trackRef) {
-        const { track } = this.resolveTrack(trackRef);
-        if (!track) {
-            return false;
-        }
-        if (track.type === 'audio') {
-            return track.enabled !== false && track.muted !== true;
-        }
-        return track.enabled !== false;
-    }
-
-    scheduleTrackRetry(type, trackRef, callback, immediate = false) {
-        if (!trackRef) return;
-        const registry = this.trackRetryTimers[type];
-        if (!registry) return;
-
-        const key = typeof trackRef === 'object' && trackRef !== null
-            ? (trackRef.id || trackRef.trackId || trackRef)
-            : trackRef;
-
-        if (registry.has(key)) {
-            return;
-        }
-
-        const delay = immediate ? 300 : 600;
-        const timeoutId = setTimeout(() => {
-            registry.delete(key);
-            callback();
-        }, delay);
-        registry.set(key, timeoutId);
-    }
-
-    clearTrackRetry(type, trackRef) {
-        if (!trackRef) return;
-        const registry = this.trackRetryTimers[type];
-        if (!registry) return;
-
-        const key = typeof trackRef === 'object' && trackRef !== null
-            ? (trackRef.id || trackRef.trackId || trackRef)
-            : trackRef;
-
-        if (key && registry.has(key)) {
-            clearTimeout(registry.get(key));
-            registry.delete(key);
-        }
-    }
-
-    disableHostOnlyControls() {
-        if (this.notetakerStartBtn) {
-            this.notetakerStartBtn.setAttribute('disabled', 'disabled');
-            this.notetakerStartBtn.classList.add('disabled');
-        }
-        if (this.notetakerStatusEl) {
-            this.notetakerStatusEl.classList.add('guest-mode');
-        }
-        this.notetakerPauseBtn?.setAttribute('disabled', 'disabled');
-        this.notetakerStopBtn?.setAttribute('disabled', 'disabled');
-        if (this.notetakerPauseBtn) {
-            this.notetakerPauseBtn.dataset.active = 'false';
-        }
-        if (this.notetakerStopBtn) {
-            this.notetakerStopBtn.dataset.active = 'false';
-        }
-        this.recordBtn?.setAttribute('disabled', 'disabled');
-        if (this.recordBtn) {
-            this.recordBtn.dataset.active = 'false';
-        }
-        this.pollBtn?.setAttribute('disabled', 'disabled');
-        if (this.pollBtn) {
-            this.pollBtn.dataset.active = 'false';
-        }
-        this.whiteboardBtn?.setAttribute('disabled', 'disabled');
-        if (this.whiteboardBtn) {
-            this.whiteboardBtn.dataset.active = 'false';
-        }
-        if (this.shareLinkContainer) {
-            this.shareLinkContainer.style.display = 'none';
-        }
-    }
-
-    startCallTimer() {
-        this.stopCallTimer();
-        this.callStartTime = Date.now();
-        this.updateCallTimer();
-        this.callTimerInterval = setInterval(() => this.updateCallTimer(), 1000);
-    }
-
-    stopCallTimer() {
-        if (this.callTimerInterval) {
-            clearInterval(this.callTimerInterval);
-            this.callTimerInterval = null;
-        }
-    }
-
-    updateCallTimer() {
-        if (!this.callTimerEl || !this.callStartTime) return;
-        const diff = Date.now() - this.callStartTime;
-        const minutes = Math.floor(diff / 60000).toString().padStart(2, '0');
-        const seconds = Math.floor((diff % 60000) / 1000).toString().padStart(2, '0');
-        this.callTimerEl.textContent = `${minutes}:${seconds}`;
-    }
-
-    toggleChatPanel() {
-        if (!this.chatPanel) return;
-        this.showControls(true);
-        const hidden = this.chatPanel.classList.toggle('hidden');
-        this.chatPanel.style.display = hidden ? 'none' : 'flex';
-        this.chatBtn?.classList.toggle('active', !hidden);
-        if (this.chatBtn) {
-            this.chatBtn.dataset.active = !hidden ? 'true' : 'false';
-        }
-        if (!hidden) {
-            if (this.chatBadge) {
-                this.chatBadge.style.display = 'none';
-                this.chatBadge.textContent = '0';
-            }
-        }
-    }
-
-    togglePollModal() {
-        if (!this.pollModal) return;
-        this.showControls(true);
-        const visible = this.pollModal.classList.toggle('visible');
-        this.pollModal.style.display = visible ? 'flex' : 'none';
-        this.pollBtn?.classList.toggle('active', visible);
-        if (this.pollBtn) {
-            this.pollBtn.dataset.active = visible ? 'true' : 'false';
-        }
-    }
-
-    toggleWhiteboard() {
-        if (!this.whiteboardContainer) return;
-        this.showControls(true);
-        const visible = this.whiteboardContainer.classList.toggle('visible');
-        this.whiteboardContainer.style.display = visible ? 'flex' : 'none';
-        this.whiteboardBtn?.classList.toggle('active', visible);
-        if (this.whiteboardBtn) {
-            this.whiteboardBtn.dataset.active = visible ? 'true' : 'false';
-        }
-    }
-
-    toggleReactions() {
-        if (!this.reactionsPanel) {
-            alert('Reactions are coming soon.');
-            return;
-        }
-        this.showControls(true);
-        this.setupReactionButtons();
-        const visible = this.reactionsPanel.classList.toggle('visible');
-        this.reactionsPanel.style.display = visible ? 'flex' : 'none';
-        if (this.reactionsBtn) {
-            this.reactionsBtn.classList.toggle('active', visible);
-            this.reactionsBtn.dataset.active = visible ? 'true' : 'false';
-        }
-        if (visible) {
-            clearTimeout(this.reactionTimeout);
-            this.reactionTimeout = setTimeout(() => {
-                this.reactionsPanel.classList.remove('visible');
-                this.reactionsPanel.style.display = 'none';
-            }, 4000);
-        }
-    }
-
-    setupReactionButtons() {
-        if (!this.reactionsPanel || this.reactionsPanel.dataset.bound === 'true') {
-            return;
-        }
-        this.reactionsPanel.querySelectorAll('.reaction-btn').forEach(btn => {
-            btn.addEventListener('click', () => {
-                const reaction = btn.dataset.reaction;
-                if (reaction) {
-                    this.sendReaction(reaction);
-                }
-                this.toggleReactions();
-            });
-        });
-        this.reactionsPanel.dataset.bound = 'true';
-    }
-
-    async sendReaction(reaction) {
-        this.showReactionOverlay(reaction, 'You');
-        if (!this.sdk) return;
-        try {
-            await this.sdk.sendMessage(`REACTION::${reaction}`);
-        } catch (error) {
-            this.logWarn('Failed to send reaction', error);
-        }
-    }
-
-    showReactionOverlay(reaction, sender) {
-        if (!this.reactionOverlay) {
-            return;
-        }
-        this.reactionOverlay.textContent = reaction;
-        this.reactionOverlay.classList.add('visible');
-        clearTimeout(this.reactionTimeout);
-        this.reactionTimeout = setTimeout(() => {
-            this.reactionOverlay.classList.remove('visible');
-        }, 2200);
-    }
-
-    async toggleRecording() {
-        if (!this.isHost) {
-            alert('Only the host can control recording.');
-            return;
-        }
-        if (!this.sdk) {
-            this.logWarn('Recording ignored - SDK not initialized');
-            return;
-        }
-
-        const enable = !this.isRecording;
-
-        if (enable) {
-            try {
-                const result = await this.sdk.toggleRecording(true);
-                this.recordingMode = result?.mode || 'cloud';
-                this.isRecording = true;
-                this.applyRecordingUI(true, this.recordingMode);
-                this.logDebug('Recording started', this.recordingMode);
-                this.requestWakeLock();
-                return;
-            } catch (error) {
-                this.logWarn('Cloud recording unavailable, attempting local fallback', error);
-                if (error?.code === 'CLOUD_RECORDING_UNAVAILABLE' || /not available/i.test(error?.message || '')) {
-                    try {
-                        await this.startLocalRecording();
-                        this.isRecording = true;
-                        this.recordingMode = 'local';
-                        this.applyRecordingUI(true, 'local');
-                        this.requestWakeLock();
-                        alert('Cloud recording is not available on this plan. Started a local recording instead — it will upload when you stop.');
-                        return;
-                    } catch (fallbackError) {
-                        this.logError('Local recording fallback failed', fallbackError);
-                    }
-                } else {
-                    this.logError('Recording toggle failed', error);
-                }
-                this.applyRecordingUI(false);
-                this.isRecording = false;
-                this.recordingMode = null;
-                alert('Recording is not available in this environment.');
-                return;
-            }
-        }
-
-        // Stop recording
-        try {
-            if (this.recordingMode === 'cloud') {
-                await this.sdk.toggleRecording(false);
-            } else if (this.recordingMode === 'local') {
-                await this.stopLocalRecording();
-            }
-        } catch (error) {
-            this.logError('Failed to stop recording', error);
-        } finally {
-            this.isRecording = false;
-            this.recordingMode = null;
-            this.applyRecordingUI(false);
-            this.requestWakeLock();
-        }
-    }
-
-    startNotetakerStatusPolling() {
-        this.stopNotetakerStatusPolling();
-        if (!this.sdk?.hmsRoomId) {
-            return;
-        }
-        this.refreshNotetakerStatus(true);
-        this.notetakerStatusPoll = setInterval(() => this.refreshNotetakerStatus(true), 15000);
-    }
-
-    stopNotetakerStatusPolling() {
-        if (this.notetakerStatusPoll) {
-            clearInterval(this.notetakerStatusPoll);
-            this.notetakerStatusPoll = null;
-        }
-    }
-
-    async refreshNotetakerStatus(silent = false) {
-        if (!this.sdk?.hmsRoomId) {
-            return;
-        }
-
-        try {
-            const res = await fetch(`/api/notetaker/status?room_id=${encodeURIComponent(this.sdk.hmsRoomId)}`, {
-                method: 'GET',
-                credentials: 'include'
-            });
-
-            if (!res.ok) {
-                if (res.status === 401 || res.status === 403) {
-                    this.stopNotetakerStatusPolling();
-                    return;
-                }
-                const message = await res.text();
-                throw new Error(message || `Status request failed (${res.status})`);
-            }
-
-            const data = await res.json();
-
-            if (!data || data.active === false) {
-                if (this.notetakerStartTimestamp) {
-                    this.notetakerStartTimestamp = null;
-                    this.notetakerPaused = false;
-                }
-                this.updateNotetakerUI('stopped');
-                return;
-            }
-
-            if (data.start_time || data.startTime) {
-                const startTs = new Date(data.start_time || data.startTime).getTime();
-                if (!Number.isNaN(startTs)) {
-                    this.notetakerStartTimestamp = startTs;
-                }
-            }
-
-            this.notetakerPaused = data.status === 'paused';
-
-            if (data.status === 'paused') {
-                this.updateNotetakerUI('paused');
-            } else if (data.status === 'recording' || data.active) {
-                this.updateNotetakerUI('recording');
-            } else {
-                this.updateNotetakerUI('stopped');
-            }
-
-            if (typeof data.duration === 'string' && this.notetakerTimerEl) {
-                const durationText = data.duration.split('.')[0];
-                this.notetakerTimerEl.textContent = durationText;
-            }
-        } catch (error) {
-            if (silent) {
-                this.logDebug('Notetaker status refresh skipped', error);
-            } else {
-                this.logError('Failed to refresh notetaker status', error);
-            }
-        }
     }
 
     async startNotetaker() {
