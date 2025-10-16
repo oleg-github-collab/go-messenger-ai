@@ -87,7 +87,7 @@ class ProfessionalUIController {
         this.shareBaseStatus = '';
         this.isShowingCopyStatus = false;
         this.controlsBound = false;
-        this.trackRetryTimers = { video: {}, audio: {} };
+        this.trackRetryTimers = { video: new Map(), audio: new Map() };
         this.callStartTime = null;
         this.callTimerInterval = null;
         this.notetakerInterval = null;
@@ -104,6 +104,7 @@ class ProfessionalUIController {
         this.localRecordingStart = null;
         this.localRecordingTracks = [];
         this.latestLocalRecordingId = null;
+        this.notetakerStatusPoll = null;
 
         window.__PRO_UI__ = this;
 
@@ -646,6 +647,7 @@ class ProfessionalUIController {
             }
             this.enableCallControls();
             this.startCallTimer();
+            this.startNotetakerStatusPolling();
 
             if (!this.isHost && this.aiPanel) {
                 this.aiPanel.style.display = 'none';
@@ -942,15 +944,12 @@ class ProfessionalUIController {
 
         this.storeSubscriptions = [];
 
-        Object.keys(this.trackRetryTimers.video).forEach(trackId => {
-            clearTimeout(this.trackRetryTimers.video[trackId]);
-        });
-        Object.keys(this.trackRetryTimers.audio).forEach(trackId => {
-            clearTimeout(this.trackRetryTimers.audio[trackId]);
-        });
-        this.trackRetryTimers = { video: {}, audio: {} };
+        this.trackRetryTimers.video.forEach(timeoutId => clearTimeout(timeoutId));
+        this.trackRetryTimers.audio.forEach(timeoutId => clearTimeout(timeoutId));
+        this.trackRetryTimers = { video: new Map(), audio: new Map() };
 
         this.stopCallTimer();
+        this.stopNotetakerStatusPolling();
         this.isScreenSharing = false;
         this.isRecording = false;
         this.isRemoteAudioMuted = false;
@@ -1034,9 +1033,9 @@ class ProfessionalUIController {
 
         this.clearStoreSubscriptions();
 
-        const selectPeers = (state) => state?.peers || {};
-        const selectMessages = (state) => state?.messages || [];
+        const selectPeers = (state) => state?.peers || [];
         const selectTracks = (state) => state?.tracks || {};
+        const selectMessages = (state) => state?.messages || null;
 
         this.storeSubscriptions.push(
             hmsStore.subscribe(this.onTrackUpdate.bind(this), selectPeers)
@@ -1062,6 +1061,23 @@ class ProfessionalUIController {
         );
 
         this.logDebug('Subscribed to HMS store updates');
+
+        try {
+            const initialPeers = hmsStore.getState(selectPeers) || [];
+            this.onPeersUpdate(initialPeers);
+            this.onTrackUpdate(initialPeers);
+        } catch (error) {
+            this.logWarn('Failed to process initial peer state', error);
+        }
+
+        try {
+            const initialMessages = hmsStore.getState(selectMessages);
+            if (initialMessages) {
+                this.onMessage(initialMessages);
+            }
+        } catch (error) {
+            this.logWarn('Failed to process initial message state', error);
+        }
     }
 
     /**
@@ -1070,14 +1086,37 @@ class ProfessionalUIController {
     onMessage(messagesState) {
         const normalizeMessageList = (source) => {
             if (!source) return [];
-            if (Array.isArray(source)) return source;
-            if (Array.isArray(source.messages)) return source.messages;
-            if (Array.isArray(source.broadcastMessages)) return source.broadcastMessages;
-            if (Array.isArray(source.privateMessages)) return source.privateMessages;
-            if (typeof source === 'object') {
-                return Object.values(source).filter(item => item && typeof item === 'object' && 'message' in item);
+            if (Array.isArray(source)) {
+                return source;
             }
-            return [];
+
+            if (typeof source !== 'object') {
+                return [];
+            }
+
+            const aggregates = [];
+            const buckets = [
+                source.broadcastMessages,
+                source.broadCastMessages,
+                source.directMessages,
+                source.groupMessages,
+                source.privateMessages,
+                source.messages
+            ];
+
+            buckets.forEach(bucket => {
+                if (Array.isArray(bucket)) {
+                    aggregates.push(...bucket);
+                }
+            });
+
+            if (aggregates.length > 0) {
+                return aggregates;
+            }
+
+            return Object.values(source)
+                .filter(item => item && typeof item === 'object')
+                .reduce((acc, item) => acc.concat(normalizeMessageList(item)), []);
         };
 
         const messages = normalizeMessageList(messagesState);
@@ -1115,15 +1154,15 @@ class ProfessionalUIController {
      * Handle peer updates
      */
     onPeersUpdate(peers) {
-        const peerMap = peers || {};
-        const peerCount = Object.keys(peerMap).length;
+        const peerList = Array.isArray(peers) ? peers : Object.values(peers || {});
+        const peerCount = peerList.length;
         const participantLabel = document.querySelector('.participant-name');
 
         if (participantLabel) {
             if (peerCount <= 1) {
                 participantLabel.textContent = 'Waiting for guest...';
             } else {
-                const remotePeers = Object.values(peerMap).filter(p => !p.isLocal);
+                const remotePeers = peerList.filter(p => !p.isLocal);
                 if (remotePeers.length > 0) {
                     participantLabel.textContent = remotePeers[0].name;
                 }
@@ -1333,6 +1372,7 @@ class ProfessionalUIController {
                 this.renderedMessageIds.clear();
             }
             this.stopCallTimer();
+            this.stopNotetakerStatusPolling();
             if (this.notetakerStartTimestamp) {
                 await this.stopNotetaker();
             }
@@ -1388,90 +1428,138 @@ class ProfessionalUIController {
         this.logDebug('Call controls enabled');
     }
 
-    safeAttachVideo(trackId, element, label = 'video') {
-        if (!trackId || !element || !this.sdk?.hmsActions || !this.sdk?.hmsStore) {
+    resolveTrack(trackRef, type = 'video') {
+        if (!trackRef) {
+            return { track: null, trackId: null };
+        }
+
+        if (typeof trackRef === 'object' && trackRef !== null && trackRef.id) {
+            return { track: trackRef, trackId: trackRef.id };
+        }
+
+        const trackId = typeof trackRef === 'string'
+            ? trackRef
+            : (trackRef && (trackRef.trackId || trackRef.id)) || null;
+
+        if (!trackId || !this.sdk?.hmsStore) {
+            return { track: null, trackId };
+        }
+
+        const track = this.sdk.hmsStore.getState(state => {
+            const collections = [
+                state?.tracks,
+                type === 'video' ? state?.videoTracks : null,
+                type === 'audio' ? state?.audioTracks : null
+            ];
+
+            for (const collection of collections) {
+                if (!collection) continue;
+                if (typeof collection.get === 'function') {
+                    const value = collection.get(trackId);
+                    if (value) return value;
+                }
+                if (collection && typeof collection === 'object' && trackId in collection) {
+                    return collection[trackId];
+                }
+            }
+            return null;
+        });
+
+        return { track, trackId };
+    }
+
+    safeAttachVideo(trackRef, element, label = 'video') {
+        if (!trackRef || !element || !this.sdk?.hmsActions) {
             return;
         }
 
-        const track = this.sdk.hmsStore.getState(s => s?.tracks?.[trackId] || s?.videoTracks?.[trackId]);
+        const { track, trackId } = this.resolveTrack(trackRef, 'video');
 
         if (!track) {
-            this.logDebug(`Track ${trackId} not ready for attach (${label})`);
-            this.scheduleTrackRetry('video', trackId, () => this.safeAttachVideo(trackId, element, label));
+            const key = trackId || (trackRef && trackRef.id) || label;
+            this.logDebug(`Track ${key} not ready for attach (${label})`);
+            this.scheduleTrackRetry('video', trackRef, () => this.safeAttachVideo(trackRef, element, label));
             return;
         }
+
         try {
-            this.clearTrackRetry('video', trackId);
+            this.clearTrackRetry('video', trackRef);
             this.sdk.hmsActions.attachVideo(track, element);
-            this.logDebug(`Attached ${label} video track`, trackId);
+            this.logDebug(`Attached ${label} video track`, track.id || trackId);
         } catch (error) {
             this.logError(`attachVideo failed for ${label}`, error);
-            this.scheduleTrackRetry('video', trackId, () => this.safeAttachVideo(trackId, element, label), true);
+            this.scheduleTrackRetry('video', trackRef, () => this.safeAttachVideo(trackRef, element, label), true);
         }
     }
 
-    safeAttachAudio(trackId, element, label = 'audio') {
-        if (!trackId || !element || !this.sdk?.hmsActions || !this.sdk?.hmsStore) {
+    safeAttachAudio(trackRef, element, label = 'audio') {
+        if (!trackRef || !element || !this.sdk?.hmsActions) {
             return;
         }
 
-        const track = this.sdk.hmsStore.getState(s => s?.tracks?.[trackId] || s?.audioTracks?.[trackId]);
+        const { track, trackId } = this.resolveTrack(trackRef, 'audio');
 
         if (!track) {
-            this.logDebug(`Track ${trackId} not ready for attach (${label})`);
-            this.scheduleTrackRetry('audio', trackId, () => this.safeAttachAudio(trackId, element, label));
+            const key = trackId || (trackRef && trackRef.id) || label;
+            this.logDebug(`Track ${key} not ready for attach (${label})`);
+            this.scheduleTrackRetry('audio', trackRef, () => this.safeAttachAudio(trackRef, element, label));
             return;
         }
 
         try {
-            this.clearTrackRetry('audio', trackId);
+            this.clearTrackRetry('audio', trackRef);
             this.sdk.hmsActions.attachAudio(track, element);
-            this.logDebug(`Attached ${label} audio track`, trackId);
+            this.logDebug(`Attached ${label} audio track`, track.id || trackId);
         } catch (error) {
             this.logError(`attachAudio failed for ${label}`, error);
-            this.scheduleTrackRetry('audio', trackId, () => this.safeAttachAudio(trackId, element, label), true);
+            this.scheduleTrackRetry('audio', trackRef, () => this.safeAttachAudio(trackRef, element, label), true);
         }
     }
 
-    isTrackEnabled(trackId) {
-        if (!trackId || !this.sdk?.hmsStore) {
+    isTrackEnabled(trackRef) {
+        const { track } = this.resolveTrack(trackRef);
+        if (!track) {
             return false;
         }
-
-        try {
-            const track = this.sdk.hmsStore.getState(s => s?.tracks?.[trackId] || s?.videoTracks?.[trackId] || s?.audioTracks?.[trackId]);
-            if (!track) return false;
-            if (track.type === 'audio') {
-                return track.enabled !== false && track.muted !== true;
-            }
-            return track.enabled !== false;
-        } catch (error) {
-            this.logWarn('Unable to read track state', trackId, error);
-            return false;
+        if (track.type === 'audio') {
+            return track.enabled !== false && track.muted !== true;
         }
+        return track.enabled !== false;
     }
 
-    scheduleTrackRetry(type, trackId, callback, immediate = false) {
-        if (!trackId) return;
+    scheduleTrackRetry(type, trackRef, callback, immediate = false) {
+        if (!trackRef) return;
         const registry = this.trackRetryTimers[type];
         if (!registry) return;
-        if (registry[trackId]) {
+
+        const key = typeof trackRef === 'object' && trackRef !== null
+            ? (trackRef.id || trackRef.trackId || trackRef)
+            : trackRef;
+
+        if (registry.has(key)) {
             return;
         }
 
         const delay = immediate ? 300 : 600;
-        registry[trackId] = setTimeout(() => {
-            delete registry[trackId];
+        const timeoutId = setTimeout(() => {
+            registry.delete(key);
             callback();
         }, delay);
+        registry.set(key, timeoutId);
     }
 
-    clearTrackRetry(type, trackId) {
-        if (!trackId) return;
+    clearTrackRetry(type, trackRef) {
+        if (!trackRef) return;
         const registry = this.trackRetryTimers[type];
-        if (registry && registry[trackId]) {
-            clearTimeout(registry[trackId]);
-            delete registry[trackId];
+        if (!registry) return;
+
+        const key = typeof trackRef === 'object' && trackRef !== null
+            ? (trackRef.id || trackRef.trackId || trackRef)
+            : trackRef;
+
+        if (key && registry.has(key)) {
+            clearTimeout(registry.get(key));
+            registry.delete(key);
         }
     }
 
@@ -1685,6 +1773,83 @@ class ProfessionalUIController {
         }
     }
 
+    startNotetakerStatusPolling() {
+        this.stopNotetakerStatusPolling();
+        if (!this.sdk?.hmsRoomId) {
+            return;
+        }
+        this.refreshNotetakerStatus(true);
+        this.notetakerStatusPoll = setInterval(() => this.refreshNotetakerStatus(true), 15000);
+    }
+
+    stopNotetakerStatusPolling() {
+        if (this.notetakerStatusPoll) {
+            clearInterval(this.notetakerStatusPoll);
+            this.notetakerStatusPoll = null;
+        }
+    }
+
+    async refreshNotetakerStatus(silent = false) {
+        if (!this.sdk?.hmsRoomId) {
+            return;
+        }
+
+        try {
+            const res = await fetch(`/api/notetaker/status?room_id=${encodeURIComponent(this.sdk.hmsRoomId)}`, {
+                method: 'GET',
+                credentials: 'include'
+            });
+
+            if (!res.ok) {
+                if (res.status === 401 || res.status === 403) {
+                    this.stopNotetakerStatusPolling();
+                    return;
+                }
+                const message = await res.text();
+                throw new Error(message || `Status request failed (${res.status})`);
+            }
+
+            const data = await res.json();
+
+            if (!data || data.active === false) {
+                if (this.notetakerStartTimestamp) {
+                    this.notetakerStartTimestamp = null;
+                    this.notetakerPaused = false;
+                }
+                this.updateNotetakerUI('stopped');
+                return;
+            }
+
+            if (data.start_time || data.startTime) {
+                const startTs = new Date(data.start_time || data.startTime).getTime();
+                if (!Number.isNaN(startTs)) {
+                    this.notetakerStartTimestamp = startTs;
+                }
+            }
+
+            this.notetakerPaused = data.status === 'paused';
+
+            if (data.status === 'paused') {
+                this.updateNotetakerUI('paused');
+            } else if (data.status === 'recording' || data.active) {
+                this.updateNotetakerUI('recording');
+            } else {
+                this.updateNotetakerUI('stopped');
+            }
+
+            if (typeof data.duration === 'string' && this.notetakerTimerEl) {
+                const durationText = data.duration.split('.')[0];
+                this.notetakerTimerEl.textContent = durationText;
+            }
+        } catch (error) {
+            if (silent) {
+                this.logDebug('Notetaker status refresh skipped', error);
+            } else {
+                this.logError('Failed to refresh notetaker status', error);
+            }
+        }
+    }
+
     async startNotetaker() {
         if (!this.isHost) {
             alert('Only the host can start the AI Notetaker');
@@ -1710,6 +1875,7 @@ class ProfessionalUIController {
             this.updateNotetakerTimer();
             this.notetakerInterval = setInterval(() => this.updateNotetakerTimer(), 1000);
             this.logDebug('Notetaker started');
+            this.refreshNotetakerStatus(true);
         } catch (error) {
             this.logError('Notetaker start failed', error);
             this.updateNotetakerUI('stopped');
@@ -1769,6 +1935,7 @@ class ProfessionalUIController {
         this.notetakerStartTimestamp = null;
         this.updateNotetakerUI('stopped');
         this.logDebug('Notetaker stopped');
+        this.refreshNotetakerStatus(true);
     }
 
     updateNotetakerUI(state) {
@@ -1844,6 +2011,7 @@ class ProfessionalUIController {
             default:
                 break;
         }
+        this.ensureNotetakerTimerRunning();
     }
 
     updateNotetakerTimer() {
@@ -1854,6 +2022,21 @@ class ProfessionalUIController {
         const minutes = Math.floor(elapsed / 60000).toString().padStart(2, '0');
         const seconds = Math.floor((elapsed % 60000) / 1000).toString().padStart(2, '0');
         this.notetakerTimerEl.textContent = `${minutes}:${seconds}`;
+    }
+
+    ensureNotetakerTimerRunning() {
+        if (this.notetakerPaused || !this.notetakerStartTimestamp) {
+            if (this.notetakerInterval) {
+                clearInterval(this.notetakerInterval);
+                this.notetakerInterval = null;
+            }
+            return;
+        }
+
+        if (!this.notetakerInterval) {
+            this.notetakerInterval = setInterval(() => this.updateNotetakerTimer(), 1000);
+        }
+        this.updateNotetakerTimer();
     }
 
     logInfo(...args) {
