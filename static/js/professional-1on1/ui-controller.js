@@ -349,6 +349,7 @@ class ProfessionalUIController {
     async initializeAsHost(inviteCode = null) {
         console.log('[UI Controller] Initializing as HOST');
         this.isHost = true;
+        document.body.setAttribute('data-is-host', 'true');
         this.pendingInviteCode = inviteCode;
 
         try {
@@ -386,6 +387,7 @@ class ProfessionalUIController {
     async initializeAsGuest(roomCode, userName) {
         console.log('[UI Controller] Initializing as GUEST');
         this.isHost = false;
+        document.body.setAttribute('data-is-host', 'false');
         this.roomCode = roomCode;
         this.pendingShareLink = null;
 
@@ -1050,6 +1052,15 @@ class ProfessionalUIController {
                 if (typeof enabled === 'boolean') {
                     this.micBtn.classList.toggle('active', enabled);
                     this.micBtn.dataset.active = enabled ? 'true' : 'false';
+
+                    // Toggle icons
+                    const iconOn = this.micBtn.querySelector('.icon-on');
+                    const iconOff = this.micBtn.querySelector('.icon-off');
+                    if (iconOn && iconOff) {
+                        iconOn.style.display = enabled ? 'block' : 'none';
+                        iconOff.style.display = enabled ? 'none' : 'block';
+                    }
+
                     this.logDebug('Mic state', enabled);
                 } else {
                     this.logWarn('Mic toggle skipped - track not ready');
@@ -1076,6 +1087,15 @@ class ProfessionalUIController {
                 if (typeof enabled === 'boolean') {
                     this.cameraBtn.classList.toggle('active', enabled);
                     this.cameraBtn.dataset.active = enabled ? 'true' : 'false';
+
+                    // Toggle icons
+                    const iconOn = this.cameraBtn.querySelector('.icon-on');
+                    const iconOff = this.cameraBtn.querySelector('.icon-off');
+                    if (iconOn && iconOff) {
+                        iconOn.style.display = enabled ? 'block' : 'none';
+                        iconOff.style.display = enabled ? 'none' : 'block';
+                    }
+
                     this.logDebug('Camera state', enabled);
                 } else {
                     this.logWarn('Camera toggle skipped - track not ready');
@@ -1181,6 +1201,9 @@ class ProfessionalUIController {
 
         // Reactions (mobile)
         this.reactionsBtn?.addEventListener('click', () => this.toggleReactions());
+
+        // Reactions (desktop)
+        this.reactionsDesktopBtn?.addEventListener('click', () => this.toggleReactions());
 
         // Mobile More Menu
         this.mobileMoreBtn?.addEventListener('click', () => {
