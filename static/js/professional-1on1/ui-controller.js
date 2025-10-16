@@ -1876,11 +1876,19 @@ class ProfessionalUIController {
         try {
             this.clearTrackRetry('video', trackRef);
 
+            // Check if already attached - PREVENT FLICKERING
+            const currentTrackId = element.dataset.trackId;
+            const newTrackId = track.id || trackId || '';
+            if (currentTrackId === newTrackId && currentTrackId !== '') {
+                // Track already attached, skip
+                return;
+            }
+
             // Use HMS SDK attachVideo if available
             if (typeof this.sdk?.hmsActions?.attachVideo === 'function') {
                 try {
-                    this.sdk.hmsActions.attachVideo(track.id || trackId, element);
-                    element.dataset.trackId = track.id || trackId || '';
+                    this.sdk.hmsActions.attachVideo(newTrackId, element);
+                    element.dataset.trackId = newTrackId;
                     element.style.display = 'block';
                     this.logDebug(`Attached ${label} video via HMS attachVideo`, trackId);
                     return;
@@ -1944,6 +1952,14 @@ class ProfessionalUIController {
 
         try {
             this.clearTrackRetry('audio', trackRef);
+
+            // Check if already attached - PREVENT FLICKERING
+            const currentTrackId = element.dataset.trackId;
+            const newTrackId = track.id || trackId || '';
+            if (currentTrackId === newTrackId && currentTrackId !== '') {
+                // Track already attached, skip
+                return;
+            }
 
             // Use HMS SDK attachAudio if available
             if (typeof this.sdk?.hmsActions?.attachAudio === 'function') {
