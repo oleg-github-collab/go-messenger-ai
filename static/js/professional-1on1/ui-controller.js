@@ -2082,6 +2082,295 @@ class ProfessionalUIController {
         this.updateNotetakerTimer();
     }
 
+    startCallTimer() {
+        if (this.callTimerInterval) {
+            return;
+        }
+        this.callStartTime = Date.now();
+        this.callTimerInterval = setInterval(() => {
+            if (!this.callTimerEl || !this.callStartTime) {
+                return;
+            }
+            const elapsed = Date.now() - this.callStartTime;
+            const hours = Math.floor(elapsed / 3600000);
+            const minutes = Math.floor((elapsed % 3600000) / 60000);
+            const seconds = Math.floor((elapsed % 60000) / 1000);
+
+            if (hours > 0) {
+                this.callTimerEl.textContent = `${hours}:${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            } else {
+                this.callTimerEl.textContent = `${minutes.toString().padStart(2, '0')}:${seconds.toString().padStart(2, '0')}`;
+            }
+        }, 1000);
+        this.logDebug('Call timer started');
+    }
+
+    stopCallTimer() {
+        if (this.callTimerInterval) {
+            clearInterval(this.callTimerInterval);
+            this.callTimerInterval = null;
+        }
+        this.callStartTime = null;
+        if (this.callTimerEl) {
+            this.callTimerEl.textContent = '00:00';
+        }
+        this.logDebug('Call timer stopped');
+    }
+
+    startNotetakerStatusPolling() {
+        if (!this.isHost || this.notetakerStatusPoll) {
+            return;
+        }
+        this.notetakerStatusPoll = setInterval(() => {
+            this.refreshNotetakerStatus(false);
+        }, 5000);
+        this.logDebug('Notetaker status polling started');
+    }
+
+    stopNotetakerStatusPolling() {
+        if (this.notetakerStatusPoll) {
+            clearInterval(this.notetakerStatusPoll);
+            this.notetakerStatusPoll = null;
+        }
+        this.logDebug('Notetaker status polling stopped');
+    }
+
+    async refreshNotetakerStatus(force = false) {
+        if (!this.isHost || !this.sdk?.hmsRoomId) {
+            return;
+        }
+        try {
+            const res = await fetch(`/api/notetaker/status?room_id=${this.sdk.hmsRoomId}`, {
+                credentials: 'include'
+            });
+            if (res.ok) {
+                const data = await res.json();
+                if (data.active && !this.notetakerStartTimestamp) {
+                    this.notetakerStartTimestamp = Date.now() - (data.elapsed_seconds || 0) * 1000;
+                    this.updateNotetakerUI('recording');
+                    this.ensureNotetakerTimerRunning();
+                } else if (!data.active && this.notetakerStartTimestamp) {
+                    this.notetakerStartTimestamp = null;
+                    this.updateNotetakerUI('stopped');
+                }
+            }
+        } catch (error) {
+            if (force) {
+                this.logError('Failed to refresh notetaker status', error);
+            }
+        }
+    }
+
+    toggleChatPanel() {
+        if (!this.chatPanel) return;
+        const isHidden = this.chatPanel.classList.contains('hidden');
+        if (isHidden) {
+            this.chatPanel.classList.remove('hidden');
+            this.chatPanel.style.display = 'flex';
+            if (this.chatBtn) {
+                this.chatBtn.classList.add('active');
+                this.chatBtn.dataset.active = 'true';
+            }
+            if (this.chatBadge) {
+                this.chatBadge.style.display = 'none';
+                this.chatBadge.textContent = '0';
+            }
+        } else {
+            this.chatPanel.classList.add('hidden');
+            this.chatPanel.style.display = 'none';
+            if (this.chatBtn) {
+                this.chatBtn.classList.remove('active');
+                this.chatBtn.dataset.active = 'false';
+            }
+        }
+        this.logDebug('Chat panel toggled', !isHidden);
+    }
+
+    togglePollModal() {
+        if (!this.pollModal) return;
+        const isVisible = this.pollModal.classList.contains('visible');
+        if (isVisible) {
+            this.pollModal.classList.remove('visible');
+            this.pollModal.style.display = 'none';
+            if (this.pollBtn) {
+                this.pollBtn.classList.remove('active');
+                this.pollBtn.dataset.active = 'false';
+            }
+        } else {
+            this.pollModal.classList.add('visible');
+            this.pollModal.style.display = 'flex';
+            if (this.pollBtn) {
+                this.pollBtn.classList.add('active');
+                this.pollBtn.dataset.active = 'true';
+            }
+        }
+        this.logDebug('Poll modal toggled', !isVisible);
+    }
+
+    toggleWhiteboard() {
+        if (!this.whiteboardContainer) return;
+        const isVisible = this.whiteboardContainer.classList.contains('visible');
+        if (isVisible) {
+            this.whiteboardContainer.classList.remove('visible');
+            this.whiteboardContainer.style.display = 'none';
+            if (this.whiteboardBtn) {
+                this.whiteboardBtn.classList.remove('active');
+                this.whiteboardBtn.dataset.active = 'false';
+            }
+        } else {
+            this.whiteboardContainer.classList.add('visible');
+            this.whiteboardContainer.style.display = 'flex';
+            if (this.whiteboardBtn) {
+                this.whiteboardBtn.classList.add('active');
+                this.whiteboardBtn.dataset.active = 'true';
+            }
+        }
+        this.logDebug('Whiteboard toggled', !isVisible);
+    }
+
+    async toggleRecording() {
+        if (!this.isHost) {
+            alert('Only the host can start/stop recording');
+            return;
+        }
+
+        this.isRecording = !this.isRecording;
+
+        if (this.isRecording) {
+            try {
+                this.recordingMode = 'local';
+                await this.startLocalRecording();
+                this.applyRecordingUI(true, this.recordingMode);
+                this.logDebug('Recording started', this.recordingMode);
+            } catch (error) {
+                this.isRecording = false;
+                this.recordingMode = null;
+                this.applyRecordingUI(false);
+                this.logError('Recording start failed', error);
+                alert('Failed to start recording: ' + error.message);
+            }
+        } else {
+            try {
+                if (this.recordingMode === 'local') {
+                    await this.stopLocalRecording();
+                }
+                this.applyRecordingUI(false);
+                this.recordingMode = null;
+                this.logDebug('Recording stopped');
+            } catch (error) {
+                this.logError('Recording stop failed', error);
+                alert('Failed to stop recording: ' + error.message);
+            }
+        }
+    }
+
+    toggleReactions() {
+        if (!this.reactionsPanel) return;
+        const isVisible = this.reactionsPanel.classList.contains('visible');
+        if (isVisible) {
+            this.reactionsPanel.classList.remove('visible');
+            this.reactionsPanel.style.display = 'none';
+        } else {
+            this.reactionsPanel.classList.add('visible');
+            this.reactionsPanel.style.display = 'flex';
+        }
+        this.logDebug('Reactions panel toggled', !isVisible);
+    }
+
+    setupReactionButtons() {
+        const reactionButtons = document.querySelectorAll('.reaction-btn');
+        reactionButtons.forEach(btn => {
+            btn.addEventListener('click', async () => {
+                const reaction = btn.dataset.reaction;
+                if (reaction && this.sdk) {
+                    try {
+                        await this.sdk.sendMessage(`REACTION::${reaction}`);
+                        this.showReactionOverlay(reaction, 'You');
+                        this.toggleReactions();
+                    } catch (error) {
+                        this.logError('Failed to send reaction', error);
+                    }
+                }
+            });
+        });
+    }
+
+    showReactionOverlay(reaction, sender) {
+        if (!this.reactionOverlay) return;
+        this.reactionOverlay.textContent = reaction;
+        this.reactionOverlay.classList.add('visible');
+        if (this.reactionTimeout) {
+            clearTimeout(this.reactionTimeout);
+        }
+        this.reactionTimeout = setTimeout(() => {
+            if (this.reactionOverlay) {
+                this.reactionOverlay.classList.remove('visible');
+                this.reactionOverlay.textContent = '';
+            }
+        }, 3000);
+        this.logDebug('Reaction overlay shown', { reaction, sender });
+    }
+
+    disableHostOnlyControls() {
+        const hostOnlyButtons = [
+            this.recordBtn,
+            this.notetakerStartBtn,
+            this.notetakerPauseBtn,
+            this.notetakerStopBtn
+        ];
+        hostOnlyButtons.forEach(btn => {
+            if (btn) {
+                btn.disabled = true;
+                btn.style.opacity = '0.5';
+                btn.style.cursor = 'not-allowed';
+            }
+        });
+        this.logDebug('Host-only controls disabled');
+    }
+
+    isTrackEnabled(trackRef) {
+        if (!trackRef) return false;
+        const { track } = this.resolveTrack(trackRef);
+        if (!track) return false;
+        if (typeof track.enabled === 'boolean') return track.enabled;
+        const nativeTrack = track.nativeTrack || track.track || track.mediaStreamTrack;
+        if (nativeTrack && typeof nativeTrack.enabled === 'boolean') {
+            return nativeTrack.enabled && nativeTrack.readyState === 'live';
+        }
+        return false;
+    }
+
+    scheduleTrackRetry(type, trackRef, callback, isError = false) {
+        const key = (trackRef && trackRef.id) || JSON.stringify(trackRef);
+        const map = type === 'video' ? this.trackRetryTimers.video : this.trackRetryTimers.audio;
+
+        if (map.has(key)) {
+            return;
+        }
+
+        const delay = isError ? 2000 : 500;
+        const timeoutId = setTimeout(() => {
+            map.delete(key);
+            if (typeof callback === 'function') {
+                callback();
+            }
+        }, delay);
+
+        map.set(key, timeoutId);
+        this.logDebug(`Scheduled ${type} retry for track`, key);
+    }
+
+    clearTrackRetry(type, trackRef) {
+        const key = (trackRef && trackRef.id) || JSON.stringify(trackRef);
+        const map = type === 'video' ? this.trackRetryTimers.video : this.trackRetryTimers.audio;
+
+        if (map.has(key)) {
+            clearTimeout(map.get(key));
+            map.delete(key);
+            this.logDebug(`Cleared ${type} retry for track`, key);
+        }
+    }
+
     logInfo(...args) {
         console.info('[UI Controller][INFO]', ...args);
     }
