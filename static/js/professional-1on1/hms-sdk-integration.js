@@ -432,9 +432,26 @@ class ProfessionalMeetingSDK {
             ? peer.audioEnabled
             : true;
         const target = !current;
-        await this.hmsActions.setLocalAudioEnabled(target);
-        console.debug('[HMS SDK] Local audio set to', target);
-        return target;
+
+        try {
+            await this.hmsActions.setLocalAudioEnabled(target);
+            console.debug('[HMS SDK] Local audio set to', target);
+
+            // Wait for state update
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+            // Verify new state
+            const updatedPeer = this.hmsStore?.getState(state => state.localPeer);
+            const actualState = typeof updatedPeer?.audioEnabled === 'boolean'
+                ? updatedPeer.audioEnabled
+                : target;
+
+            console.debug('[HMS SDK] Audio actual state:', actualState);
+            return actualState;
+        } catch (error) {
+            console.error('[HMS SDK] Audio toggle error:', error);
+            return current; // Return previous state on error
+        }
     }
 
     /**
@@ -447,9 +464,26 @@ class ProfessionalMeetingSDK {
             ? peer.videoEnabled
             : true;
         const target = !current;
-        await this.hmsActions.setLocalVideoEnabled(target);
-        console.debug('[HMS SDK] Local video set to', target);
-        return target;
+
+        try {
+            await this.hmsActions.setLocalVideoEnabled(target);
+            console.debug('[HMS SDK] Local video set to', target);
+
+            // Wait for state update
+            await new Promise(resolve => setTimeout(resolve, 100));
+
+            // Verify new state
+            const updatedPeer = this.hmsStore?.getState(state => state.localPeer);
+            const actualState = typeof updatedPeer?.videoEnabled === 'boolean'
+                ? updatedPeer.videoEnabled
+                : target;
+
+            console.debug('[HMS SDK] Video actual state:', actualState);
+            return actualState;
+        } catch (error) {
+            console.error('[HMS SDK] Video toggle error:', error);
+            return current; // Return previous state on error
+        }
     }
 
     async toggleScreenshare(enable) {

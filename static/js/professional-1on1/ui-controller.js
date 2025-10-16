@@ -1154,8 +1154,15 @@ class ProfessionalUIController {
                 this.isScreenSharing = false;
                 this.screenShareBtn.classList.remove('active');
                 this.screenShareBtn.dataset.active = 'false';
-                this.logError('Screenshare toggle failed', error);
-                alert('Screen sharing is not available. Please try again or use a different browser.');
+
+                const errorMsg = error?.message || String(error);
+                // Don't show error if user simply cancelled
+                if (errorMsg.includes('denied') || errorMsg.includes('Permission') || errorMsg.includes('cancelled')) {
+                    this.logDebug('Screenshare cancelled by user');
+                } else {
+                    this.logError('Screenshare toggle failed', error);
+                    alert('Screen sharing is not available. Please try again or use a different browser.');
+                }
             } finally {
                 this.screenShareBtn.disabled = false;
             }
@@ -1704,14 +1711,33 @@ class ProfessionalUIController {
      * Leave call
      */
     async leaveCall() {
-        if (confirm('Are you sure you want to leave the call?')) {
-            this.logDebug('Leave call confirmed');
+        if (this.isHost) {
+            // Show host options
+            const choice = confirm(
+                'Choose how to leave:\n\n' +
+                'OK = Leave (meeting continues for others)\n' +
+                'Cancel = Stay in meeting'
+            );
+
+            if (!choice) return; // User cancelled
+
+            // Ask if they want to end for everyone
+            const endForAll = confirm(
+                'Do you want to END the meeting for everyone?\n\n' +
+                'OK = End meeting for all\n' +
+                'Cancel = Just leave (others can continue)'
+            );
+
+            this.logDebug('Leave call - host', { endForAll });
+
+            // Clean up local resources
             this.clearStoreSubscriptions();
             if (this.renderedMessageIds) {
                 this.renderedMessageIds.clear();
             }
             this.stopCallTimer();
             this.stopNotetakerStatusPolling();
+
             if (this.notetakerStartTimestamp) {
                 await this.stopNotetaker();
             }
@@ -1725,8 +1751,32 @@ class ProfessionalUIController {
                     this.logWarn('Error stopping screenshare during leave', error);
                 }
             }
+
+            if (endForAll && this.sdk?.hmsActions) {
+                try {
+                    // End room for everyone
+                    await this.sdk.hmsActions.endRoom(true, 'Host ended the meeting');
+                    this.logDebug('Room ended for all participants');
+                } catch (error) {
+                    this.logError('Error ending room', error);
+                }
+            }
+
             await this.sdk.leaveRoom();
-            window.location.href = this.isHost ? '/home' : '/';
+            window.location.href = '/home';
+        } else {
+            // Guest - simple leave
+            if (confirm('Are you sure you want to leave the call?')) {
+                this.logDebug('Leave call confirmed - guest');
+                this.clearStoreSubscriptions();
+                if (this.renderedMessageIds) {
+                    this.renderedMessageIds.clear();
+                }
+                this.stopCallTimer();
+
+                await this.sdk.leaveRoom();
+                window.location.href = '/';
+            }
         }
     }
 
@@ -2431,6 +2481,10 @@ class ProfessionalUIController {
     }
 
     showReactionOverlay(reaction, sender) {
+        // Create floating animated reaction
+        this.createFloatingReaction(reaction);
+
+        // Also show in overlay
         if (!this.reactionOverlay) return;
         this.reactionOverlay.textContent = reaction;
         this.reactionOverlay.classList.add('visible');
@@ -2444,6 +2498,29 @@ class ProfessionalUIController {
             }
         }, 3000);
         this.logDebug('Reaction overlay shown', { reaction, sender });
+    }
+
+    createFloatingReaction(emoji) {
+        const el = document.createElement('div');
+        el.className = 'floating-reaction';
+        el.textContent = emoji;
+
+        // Random horizontal position (center area)
+        const centerX = window.innerWidth / 2;
+        const randomX = centerX + (Math.random() - 0.5) * 300;
+        el.style.left = randomX + 'px';
+        el.style.bottom = '20%';
+
+        // Random animation speed
+        const speeds = ['fast', '', 'slow'];
+        el.classList.add(speeds[Math.floor(Math.random() * speeds.length)]);
+
+        document.body.appendChild(el);
+
+        // Remove after animation
+        setTimeout(() => {
+            el.remove();
+        }, 4000);
     }
 
     disableHostOnlyControls() {

@@ -2119,3 +2119,48 @@ body[data-is-host="true"] .notetaker-panel {
         border-color: rgba(255, 255, 255, 0.08);
     }
 }
+
+/* Floating Reactions Animation */
+@keyframes floatReaction {
+    0% {
+        transform: translateY(0) scale(0.5) rotate(0deg);
+        opacity: 0;
+    }
+    10% {
+        opacity: 1;
+        transform: translateY(-20px) scale(1) rotate(5deg);
+    }
+    50% {
+        transform: translateY(-150px) scale(1.2) rotate(-5deg);
+    }
+    100% {
+        transform: translateY(-300px) scale(0.8) rotate(10deg);
+        opacity: 0;
+    }
+}
+
+.floating-reaction {
+    position: fixed;
+    font-size: 48px;
+    pointer-events: none;
+    z-index: 9999;
+    animation: floatReaction 3s cubic-bezier(0.25, 0.46, 0.45, 0.94) forwards;
+    filter: drop-shadow(0 4px 8px rgba(0, 0, 0, 0.3));
+}
+
+.floating-reaction.fast {
+    animation-duration: 2s;
+}
+
+.floating-reaction.slow {
+    animation-duration: 4s;
+}
+
+/* Multiple reactions stagger */
+.floating-reaction:nth-child(2n) {
+    animation-delay: 0.1s;
+}
+
+.floating-reaction:nth-child(3n) {
+    animation-delay: 0.2s;
+}
