@@ -1013,9 +1013,11 @@ class ProfessionalUIController {
             if (this.remoteVideoEl) {
                 this.remoteVideoEl.style.display = 'none';
                 this.remoteVideoEl.srcObject = null;
+                delete this.remoteVideoEl.dataset.trackId;
             }
             if (this.remoteAudioEl) {
                 this.remoteAudioEl.srcObject = null;
+                delete this.remoteAudioEl.dataset.trackId;
             }
             this.remotePeerId = null;
         }
@@ -1709,7 +1711,7 @@ class ProfessionalUIController {
     }
 
     safeAttachVideo(trackRef, element, label = 'video') {
-        if (!trackRef || !element || !this.sdk?.hmsActions) {
+        if (!trackRef || !element) {
             return;
         }
 
@@ -1724,28 +1726,36 @@ class ProfessionalUIController {
 
         try {
             this.clearTrackRetry('video', trackRef);
-            this.sdk.hmsActions.attachVideo(track, element);
-            this.logDebug(`Attached ${label} video track`, track.id || trackId);
-        } catch (error) {
-            this.logError(`attachVideo failed for ${label}`, error);
-            if (track?.nativeTrack) {
-                try {
-                    const stream = new MediaStream([track.nativeTrack]);
-                    element.srcObject = stream;
-                    element.style.display = 'block';
-                    element.play?.().catch(() => {});
-                    this.logDebug('Fallback video stream applied');
-                    return;
-                } catch (fallbackError) {
-                    this.logWarn('Fallback video attach failed', fallbackError);
-                }
+            const stream = this.getMediaStreamForTrack(track, 'video');
+            if (!stream) {
+                this.logDebug('Video stream unavailable yet', trackId);
+                this.scheduleTrackRetry('video', trackRef, () => this.safeAttachVideo(trackRef, element, label));
+                return;
             }
+            if (element.dataset.trackId === (track.id || trackId) && element.srcObject === stream) {
+                return;
+            }
+            element.srcObject = stream;
+            element.dataset.trackId = track.id || trackId || '';
+            element.playsInline = true;
+            element.muted = label === 'local';
+            element.style.display = 'block';
+            element.play?.().catch(err => {
+                this.logWarn('Video play() failed', err);
+            });
+            this.logDebug(`Attached ${label} video track`, {
+                trackId: track.id || trackId,
+                label,
+                tracks: stream.getVideoTracks().length
+            });
+        } catch (error) {
+            this.logError(`Failed to attach ${label} video`, error);
             this.scheduleTrackRetry('video', trackRef, () => this.safeAttachVideo(trackRef, element, label), true);
         }
     }
 
     safeAttachAudio(trackRef, element, label = 'audio') {
-        if (!trackRef || !element || !this.sdk?.hmsActions) {
+        if (!trackRef || !element) {
             return;
         }
 
@@ -1760,12 +1770,103 @@ class ProfessionalUIController {
 
         try {
             this.clearTrackRetry('audio', trackRef);
-            this.sdk.hmsActions.attachAudio(track, element);
-            this.logDebug(`Attached ${label} audio track`, track.id || trackId);
+            const stream = this.getMediaStreamForTrack(track, 'audio');
+            if (!stream) {
+                this.logDebug('Audio stream unavailable yet', trackId);
+                this.scheduleTrackRetry('audio', trackRef, () => this.safeAttachAudio(trackRef, element, label));
+                return;
+            }
+            if (element.dataset.trackId === (track.id || trackId) && element.srcObject === stream) {
+                return;
+            }
+            element.srcObject = stream;
+            element.dataset.trackId = track.id || trackId || '';
+            element.autoplay = true;
+            element.playsInline = true;
+            element.muted = label === 'local';
+            element.play?.().catch(err => {
+                this.logWarn('Audio play() failed', err);
+            });
+            this.logDebug(`Attached ${label} audio track via native stream`, track.id || trackId);
         } catch (error) {
-            this.logError(`attachAudio failed for ${label}`, error);
+            this.logError(`Failed to attach ${label} audio`, error);
             this.scheduleTrackRetry('audio', trackRef, () => this.safeAttachAudio(trackRef, element, label), true);
         }
+    }
+
+    getMediaStreamForTrack(track, type = 'video') {
+        if (!track) {
+            return null;
+        }
+
+        const candidates = [];
+
+        const nativeTrack = track.nativeTrack || track.track || track.sourceTrack || track.mediaStreamTrack;
+        if (nativeTrack && nativeTrack.readyState !== 'ended') {
+            try {
+                candidates.push(new MediaStream([nativeTrack]));
+            } catch (error) {
+                this.logWarn('Failed to build MediaStream from native track', error);
+            }
+        }
+
+        if (track.stream instanceof MediaStream) {
+            candidates.push(track.stream);
+        }
+        if (track.mediaStream instanceof MediaStream) {
+            candidates.push(track.mediaStream);
+        }
+        if (track.nativeStream instanceof MediaStream) {
+            candidates.push(track.nativeStream);
+        }
+
+        const trackId = track.id || track.trackId;
+        if (trackId && this.sdk?.hmsStore) {
+            try {
+                const storeTrack = this.sdk.hmsStore.getState(state => {
+                    const collections = [
+                        state?.videoTracks,
+                        state?.audioTracks,
+                        state?.tracks
+                    ];
+                    for (const collection of collections) {
+                        if (!collection) continue;
+                        if (typeof collection.get === 'function' && collection.has(trackId)) {
+                            return collection.get(trackId);
+                        }
+                        if (collection && typeof collection === 'object' && trackId in collection) {
+                            return collection[trackId];
+                        }
+                    }
+                    return null;
+                });
+
+                if (storeTrack) {
+                    if (storeTrack.stream instanceof MediaStream) {
+                        candidates.push(storeTrack.stream);
+                    }
+                    if (storeTrack.mediaStream instanceof MediaStream) {
+                        candidates.push(storeTrack.mediaStream);
+                    }
+                }
+            } catch (error) {
+                this.logWarn('Failed to resolve track from store', error);
+            }
+        }
+
+        for (const candidate of candidates) {
+            if (!(candidate instanceof MediaStream)) {
+                continue;
+            }
+            if (type === 'video' && candidate.getVideoTracks().length > 0) {
+                return candidate;
+            }
+            if (type === 'audio' && candidate.getAudioTracks().length > 0) {
+                return candidate;
+            }
+        }
+
+        return null;
     }
 
     isTrackEnabled(trackRef) {
