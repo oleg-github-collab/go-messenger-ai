@@ -1734,7 +1734,22 @@ class ProfessionalUIController {
 
         try {
             this.clearTrackRetry('video', trackRef);
-            const stream = this.getMediaStreamForTrack(track, 'video');
+            if (this.sdk?.hmsActions?.attachVideo) {
+                try {
+                    this.sdk.hmsActions.attachVideo(track, element);
+                    element.dataset.trackId = track.id || trackId || '';
+                    element.playsInline = true;
+                    element.muted = label === 'local';
+                    element.style.display = 'block';
+                    element.play?.().catch(err => this.logWarn('Video play() failed', err));
+                    this.logDebug(`Attached ${label} video track via HMS`, track.id || trackId);
+                    return;
+                } catch (attachError) {
+                    this.logWarn('HMS attachVideo failed, falling back', attachError);
+                }
+            }
+
+            const stream = this.getMediaStreamForTrack(track, 'video', label);
             if (!stream) {
                 this.logDebug('Video stream unavailable yet', trackId);
                 this.scheduleTrackRetry('video', trackRef, () => this.safeAttachVideo(trackRef, element, label));
@@ -1748,9 +1763,7 @@ class ProfessionalUIController {
             element.playsInline = true;
             element.muted = label === 'local';
             element.style.display = 'block';
-            element.play?.().catch(err => {
-                this.logWarn('Video play() failed', err);
-            });
+            element.play?.().catch(err => this.logWarn('Video play() failed', err));
             this.logDebug(`Attached ${label} video track`, {
                 trackId: track.id || trackId,
                 label,
@@ -1778,7 +1791,22 @@ class ProfessionalUIController {
 
         try {
             this.clearTrackRetry('audio', trackRef);
-            const stream = this.getMediaStreamForTrack(track, 'audio');
+            if (this.sdk?.hmsActions?.attachAudio) {
+                try {
+                    this.sdk.hmsActions.attachAudio(track, element);
+                    element.dataset.trackId = track.id || trackId || '';
+                    element.autoplay = true;
+                    element.playsInline = true;
+                    element.muted = label === 'local';
+                    element.play?.().catch(err => this.logWarn('Audio play() failed', err));
+                    this.logDebug(`Attached ${label} audio track via HMS`, track.id || trackId);
+                    return;
+                } catch (attachError) {
+                    this.logWarn('HMS attachAudio failed, falling back', attachError);
+                }
+            }
+
+            const stream = this.getMediaStreamForTrack(track, 'audio', label);
             if (!stream) {
                 this.logDebug('Audio stream unavailable yet', trackId);
                 this.scheduleTrackRetry('audio', trackRef, () => this.safeAttachAudio(trackRef, element, label));
@@ -1792,9 +1820,7 @@ class ProfessionalUIController {
             element.autoplay = true;
             element.playsInline = true;
             element.muted = label === 'local';
-            element.play?.().catch(err => {
-                this.logWarn('Audio play() failed', err);
-            });
+            element.play?.().catch(err => this.logWarn('Audio play() failed', err));
             this.logDebug(`Attached ${label} audio track via native stream`, track.id || trackId);
         } catch (error) {
             this.logError(`Failed to attach ${label} audio`, error);
@@ -1802,12 +1828,21 @@ class ProfessionalUIController {
         }
     }
 
-    getMediaStreamForTrack(track, type = 'video') {
+    getMediaStreamForTrack(track, type = 'video', label = 'remote') {
         if (!track) {
             return null;
         }
 
         const candidates = [];
+
+        if (label === 'local') {
+            if (this.localVideoEl?.srcObject instanceof MediaStream) {
+                candidates.push(this.localVideoEl.srcObject);
+            }
+            if (this.previewStream instanceof MediaStream) {
+                candidates.push(this.previewStream);
+            }
+        }
 
         const nativeTrack = track.nativeTrack || track.track || track.sourceTrack || track.mediaStreamTrack;
         if (nativeTrack && nativeTrack.readyState !== 'ended') {
