@@ -1038,6 +1038,9 @@ class ProfessionalUIController {
                 this.logWarn('Mic toggle ignored - SDK not initialized');
                 return;
             }
+            if (this.micBtn.disabled) return;
+
+            this.micBtn.disabled = true;
             try {
                 this.logDebug('Mic toggle requested');
                 const enabled = await this.sdk.toggleAudio();
@@ -1050,6 +1053,8 @@ class ProfessionalUIController {
                 }
             } catch (error) {
                 this.logError('Mic toggle failed', error);
+            } finally {
+                this.micBtn.disabled = false;
             }
         });
 
@@ -1059,6 +1064,9 @@ class ProfessionalUIController {
                 this.logWarn('Camera toggle ignored - SDK not initialized');
                 return;
             }
+            if (this.cameraBtn.disabled) return;
+
+            this.cameraBtn.disabled = true;
             try {
                 this.logDebug('Camera toggle requested');
                 const enabled = await this.sdk.toggleVideo();
@@ -1071,6 +1079,8 @@ class ProfessionalUIController {
                 }
             } catch (error) {
                 this.logError('Camera toggle failed', error);
+            } finally {
+                this.cameraBtn.disabled = false;
             }
         });
 
@@ -1118,8 +1128,16 @@ class ProfessionalUIController {
                 this.isScreenSharing = false;
                 this.screenShareBtn.classList.remove('active');
                 this.screenShareBtn.dataset.active = 'false';
-                this.logError('Screenshare toggle failed', error);
-                alert('Screen share is not available on this device.');
+                const errorMsg = error?.message || String(error);
+                if (errorMsg.includes('not supported in this plan')) {
+                    this.logWarn('Screenshare not available in plan', error);
+                    // Hide screenshare button for this session
+                    if (this.screenShareBtn) {
+                        this.screenShareBtn.style.display = 'none';
+                    }
+                } else {
+                    this.logError('Screenshare toggle failed', error);
+                }
             }
         });
 
@@ -1130,13 +1148,18 @@ class ProfessionalUIController {
                     this.logWarn('Chat send ignored - SDK not initialized');
                     return;
                 }
+                const messageText = this.chatInput.value.trim();
+                this.chatInput.value = '';
+
                 try {
                     this.logDebug('Sending chat message');
-                    await this.sdk.sendMessage(this.chatInput.value.trim());
-                    this.chatInput.value = '';
+                    // Add message immediately to UI (optimistic update)
+                    this.addChatMessage(this.sdk.userName || 'You', messageText, Date.now());
+                    await this.sdk.sendMessage(messageText);
                     this.logDebug('Chat message sent');
                 } catch (error) {
                     this.logError('Chat send failed', error);
+                    // Optionally show error indicator
                 }
             }
         });
@@ -1735,6 +1758,20 @@ class ProfessionalUIController {
         try {
             this.clearTrackRetry('video', trackRef);
 
+            // Use HMS SDK attachVideo if available
+            if (typeof this.sdk?.hmsActions?.attachVideo === 'function') {
+                try {
+                    this.sdk.hmsActions.attachVideo(track.id || trackId, element);
+                    element.dataset.trackId = track.id || trackId || '';
+                    element.style.display = 'block';
+                    this.logDebug(`Attached ${label} video via HMS attachVideo`, trackId);
+                    return;
+                } catch (hmsError) {
+                    this.logWarn('HMS attachVideo failed, falling back to manual stream', hmsError);
+                }
+            }
+
+            // Fallback: manual stream attachment
             const media = this.getTrackMedia(track, 'video', label);
             if (!media) {
                 this.logDebug('Video media unavailable yet', trackId);
@@ -1757,6 +1794,7 @@ class ProfessionalUIController {
             element.dataset.trackId = track.id || trackId || '';
             element.playsInline = true;
             element.muted = label === 'local';
+            element.autoplay = true;
             element.style.display = 'block';
             element.play?.().catch(err => this.logWarn('Video play() failed', err));
 
@@ -1789,6 +1827,19 @@ class ProfessionalUIController {
         try {
             this.clearTrackRetry('audio', trackRef);
 
+            // Use HMS SDK attachAudio if available
+            if (typeof this.sdk?.hmsActions?.attachAudio === 'function') {
+                try {
+                    this.sdk.hmsActions.attachAudio(track.id || trackId, element);
+                    element.dataset.trackId = track.id || trackId || '';
+                    this.logDebug(`Attached ${label} audio via HMS attachAudio`, trackId);
+                    return;
+                } catch (hmsError) {
+                    this.logWarn('HMS attachAudio failed, falling back to manual stream', hmsError);
+                }
+            }
+
+            // Fallback: manual stream attachment
             const media = this.getTrackMedia(track, 'audio', label);
             if (!media) {
                 this.logDebug('Audio media unavailable yet', trackId);
@@ -1812,6 +1863,7 @@ class ProfessionalUIController {
             element.autoplay = true;
             element.playsInline = true;
             element.muted = label === 'local';
+            element.volume = 1.0;
             element.play?.().catch(err => this.logWarn('Audio play() failed', err));
             this.logDebug(`Attached ${label} audio track`, {
                 trackId: track.id || trackId,
