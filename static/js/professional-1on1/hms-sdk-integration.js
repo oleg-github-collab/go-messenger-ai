@@ -456,20 +456,54 @@ class ProfessionalMeetingSDK {
         if (!this.hmsActions) return;
         try {
             if (enable) {
-                if (typeof this.hmsActions.startScreenshare === 'function') {
+                // Try HMS SDK method first
+                if (typeof this.hmsActions.setScreenShareEnabled === 'function') {
+                    await this.hmsActions.setScreenShareEnabled(true);
+                    this.isScreenSharing = true;
+                    console.debug('[HMS SDK] Screen share enabled via HMS');
+                } else if (typeof this.hmsActions.startScreenshare === 'function') {
                     await this.hmsActions.startScreenshare();
                     this.isScreenSharing = true;
+                    console.debug('[HMS SDK] Screen share started via HMS');
                 } else {
-                    throw new Error('Screenshare is not supported in this plan.');
+                    // Fallback: use native getDisplayMedia
+                    console.debug('[HMS SDK] Using native screen share fallback');
+                    const screenStream = await navigator.mediaDevices.getDisplayMedia({
+                        video: {
+                            cursor: 'always',
+                            displaySurface: 'monitor'
+                        }
+                    });
+
+                    // Replace video track with screen share track
+                    const screenTrack = screenStream.getVideoTracks()[0];
+                    if (screenTrack) {
+                        // Stop when user clicks browser's "Stop sharing" button
+                        screenTrack.addEventListener('ended', () => {
+                            this.isScreenSharing = false;
+                            console.debug('[HMS SDK] Screen share ended by user');
+                        });
+
+                        // Try to replace track in HMS
+                        if (typeof this.hmsActions.setScreenShareEnabled === 'function') {
+                            await this.hmsActions.setScreenShareEnabled(true, screenTrack);
+                        }
+                        this.isScreenSharing = true;
+                    }
                 }
             } else {
-                if (typeof this.hmsActions.stopScreenshare === 'function') {
+                // Stop screen share
+                if (typeof this.hmsActions.setScreenShareEnabled === 'function') {
+                    await this.hmsActions.setScreenShareEnabled(false);
+                } else if (typeof this.hmsActions.stopScreenshare === 'function') {
                     await this.hmsActions.stopScreenshare();
                 }
                 this.isScreenSharing = false;
+                console.debug('[HMS SDK] Screen share stopped');
             }
         } catch (error) {
             this.isScreenSharing = false;
+            console.error('[HMS SDK] Screen share error:', error);
             throw error;
         }
     }

@@ -58,6 +58,10 @@ class ProfessionalUIController {
         this.pollModal = document.getElementById('pollModal');
         this.whiteboardContainer = document.getElementById('whiteboardContainer');
         this.reactionsPanel = document.getElementById('reactionsPanel');
+        this.reactionsFloatingPanel = document.getElementById('reactionsFloatingPanel');
+        this.mobileMoreBtn = document.getElementById('mobileMoreBtn');
+        this.mobileMoreMenu = document.getElementById('mobileMoreMenu');
+        this.closeMobileMenu = document.getElementById('closeMobileMenu');
 
         // Control buttons
         this.micBtn = document.getElementById('micBtn');
@@ -1118,6 +1122,9 @@ class ProfessionalUIController {
                 this.logWarn('Screenshare ignored - SDK not initialized');
                 return;
             }
+            if (this.screenShareBtn.disabled) return;
+
+            this.screenShareBtn.disabled = true;
             try {
                 this.isScreenSharing = !this.isScreenSharing;
                 await this.sdk.toggleScreenshare(this.isScreenSharing);
@@ -1128,16 +1135,10 @@ class ProfessionalUIController {
                 this.isScreenSharing = false;
                 this.screenShareBtn.classList.remove('active');
                 this.screenShareBtn.dataset.active = 'false';
-                const errorMsg = error?.message || String(error);
-                if (errorMsg.includes('not supported in this plan')) {
-                    this.logWarn('Screenshare not available in plan', error);
-                    // Hide screenshare button for this session
-                    if (this.screenShareBtn) {
-                        this.screenShareBtn.style.display = 'none';
-                    }
-                } else {
-                    this.logError('Screenshare toggle failed', error);
-                }
+                this.logError('Screenshare toggle failed', error);
+                alert('Screen sharing is not available. Please try again or use a different browser.');
+            } finally {
+                this.screenShareBtn.disabled = false;
             }
         });
 
@@ -1181,6 +1182,51 @@ class ProfessionalUIController {
 
         // Reactions (mobile)
         this.reactionsBtn?.addEventListener('click', () => this.toggleReactions());
+
+        // Mobile More Menu
+        this.mobileMoreBtn?.addEventListener('click', () => {
+            if (this.mobileMoreMenu) {
+                this.mobileMoreMenu.style.display = 'block';
+            }
+        });
+
+        this.closeMobileMenu?.addEventListener('click', () => {
+            if (this.mobileMoreMenu) {
+                this.mobileMoreMenu.style.display = 'none';
+            }
+        });
+
+        // Mobile menu items (placeholders for future features)
+        document.getElementById('mobileBlurBtn')?.addEventListener('click', () => {
+            alert('Blur background feature coming soon!');
+            if (this.mobileMoreMenu) this.mobileMoreMenu.style.display = 'none';
+        });
+
+        document.getElementById('mobileVirtualBtn')?.addEventListener('click', () => {
+            alert('Virtual background feature coming soon!');
+            if (this.mobileMoreMenu) this.mobileMoreMenu.style.display = 'none';
+        });
+
+        document.getElementById('mobileSpeakerBtn')?.addEventListener('click', () => {
+            // Toggle speaker
+            this.isRemoteAudioMuted = !this.isRemoteAudioMuted;
+            if (this.remoteAudioEl) {
+                this.remoteAudioEl.muted = this.isRemoteAudioMuted;
+            }
+            if (this.mobileMoreMenu) this.mobileMoreMenu.style.display = 'none';
+        });
+
+        document.getElementById('mobileRaiseHandBtn')?.addEventListener('click', async () => {
+            if (this.sdk) {
+                try {
+                    await this.sdk.sendMessage('✋ Raised hand');
+                    this.showReactionOverlay('✋', 'You');
+                } catch (error) {
+                    this.logError('Raise hand failed', error);
+                }
+            }
+            if (this.mobileMoreMenu) this.mobileMoreMenu.style.display = 'none';
+        });
 
         // Notetaker controls
         this.notetakerStartBtn?.addEventListener('click', () => this.startNotetaker());
@@ -2317,20 +2363,28 @@ class ProfessionalUIController {
     }
 
     toggleReactions() {
-        if (!this.reactionsPanel) return;
-        const isVisible = this.reactionsPanel.classList.contains('visible');
+        const panel = this.reactionsFloatingPanel || this.reactionsPanel;
+        if (!panel) return;
+
+        const isVisible = panel.style.display !== 'none' && panel.style.display !== '';
         if (isVisible) {
-            this.reactionsPanel.classList.remove('visible');
-            this.reactionsPanel.style.display = 'none';
+            panel.style.display = 'none';
+            if (this.reactionsBtn) {
+                this.reactionsBtn.classList.remove('active');
+                this.reactionsBtn.dataset.active = 'false';
+            }
         } else {
-            this.reactionsPanel.classList.add('visible');
-            this.reactionsPanel.style.display = 'flex';
+            panel.style.display = 'flex';
+            if (this.reactionsBtn) {
+                this.reactionsBtn.classList.add('active');
+                this.reactionsBtn.dataset.active = 'true';
+            }
         }
         this.logDebug('Reactions panel toggled', !isVisible);
     }
 
     setupReactionButtons() {
-        const reactionButtons = document.querySelectorAll('.reaction-btn');
+        const reactionButtons = document.querySelectorAll('.reaction-btn, .reaction-quick-btn');
         reactionButtons.forEach(btn => {
             btn.addEventListener('click', async () => {
                 const reaction = btn.dataset.reaction;
@@ -2338,7 +2392,14 @@ class ProfessionalUIController {
                     try {
                         await this.sdk.sendMessage(`REACTION::${reaction}`);
                         this.showReactionOverlay(reaction, 'You');
-                        this.toggleReactions();
+                        // Auto-hide floating panel after selection
+                        if (this.reactionsFloatingPanel) {
+                            this.reactionsFloatingPanel.style.display = 'none';
+                        }
+                        if (this.reactionsBtn) {
+                            this.reactionsBtn.classList.remove('active');
+                            this.reactionsBtn.dataset.active = 'false';
+                        }
                     } catch (error) {
                         this.logError('Failed to send reaction', error);
                     }
