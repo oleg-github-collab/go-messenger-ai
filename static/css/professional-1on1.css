@@ -1966,145 +1966,517 @@ body[data-is-host="true"] .notetaker-panel {
     }
 }
 
-/* Mobile Native App Quality Enhancements */
+/* ===== MOBILE INTERFACE - NATIVE APP QUALITY REBUILD ===== */
 @media (max-width: 768px) {
-    /* Safe Area Insets for iOS */
+    /* iOS Safe Area Support */
+    :root {
+        --safe-top: env(safe-area-inset-top, 0px);
+        --safe-bottom: env(safe-area-inset-bottom, 0px);
+        --safe-left: env(safe-area-inset-left, 0px);
+        --safe-right: env(safe-area-inset-right, 0px);
+    }
+
+    /* Base mobile container */
     body {
-        padding-top: env(safe-area-inset-top);
-        padding-bottom: env(safe-area-inset-bottom);
-        padding-left: env(safe-area-inset-left);
-        padding-right: env(safe-area-inset-right);
+        padding: 0;
+        margin: 0;
+        overflow: hidden;
+        overscroll-behavior: none;
+        -webkit-overflow-scrolling: touch;
+        position: fixed;
+        width: 100vw;
+        height: 100vh;
     }
 
-    /* Touch-optimized buttons */
+    /* Call container - fullscreen mobile */
+    .call-container {
+        padding: 0;
+        height: 100vh;
+        width: 100vw;
+        display: flex;
+        flex-direction: column;
+        touch-action: none;
+    }
+
+    /* Top bar - iOS style header */
+    .top-bar {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        z-index: 150;
+        padding: calc(var(--safe-top) + 8px) 16px 8px;
+        background: linear-gradient(180deg, rgba(0, 0, 0, 0.7) 0%, rgba(0, 0, 0, 0.3) 70%, transparent 100%);
+        backdrop-filter: blur(10px) saturate(180%);
+        -webkit-backdrop-filter: blur(10px) saturate(180%);
+        border: none;
+        box-shadow: none;
+        height: auto;
+        min-height: calc(44px + var(--safe-top));
+    }
+
+    .call-info-group {
+        gap: 8px;
+        flex-direction: row;
+        align-items: center;
+    }
+
+    .call-timer {
+        font-size: 14px;
+        font-weight: 600;
+        color: rgba(255, 255, 255, 0.9);
+        letter-spacing: 0.5px;
+    }
+
+    .participant-count {
+        font-size: 13px;
+        padding: 4px 10px;
+        border-radius: 12px;
+        background: rgba(255, 255, 255, 0.15);
+    }
+
+    /* Video area - maximized */
+    .video-area {
+        flex: 1;
+        padding: 0;
+        margin: 0;
+        height: 100vh;
+        width: 100vw;
+        position: relative;
+        display: flex;
+        flex-direction: column;
+    }
+
+    /* Remote video - full screen */
+    .remote-video-container {
+        position: absolute;
+        top: 0;
+        left: 0;
+        width: 100%;
+        height: 100%;
+        border-radius: 0;
+        overflow: hidden;
+        z-index: 1;
+    }
+
+    #remoteVideo {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+        object-position: center;
+    }
+
+    /* Local video PiP - iOS style */
+    .local-video-pip {
+        position: fixed;
+        top: calc(var(--safe-top) + 60px);
+        right: 12px;
+        width: 100px;
+        height: 133px;
+        border-radius: 16px;
+        border: 2px solid rgba(255, 255, 255, 0.3);
+        box-shadow: 0 4px 20px rgba(0, 0, 0, 0.5);
+        z-index: 160;
+        overflow: hidden;
+        transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    }
+
+    .local-video-pip:active {
+        transform: scale(0.95);
+    }
+
+    #localVideo {
+        width: 100%;
+        height: 100%;
+        object-fit: cover;
+    }
+
+    /* Bottom controls - iOS style dock */
+    .bottom-controls {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        z-index: 150;
+        padding: 16px 20px calc(var(--safe-bottom) + 16px);
+        background: linear-gradient(0deg, rgba(0, 0, 0, 0.8) 0%, rgba(0, 0, 0, 0.5) 60%, transparent 100%);
+        backdrop-filter: blur(20px) saturate(180%);
+        -webkit-backdrop-filter: blur(20px) saturate(180%);
+        border: none;
+        box-shadow: 0 -2px 20px rgba(0, 0, 0, 0.3);
+        display: flex;
+        justify-content: center;
+        align-items: center;
+        gap: 16px;
+        flex-wrap: nowrap;
+    }
+
+    /* Control buttons - large touch targets */
     .control-btn {
-        min-width: 52px;
-        min-height: 52px;
+        min-width: 56px;
+        min-height: 56px;
+        max-width: 56px;
+        max-height: 56px;
+        padding: 0;
+        border-radius: 50%;
+        border: none;
+        background: rgba(255, 255, 255, 0.15);
+        backdrop-filter: blur(10px);
+        -webkit-backdrop-filter: blur(10px);
+        display: flex;
+        align-items: center;
+        justify-content: center;
+        transition: all 0.2s cubic-bezier(0.4, 0, 0.2, 1);
         -webkit-tap-highlight-color: transparent;
+        -webkit-touch-callout: none;
+        user-select: none;
+        position: relative;
+        overflow: hidden;
     }
 
-    /* Smooth scrolling */
-    .settings-panel,
-    .chat-panel,
-    .poll-modal {
+    .control-btn span {
+        display: none;
+    }
+
+    .control-btn svg {
+        width: 24px;
+        height: 24px;
+        stroke: white;
+        fill: none;
+    }
+
+    .control-btn:active {
+        transform: scale(0.92);
+        background: rgba(255, 255, 255, 0.25);
+    }
+
+    /* Mic/Camera active states */
+    .control-btn[data-active="true"] {
+        background: rgba(67, 233, 123, 0.25);
+        border: 2px solid rgba(67, 233, 123, 0.5);
+    }
+
+    .control-btn[data-active="false"] {
+        background: rgba(244, 92, 67, 0.25);
+        border: 2px solid rgba(244, 92, 67, 0.5);
+    }
+
+    /* Leave button - prominent */
+    #leaveBtn {
+        background: rgba(244, 67, 54, 0.9);
+        width: 64px;
+        height: 64px;
+        box-shadow: 0 4px 12px rgba(244, 67, 54, 0.4);
+    }
+
+    #leaveBtn:active {
+        transform: scale(0.9);
+        background: rgba(244, 67, 54, 1);
+    }
+
+    /* Mobile-only buttons */
+    .mobile-only {
+        display: flex !important;
+    }
+
+    .desktop-only {
+        display: none !important;
+    }
+
+    /* Chat panel - bottom sheet */
+    .chat-panel {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        width: 100%;
+        height: 70vh;
+        max-height: 70vh;
+        border-radius: 20px 20px 0 0;
+        transform: translateY(100%);
+        transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+        z-index: 200;
+        display: flex;
+        flex-direction: column;
+        box-shadow: 0 -4px 30px rgba(0, 0, 0, 0.6);
+    }
+
+    .chat-panel.open {
+        transform: translateY(0);
+    }
+
+    .chat-header {
+        padding: 12px 16px calc(12px + var(--safe-top));
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+        position: relative;
+    }
+
+    .chat-header::before {
+        content: '';
+        position: absolute;
+        top: 8px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 36px;
+        height: 4px;
+        background: rgba(255, 255, 255, 0.3);
+        border-radius: 2px;
+    }
+
+    .chat-messages {
+        flex: 1;
+        overflow-y: auto;
+        padding: 16px;
         -webkit-overflow-scrolling: touch;
         overscroll-behavior: contain;
     }
 
-    /* Bottom controls - iOS safe area */
-    .bottom-controls {
-        padding-bottom: calc(var(--spacing-lg) + env(safe-area-inset-bottom));
+    .chat-input-area {
+        padding: 12px 16px calc(12px + var(--safe-bottom));
+        background: var(--glass-bg);
+        border-top: 1px solid rgba(255, 255, 255, 0.1);
     }
 
-    /* Native feel transitions */
-    .call-container {
-        touch-action: pan-y;
+    /* Settings panel - full screen modal */
+    .settings-panel {
+        position: fixed;
+        top: 0;
+        left: 0;
+        right: 0;
+        bottom: 0;
+        width: 100vw;
+        height: 100vh;
+        max-width: 100vw;
+        max-height: 100vh;
+        border-radius: 0;
+        transform: translateY(100%);
+        transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+        z-index: 250;
+        display: flex;
+        flex-direction: column;
     }
 
-    /* Disable text selection on buttons */
-    button, .control-btn {
-        -webkit-touch-callout: none;
-        -webkit-user-select: none;
-        user-select: none;
+    .settings-panel.open {
+        transform: translateY(0);
     }
 
-    /* Pull-to-refresh style header */
-    .top-bar {
+    .settings-header {
+        padding: calc(var(--safe-top) + 16px) 20px 16px;
+        background: var(--glass-bg);
+        backdrop-filter: blur(20px);
+        -webkit-backdrop-filter: blur(20px);
+        border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+    }
+
+    .settings-content {
+        flex: 1;
+        overflow-y: auto;
+        -webkit-overflow-scrolling: touch;
+        padding-bottom: var(--safe-bottom);
+    }
+
+    /* Poll modal - bottom sheet */
+    .poll-modal {
+        position: fixed;
+        bottom: 0;
+        left: 0;
+        right: 0;
+        width: 100%;
+        height: 80vh;
+        max-height: 80vh;
+        border-radius: 20px 20px 0 0;
+        transform: translateY(100%);
+        transition: transform 0.35s cubic-bezier(0.4, 0, 0.2, 1);
+        z-index: 200;
+        top: auto;
+    }
+
+    .poll-modal.open {
+        transform: translateY(0);
+    }
+
+    /* Mobile more menu - bottom sheet */
+    .mobile-more-menu {
+        border-radius: 20px 20px 0 0;
+        padding: 20px 16px calc(20px + var(--safe-bottom));
+        max-height: 60vh;
+    }
+
+    .mobile-more-menu::before {
+        content: '';
+        position: absolute;
+        top: 8px;
+        left: 50%;
+        transform: translateX(-50%);
+        width: 36px;
+        height: 4px;
+        background: rgba(255, 255, 255, 0.3);
+        border-radius: 2px;
+    }
+
+    /* Reactions floating panel */
+    .reactions-floating-panel {
+        bottom: calc(80px + var(--safe-bottom));
+        padding: 12px;
+        gap: 12px;
+        border-radius: 24px;
         backdrop-filter: blur(20px) saturate(180%);
         -webkit-backdrop-filter: blur(20px) saturate(180%);
     }
 
-    /* Haptic feedback simulation */
-    .control-btn:active {
-        transform: scale(0.95);
-    }
-
-    /* Status bar spacing */
-    .preview-screen,
-    .call-container {
-        padding-top: env(safe-area-inset-top);
-    }
-
-    /* Modal fullscreen on mobile */
-    .poll-modal,
-    .settings-panel {
-        border-radius: var(--radius-xl) var(--radius-xl) 0 0;
-        bottom: 0;
-        top: auto;
-        height: 90vh;
-    }
-
-    /* Video containers - optimized for mobile */
-    .video-area {
-        height: calc(100vh - 180px - env(safe-area-inset-top) - env(safe-area-inset-bottom));
-    }
-
-    /* Reaction buttons - larger touch targets */
     .reaction-quick-btn {
-        min-width: 48px;
-        min-height: 48px;
+        width: 52px;
+        height: 52px;
+        min-width: 52px;
+        min-height: 52px;
+        border-radius: 50%;
+        font-size: 26px;
+        background: rgba(255, 255, 255, 0.1);
+        border: none;
+        transition: transform 0.2s cubic-bezier(0.4, 0, 0.2, 1);
+        -webkit-tap-highlight-color: transparent;
     }
 
-    /* Chat input - keyboard aware */
-    .chat-input-area {
-        padding-bottom: calc(var(--spacing-md) + env(safe-area-inset-bottom));
+    .reaction-quick-btn:active {
+        transform: scale(0.85);
+        background: rgba(255, 255, 255, 0.2);
     }
 
-    /* Floating action button style */
-    .mobile-more-menu {
-        border-radius: var(--radius-xl) var(--radius-xl) 0 0;
-        padding-bottom: calc(var(--spacing-lg) + env(safe-area-inset-bottom));
+    /* Transcript panel - side drawer */
+    .transcript-panel {
+        position: fixed;
+        right: -100%;
+        top: 0;
+        width: 100%;
+        height: 100vh;
+        border-radius: 0;
+        z-index: 220;
+        transition: right 0.35s cubic-bezier(0.4, 0, 0.2, 1);
     }
 
-    /* iOS-style bounce effect prevention */
-    body {
-        overscroll-behavior-y: none;
+    .transcript-panel.open {
+        right: 0;
+    }
+
+    /* Notetaker status - mobile compact */
+    .notetaker-status {
+        padding: 8px 16px;
+        font-size: 13px;
+        border-radius: 16px;
+    }
+
+    /* Disable hover effects on mobile */
+    .control-btn:hover {
+        transform: none;
+    }
+
+    /* Optimize animations for 60fps */
+    * {
+        will-change: transform;
+        transform: translateZ(0);
+        -webkit-font-smoothing: antialiased;
+        -moz-osx-font-smoothing: grayscale;
+    }
+
+    /* Prevent elastic scroll */
+    .call-container,
+    .video-area {
+        overscroll-behavior: none;
+        -webkit-overflow-scrolling: auto;
+    }
+
+    /* Button group spacing */
+    .control-group {
+        display: flex;
+        gap: 12px;
+        align-items: center;
     }
 }
 
-/* Portrait orientation optimizations */
+/* Portrait orientation - native vertical layout */
 @media (max-width: 768px) and (orientation: portrait) {
     .local-video-pip {
         width: 100px;
         height: 133px;
-        bottom: calc(var(--spacing-xl) + 80px + env(safe-area-inset-bottom));
+        top: calc(var(--safe-top) + 60px);
+        right: 12px;
     }
 
     .remote-video-container {
         aspect-ratio: 9/16;
     }
+
+    .bottom-controls {
+        padding: 20px 16px calc(var(--safe-bottom) + 20px);
+        gap: 18px;
+    }
+
+    .control-btn {
+        min-width: 60px;
+        min-height: 60px;
+        max-width: 60px;
+        max-height: 60px;
+    }
+
+    #leaveBtn {
+        width: 68px;
+        height: 68px;
+    }
 }
 
-/* Landscape orientation optimizations */
+/* Landscape orientation - compact horizontal layout */
 @media (max-width: 768px) and (orientation: landscape) {
     .local-video-pip {
         width: 120px;
         height: 90px;
-        right: var(--spacing-md);
-        bottom: calc(var(--spacing-md) + 60px);
-    }
-
-    .bottom-controls {
-        flex-direction: row;
-        padding: var(--spacing-sm) var(--spacing-md);
+        top: calc(var(--safe-top) + 12px);
+        right: 12px;
     }
 
     .top-bar {
-        padding: var(--spacing-sm) var(--spacing-md);
+        padding: calc(var(--safe-top) + 6px) 16px 6px;
+    }
+
+    .bottom-controls {
+        padding: 8px 20px calc(var(--safe-bottom) + 8px);
+        gap: 12px;
+    }
+
+    .control-btn {
+        min-width: 48px;
+        min-height: 48px;
+        max-width: 48px;
+        max-height: 48px;
+    }
+
+    #leaveBtn {
+        width: 54px;
+        height: 54px;
+    }
+
+    .chat-panel,
+    .poll-modal {
+        height: 85vh;
+        max-height: 85vh;
     }
 }
 
-/* High refresh rate displays */
+/* High refresh rate displays - 60fps optimization */
 @media (prefers-reduced-motion: no-preference) {
-    * {
-        animation-duration: 0.2s !important;
-        transition-duration: 0.2s !important;
-    }
-
     .control-btn,
     .poll-vote-option,
-    .reaction-quick-btn {
-        transition: transform 0.1s cubic-bezier(0.4, 0, 0.2, 1);
+    .reaction-quick-btn,
+    .chat-panel,
+    .settings-panel,
+    .poll-modal {
+        transition-duration: 0.25s;
+    }
+
+    /* Hardware acceleration */
+    .control-btn:active,
+    .reaction-quick-btn:active,
+    .local-video-pip:active {
+        transition-duration: 0.1s;
     }
 }
 
