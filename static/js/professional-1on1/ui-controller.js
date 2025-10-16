@@ -41,7 +41,6 @@ class ProfessionalUIController {
         this.endCallBtn = document.getElementById('endCallBtn');
         this.chatBtn = document.getElementById('chatBtn');
         this.pollBtn = document.getElementById('pollBtn');
-        this.whiteboardBtn = document.getElementById('whiteboardBtn');
         this.recordBtn = document.getElementById('recordBtn');
         this.speakerBtn = document.getElementById('speakerBtn');
         this.raiseHandBtn = document.getElementById('raiseHandBtn');
@@ -56,9 +55,9 @@ class ProfessionalUIController {
         this.notetakerStopBtn = document.getElementById('stopNotetakerBtn');
         this.chatPanel = document.querySelector('.chat-panel');
         this.pollModal = document.getElementById('pollModal');
-        this.whiteboardContainer = document.getElementById('whiteboardContainer');
         this.reactionsPanel = document.getElementById('reactionsPanel');
         this.reactionsFloatingPanel = document.getElementById('reactionsFloatingPanel');
+        this.reactionsDesktopBtn = document.getElementById('reactionsDesktopBtn');
         this.mobileMoreBtn = document.getElementById('mobileMoreBtn');
         this.mobileMoreMenu = document.getElementById('mobileMoreMenu');
         this.closeMobileMenu = document.getElementById('closeMobileMenu');
