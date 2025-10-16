@@ -427,10 +427,22 @@ class ProfessionalMeetingSDK {
      */
     async toggleAudio() {
         if (!this.hmsActions) return;
-        const enabled = !this.hmsStore.getState(state => state.localPeer?.audioEnabled);
-        await this.hmsActions.setLocalAudioEnabled(enabled);
-        console.debug('[HMS SDK] Local audio set to', enabled);
-        return enabled;
+        const peer = this.hmsStore?.getState(state => state.localPeer);
+        const audioTrack = peer?.audioTrack;
+
+        if (!audioTrack) {
+            console.warn('[HMS SDK] toggleAudio ignored - no local audio track yet');
+            return peer?.audioEnabled ?? null;
+        }
+
+        const current = typeof peer?.audioEnabled === 'boolean'
+            ? peer.audioEnabled
+            : audioTrack.enabled;
+
+        const target = !current;
+        await this.hmsActions.setLocalAudioEnabled(target);
+        console.debug('[HMS SDK] Local audio set to', target);
+        return target;
     }
 
     /**
@@ -438,10 +450,22 @@ class ProfessionalMeetingSDK {
      */
     async toggleVideo() {
         if (!this.hmsActions) return;
-        const enabled = !this.hmsStore.getState(state => state.localPeer?.videoEnabled);
-        await this.hmsActions.setLocalVideoEnabled(enabled);
-        console.debug('[HMS SDK] Local video set to', enabled);
-        return enabled;
+        const peer = this.hmsStore?.getState(state => state.localPeer);
+        const videoTrack = peer?.videoTrack;
+
+        if (!videoTrack) {
+            console.warn('[HMS SDK] toggleVideo ignored - no local video track yet');
+            return peer?.videoEnabled ?? null;
+        }
+
+        const current = typeof peer?.videoEnabled === 'boolean'
+            ? peer.videoEnabled
+            : videoTrack.enabled;
+
+        const target = !current;
+        await this.hmsActions.setLocalVideoEnabled(target);
+        console.debug('[HMS SDK] Local video set to', target);
+        return target;
     }
 
     async toggleScreenshare(enable) {

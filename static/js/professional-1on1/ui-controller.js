@@ -1041,9 +1041,13 @@ class ProfessionalUIController {
             try {
                 this.logDebug('Mic toggle requested');
                 const enabled = await this.sdk.toggleAudio();
-                this.micBtn.classList.toggle('active', enabled);
-                this.micBtn.dataset.active = enabled ? 'true' : 'false';
-                this.logDebug('Mic state', enabled);
+                if (typeof enabled === 'boolean') {
+                    this.micBtn.classList.toggle('active', enabled);
+                    this.micBtn.dataset.active = enabled ? 'true' : 'false';
+                    this.logDebug('Mic state', enabled);
+                } else {
+                    this.logWarn('Mic toggle skipped - track not ready');
+                }
             } catch (error) {
                 this.logError('Mic toggle failed', error);
             }
@@ -1058,9 +1062,13 @@ class ProfessionalUIController {
             try {
                 this.logDebug('Camera toggle requested');
                 const enabled = await this.sdk.toggleVideo();
-                this.cameraBtn.classList.toggle('active', enabled);
-                this.cameraBtn.dataset.active = enabled ? 'true' : 'false';
-                this.logDebug('Camera state', enabled);
+                if (typeof enabled === 'boolean') {
+                    this.cameraBtn.classList.toggle('active', enabled);
+                    this.cameraBtn.dataset.active = enabled ? 'true' : 'false';
+                    this.logDebug('Camera state', enabled);
+                } else {
+                    this.logWarn('Camera toggle skipped - track not ready');
+                }
             } catch (error) {
                 this.logError('Camera toggle failed', error);
             }
