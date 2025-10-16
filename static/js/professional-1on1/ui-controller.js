@@ -671,9 +671,11 @@ class ProfessionalUIController {
 
             if (this.micBtn) {
                 this.micBtn.classList.toggle('active', joinPreferences.audioEnabled);
+                this.micBtn.dataset.active = joinPreferences.audioEnabled ? 'true' : 'false';
             }
             if (this.cameraBtn) {
                 this.cameraBtn.classList.toggle('active', joinPreferences.videoEnabled);
+                this.cameraBtn.dataset.active = joinPreferences.videoEnabled ? 'true' : 'false';
             }
 
             this.hideLoading();
@@ -951,7 +953,16 @@ class ProfessionalUIController {
      * Handle track updates - render video/audio
      */
     onTrackUpdate(peers) {
-        const peerValues = Object.values(peers || {});
+        let peerValues = [];
+        if (!peers) {
+            peerValues = [];
+        } else if (Array.isArray(peers)) {
+            peerValues = peers;
+        } else if (typeof Map !== 'undefined' && peers instanceof Map) {
+            peerValues = Array.from(peers.values());
+        } else if (typeof peers === 'object') {
+            peerValues = Object.values(peers);
+        }
         this.logDebug('Track update', peerValues.length);
 
         const localPeer = peerValues.find(peer => peer.isLocal);
@@ -1260,7 +1271,7 @@ class ProfessionalUIController {
 
         this.clearStoreSubscriptions();
 
-        const selectPeers = (state) => state?.peers || [];
+        const selectPeers = (state) => state?.peers || {};
         const selectTracks = (state) => state?.tracks || {};
         const selectMessages = (state) => state?.messages || null;
 
@@ -1632,13 +1643,15 @@ class ProfessionalUIController {
                     audio: s.localPeer?.audioEnabled,
                     video: s.localPeer?.videoEnabled
                 }));
+                const audioEnabled = state.audio !== false;
+                const videoEnabled = state.video !== false;
                 if (this.micBtn) {
-                    this.micBtn.classList.toggle('active', Boolean(state.audio));
-                    this.micBtn.dataset.active = state.audio ? 'true' : 'false';
+                    this.micBtn.classList.toggle('active', audioEnabled);
+                    this.micBtn.dataset.active = audioEnabled ? 'true' : 'false';
                 }
                 if (this.cameraBtn) {
-                    this.cameraBtn.classList.toggle('active', Boolean(state.video));
-                    this.cameraBtn.dataset.active = state.video ? 'true' : 'false';
+                    this.cameraBtn.classList.toggle('active', videoEnabled);
+                    this.cameraBtn.dataset.active = videoEnabled ? 'true' : 'false';
                 }
             } catch (error) {
                 this.logWarn('Unable to sync control state from store', error);
@@ -1719,6 +1732,7 @@ class ProfessionalUIController {
                 try {
                     const stream = new MediaStream([track.nativeTrack]);
                     element.srcObject = stream;
+                    element.style.display = 'block';
                     element.play?.().catch(() => {});
                     this.logDebug('Fallback video stream applied');
                     return;
