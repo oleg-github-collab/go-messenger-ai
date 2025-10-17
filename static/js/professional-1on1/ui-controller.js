@@ -1168,25 +1168,29 @@ class ProfessionalUIController {
             }
         });
 
-        // Chat send
-        this.chatInput?.addEventListener('keypress', async (e) => {
-            if (e.key === 'Enter' && this.chatInput.value.trim()) {
+        // Chat send with Enter key
+        this.chatInput?.addEventListener('keydown', async (e) => {
+            if (e.key === 'Enter' && !e.shiftKey) {
+                e.preventDefault();
+
+                const messageText = this.chatInput.value.trim();
+                if (!messageText) return;
+
                 if (!this.sdk) {
                     this.logWarn('Chat send ignored - SDK not initialized');
                     return;
                 }
-                const messageText = this.chatInput.value.trim();
+
                 this.chatInput.value = '';
 
                 try {
-                    this.logDebug('Sending chat message');
+                    this.logDebug('Sending chat message via Enter');
                     // Add message immediately to UI (optimistic update)
                     this.addChatMessage(this.sdk.userName || 'You', messageText, Date.now());
                     await this.sdk.sendMessage(messageText);
                     this.logDebug('Chat message sent');
                 } catch (error) {
                     this.logError('Chat send failed', error);
-                    // Optionally show error indicator
                 }
             }
         });
