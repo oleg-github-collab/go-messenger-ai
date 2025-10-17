@@ -1,0 +1,537 @@
+/* Professional Audio Call - Modern Design with Animations */
+
+:root {
+    --gradient-primary: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    --gradient-secondary: linear-gradient(135deg, #00f2fe 0%, #4facfe 100%);
+    --glass-bg: rgba(10, 10, 15, 0.85);
+    --glass-border: rgba(255, 255, 255, 0.1);
+    --text-primary: #ffffff;
+    --text-secondary: rgba(255, 255, 255, 0.7);
+    --accent-green: #38ef7d;
+    --accent-red: #f45c43;
+}
+
+* {
+    margin: 0;
+    padding: 0;
+    box-sizing: border-box;
+}
+
+body {
+    font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', 'Roboto', sans-serif;
+    background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #16213e 100%);
+    color: var(--text-primary);
+    overflow: hidden;
+    height: 100vh;
+    width: 100vw;
+    position: fixed;
+}
+
+/* Loading Screen */
+.loading-screen {
+    position: fixed;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    background: linear-gradient(135deg, #0a0a0f 0%, #1a1a2e 50%, #16213e 100%);
+    z-index: 10000;
+}
+
+.loading-content {
+    text-align: center;
+}
+
+.loading-spinner {
+    width: 60px;
+    height: 60px;
+    border: 4px solid rgba(255, 255, 255, 0.1);
+    border-top-color: #667eea;
+    border-radius: 50%;
+    animation: spin 1s linear infinite;
+    margin: 0 auto 24px;
+}
+
+@keyframes spin {
+    to { transform: rotate(360deg); }
+}
+
+.loading-content h2 {
+    font-size: 20px;
+    font-weight: 500;
+    color: var(--text-secondary);
+}
+
+/* Audio Call Container */
+.audio-call-container {
+    width: 100vw;
+    height: 100vh;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    justify-content: space-between;
+    position: relative;
+    padding: 32px 24px;
+    overflow: hidden;
+}
+
+/* Animated Background Waves */
+.audio-bg-animation {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    z-index: 0;
+    overflow: hidden;
+    opacity: 0.3;
+}
+
+.audio-wave {
+    position: absolute;
+    width: 200%;
+    height: 200%;
+    border-radius: 45%;
+    background: radial-gradient(ellipse at center, rgba(102, 126, 234, 0.4) 0%, transparent 70%);
+    animation: wave-rotate 20s linear infinite;
+}
+
+.wave-1 {
+    top: -50%;
+    left: -50%;
+    animation-duration: 25s;
+}
+
+.wave-2 {
+    top: -60%;
+    left: -40%;
+    animation-duration: 30s;
+    animation-direction: reverse;
+    background: radial-gradient(ellipse at center, rgba(118, 75, 162, 0.3) 0%, transparent 70%);
+}
+
+.wave-3 {
+    top: -40%;
+    left: -60%;
+    animation-duration: 35s;
+    background: radial-gradient(ellipse at center, rgba(0, 242, 254, 0.2) 0%, transparent 70%);
+}
+
+@keyframes wave-rotate {
+    from { transform: rotate(0deg); }
+    to { transform: rotate(360deg); }
+}
+
+/* Top Bar */
+.audio-top-bar {
+    position: relative;
+    z-index: 10;
+    width: 100%;
+    max-width: 600px;
+    display: flex;
+    justify-content: space-between;
+    align-items: center;
+    padding: 16px 24px;
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--glass-border);
+    border-radius: 20px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.call-duration {
+    font-size: 18px;
+    font-weight: 600;
+    letter-spacing: 1px;
+    font-variant-numeric: tabular-nums;
+}
+
+.connection-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+.status-dot {
+    width: 8px;
+    height: 8px;
+    border-radius: 50%;
+    background: var(--accent-green);
+    animation: pulse-dot 2s ease-in-out infinite;
+}
+
+@keyframes pulse-dot {
+    0%, 100% {
+        opacity: 1;
+        transform: scale(1);
+    }
+    50% {
+        opacity: 0.6;
+        transform: scale(1.2);
+    }
+}
+
+/* Main Audio Area */
+.audio-main-area {
+    position: relative;
+    z-index: 10;
+    flex: 1;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    gap: 80px;
+    width: 100%;
+    max-width: 900px;
+}
+
+/* Avatar Circles */
+.audio-avatar {
+    position: relative;
+    display: flex;
+    flex-direction: column;
+    align-items: center;
+    gap: 16px;
+    animation: fadeInUp 0.6s ease-out;
+}
+
+.avatar-circle {
+    position: relative;
+    width: 180px;
+    height: 180px;
+}
+
+.avatar-initial {
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    transform: translate(-50%, -50%);
+    width: 140px;
+    height: 140px;
+    border-radius: 50%;
+    background: var(--gradient-primary);
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    font-size: 56px;
+    font-weight: 700;
+    color: white;
+    box-shadow: 0 8px 24px rgba(102, 126, 234, 0.4);
+    transition: transform 0.3s ease;
+}
+
+.avatar-circle:hover .avatar-initial {
+    transform: translate(-50%, -50%) scale(1.05);
+}
+
+.audio-ring {
+    position: absolute;
+    top: 0;
+    left: 0;
+    width: 100%;
+    height: 100%;
+    transform: rotate(-90deg);
+}
+
+.ring-active {
+    stroke-dasharray: 597;
+    stroke-dashoffset: 597;
+    transition: stroke-dashoffset 0.3s ease;
+}
+
+.audio-avatar.speaking .ring-active {
+    animation: audio-pulse 1.5s ease-in-out infinite;
+}
+
+@keyframes audio-pulse {
+    0%, 100% {
+        stroke-dashoffset: 597;
+    }
+    50% {
+        stroke-dashoffset: 0;
+    }
+}
+
+.avatar-name {
+    font-size: 22px;
+    font-weight: 600;
+    color: var(--text-primary);
+}
+
+.avatar-status {
+    display: flex;
+    align-items: center;
+    gap: 8px;
+    font-size: 14px;
+    color: var(--text-secondary);
+}
+
+.mic-icon {
+    font-size: 20px;
+}
+
+/* Waiting Message */
+.waiting-message {
+    position: absolute;
+    text-align: center;
+    animation: fadeIn 0.5s ease-out;
+}
+
+.waiting-icon {
+    font-size: 64px;
+    margin-bottom: 16px;
+    animation: bounce 2s ease-in-out infinite;
+}
+
+@keyframes bounce {
+    0%, 100% {
+        transform: translateY(0);
+    }
+    50% {
+        transform: translateY(-12px);
+    }
+}
+
+.waiting-message p {
+    font-size: 18px;
+    color: var(--text-secondary);
+}
+
+/* Center Visualizer */
+.center-visualizer {
+    position: absolute;
+    bottom: 200px;
+    left: 50%;
+    transform: translateX(-50%);
+    display: flex;
+    align-items: flex-end;
+    gap: 6px;
+    height: 80px;
+    z-index: 5;
+}
+
+.viz-bar {
+    width: 6px;
+    height: 20px;
+    background: var(--gradient-secondary);
+    border-radius: 3px;
+    transition: height 0.15s ease;
+    animation: viz-idle 2s ease-in-out infinite;
+}
+
+.viz-bar:nth-child(1) { animation-delay: 0s; }
+.viz-bar:nth-child(2) { animation-delay: 0.1s; }
+.viz-bar:nth-child(3) { animation-delay: 0.2s; }
+.viz-bar:nth-child(4) { animation-delay: 0.3s; }
+.viz-bar:nth-child(5) { animation-delay: 0.2s; }
+.viz-bar:nth-child(6) { animation-delay: 0.1s; }
+.viz-bar:nth-child(7) { animation-delay: 0s; }
+
+@keyframes viz-idle {
+    0%, 100% {
+        height: 20px;
+    }
+    50% {
+        height: 40px;
+    }
+}
+
+.center-visualizer.active .viz-bar {
+    animation: viz-active 0.6s ease-in-out infinite;
+}
+
+@keyframes viz-active {
+    0%, 100% {
+        height: 20px;
+    }
+    50% {
+        height: 70px;
+    }
+}
+
+/* Bottom Controls */
+.audio-controls {
+    position: relative;
+    z-index: 10;
+    display: flex;
+    justify-content: center;
+    align-items: center;
+    gap: 24px;
+    padding: 24px 32px;
+    background: var(--glass-bg);
+    backdrop-filter: blur(20px);
+    -webkit-backdrop-filter: blur(20px);
+    border: 1px solid var(--glass-border);
+    border-radius: 28px;
+    box-shadow: 0 8px 32px rgba(0, 0, 0, 0.4);
+}
+
+.audio-control-btn {
+    width: 64px;
+    height: 64px;
+    border-radius: 50%;
+    border: none;
+    background: rgba(255, 255, 255, 0.1);
+    color: white;
+    display: flex;
+    align-items: center;
+    justify-content: center;
+    cursor: pointer;
+    transition: all 0.3s cubic-bezier(0.4, 0, 0.2, 1);
+    position: relative;
+    overflow: hidden;
+}
+
+.audio-control-btn::before {
+    content: '';
+    position: absolute;
+    top: 50%;
+    left: 50%;
+    width: 0;
+    height: 0;
+    border-radius: 50%;
+    background: rgba(255, 255, 255, 0.3);
+    transform: translate(-50%, -50%);
+    transition: width 0.6s, height 0.6s;
+}
+
+.audio-control-btn:active::before {
+    width: 100%;
+    height: 100%;
+}
+
+.audio-control-btn:hover {
+    transform: translateY(-4px);
+    box-shadow: 0 8px 16px rgba(0, 0, 0, 0.3);
+}
+
+.audio-control-btn:active {
+    transform: translateY(0);
+}
+
+/* Mic Button States */
+#micBtn[data-active="true"] {
+    background: rgba(67, 233, 123, 0.25);
+    border: 2px solid var(--accent-green);
+}
+
+#micBtn[data-active="false"] {
+    background: rgba(244, 92, 67, 0.25);
+    border: 2px solid var(--accent-red);
+}
+
+/* Leave Button */
+.leave-btn {
+    background: rgba(244, 67, 54, 0.9) !important;
+    width: 72px;
+    height: 72px;
+}
+
+.leave-btn:hover {
+    background: rgba(244, 67, 54, 1) !important;
+    box-shadow: 0 8px 24px rgba(244, 67, 54, 0.5) !important;
+}
+
+/* Animations */
+@keyframes fadeIn {
+    from {
+        opacity: 0;
+    }
+    to {
+        opacity: 1;
+    }
+}
+
+@keyframes fadeInUp {
+    from {
+        opacity: 0;
+        transform: translateY(30px);
+    }
+    to {
+        opacity: 1;
+        transform: translateY(0);
+    }
+}
+
+/* Mobile Responsive */
+@media (max-width: 768px) {
+    .audio-call-container {
+        padding: 20px 16px;
+    }
+
+    .audio-main-area {
+        flex-direction: column;
+        gap: 40px;
+    }
+
+    .avatar-circle {
+        width: 140px;
+        height: 140px;
+    }
+
+    .avatar-initial {
+        width: 110px;
+        height: 110px;
+        font-size: 44px;
+    }
+
+    .avatar-name {
+        font-size: 18px;
+    }
+
+    .center-visualizer {
+        bottom: 160px;
+    }
+
+    .audio-controls {
+        gap: 16px;
+        padding: 16px 20px;
+    }
+
+    .audio-control-btn {
+        width: 56px;
+        height: 56px;
+    }
+
+    .leave-btn {
+        width: 64px;
+        height: 64px;
+    }
+
+    .audio-top-bar {
+        padding: 12px 16px;
+        border-radius: 16px;
+    }
+
+    .call-duration {
+        font-size: 16px;
+    }
+}
+
+/* Landscape Mobile */
+@media (max-width: 768px) and (orientation: landscape) {
+    .audio-main-area {
+        flex-direction: row;
+        gap: 60px;
+    }
+
+    .avatar-circle {
+        width: 120px;
+        height: 120px;
+    }
+
+    .avatar-initial {
+        width: 90px;
+        height: 90px;
+        font-size: 36px;
+    }
+
+    .center-visualizer {
+        bottom: 140px;
+    }
+}
