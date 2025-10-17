@@ -231,34 +231,60 @@
             </div>
         </div>
 
-        <!-- Notetaker Control Panel -->
-        <div class="notetaker-panel glassmorphic" id="notetakerPanel">
-            <div class="notetaker-header">
-                <div class="notetaker-icon">📝</div>
-                <span class="notetaker-title" data-i18n="notetaker">AI Notetaker</span>
-                <div class="notetaker-status" id="notetakerStatus">Ready</div>
+        <!-- AI Notetaker Floating Trigger Button -->
+        <button class="ai-notetaker-trigger" id="aiNotetakerTrigger" style="display: none;">
+            <span class="icon">🤖</span>
+        </button>
+
+        <!-- AI Notetaker Side Panel -->
+        <div class="notetaker-panel" id="notetakerPanel">
+            <div class="notetaker-panel-header">
+                <div class="notetaker-panel-title">
+                    <div class="notetaker-icon">🤖</div>
+                    <h3 class="notetaker-title">AI Notetaker</h3>
+                </div>
+                <button class="notetaker-close-btn" id="closeNotetakerPanel">✕</button>
             </div>
-            <div class="notetaker-controls">
-                <button class="notetaker-btn start" id="startNotetakerBtn" title="Start recording">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                        <circle cx="12" cy="12" r="8"/>
-                    </svg>
-                    <span data-i18n="start">Start</span>
-                </button>
-                <button class="notetaker-btn pause" id="pauseNotetakerBtn" style="display: none;" title="Pause recording">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                        <rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>
-                    </svg>
-                    <span data-i18n="pause">Pause</span>
-                </button>
-                <button class="notetaker-btn stop" id="stopNotetakerBtn" style="display: none;" title="Stop recording">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                        <rect x="6" y="6" width="12" height="12"/>
-                    </svg>
-                    <span data-i18n="stop">Stop</span>
-                </button>
+
+            <div class="notetaker-panel-content">
+                <!-- Status Card -->
+                <div class="notetaker-status-card">
+                    <div class="notetaker-status" id="notetakerStatus">Ready to record</div>
+                    <div class="notetaker-timer" id="notetakerTimer" style="display: none;">00:00</div>
+                </div>
+
+                <!-- Controls -->
+                <div class="notetaker-controls">
+                    <button class="notetaker-btn start" id="startNotetakerBtn">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <circle cx="12" cy="12" r="8"/>
+                        </svg>
+                        <span>Start</span>
+                    </button>
+                    <button class="notetaker-btn pause" id="pauseNotetakerBtn" style="display: none;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>
+                        </svg>
+                        <span>Pause</span>
+                    </button>
+                    <button class="notetaker-btn stop" id="stopNotetakerBtn" style="display: none;">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
+                            <rect x="6" y="6" width="12" height="12"/>
+                        </svg>
+                        <span>Stop</span>
+                    </button>
+                </div>
+
+                <!-- Live Transcript -->
+                <div class="notetaker-transcript">
+                    <div class="notetaker-transcript-title">Live Transcript</div>
+                    <div id="notetakerTranscriptList">
+                        <p style="text-align: center; color: rgba(255,255,255,0.4); padding: 20px;">
+                            Start recording to see transcript...
+                        </p>
+                    </div>
+                </div>
             </div>
-            <div class="notetaker-timer" id="notetakerTimer" style="display: none;">00:00</div>
         </div>
 
         <!-- Reactions Panel (In Call) -->
@@ -755,6 +781,7 @@
     </div>
 
     <!-- 100ms SDK Bundle (local) -->
+    <script src="/static/i18n.js"></script>
     <script src="/static/js/hms-bundle.js"></script>
 
     <!-- Professional Meeting SDK -->

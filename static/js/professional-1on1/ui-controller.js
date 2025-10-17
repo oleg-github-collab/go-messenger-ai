@@ -48,11 +48,17 @@ class ProfessionalUIController {
         // Status elements
         this.callTimerEl = document.getElementById('callTimer');
         this.recordingIndicatorEl = document.getElementById('recordingIndicator');
+
+        // AI Notetaker elements
+        this.aiNotetakerTrigger = document.getElementById('aiNotetakerTrigger');
+        this.notetakerPanel = document.getElementById('notetakerPanel');
+        this.closeNotetakerPanel = document.getElementById('closeNotetakerPanel');
         this.notetakerStatusEl = document.getElementById('notetakerStatus');
         this.notetakerTimerEl = document.getElementById('notetakerTimer');
         this.notetakerStartBtn = document.getElementById('startNotetakerBtn');
         this.notetakerPauseBtn = document.getElementById('pauseNotetakerBtn');
         this.notetakerStopBtn = document.getElementById('stopNotetakerBtn');
+        this.notetakerTranscriptList = document.getElementById('notetakerTranscriptList');
         this.chatPanel = document.querySelector('.chat-panel');
         this.pollModal = document.getElementById('pollModal');
         this.reactionsPanel = document.getElementById('reactionsPanel');
@@ -1289,6 +1295,15 @@ class ProfessionalUIController {
         this.endCallBtn?.addEventListener('click', () => this.leaveCall());
         document.getElementById('backBtn')?.addEventListener('click', () => this.leaveCall());
 
+        // AI Notetaker panel toggle
+        this.aiNotetakerTrigger?.addEventListener('click', () => {
+            this.notetakerPanel?.classList.add('open');
+        });
+
+        this.closeNotetakerPanel?.addEventListener('click', () => {
+            this.notetakerPanel?.classList.remove('open');
+        });
+
         this.setupReactionButtons();
 
         this.controlsBound = true;
@@ -1727,6 +1742,10 @@ class ProfessionalUIController {
         }
         if (this.callContainer) {
             this.callContainer.style.display = 'flex';
+        }
+        // Show AI Notetaker trigger button
+        if (this.aiNotetakerTrigger) {
+            this.aiNotetakerTrigger.style.display = 'flex';
         }
     }
 
