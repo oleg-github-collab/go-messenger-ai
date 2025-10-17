@@ -617,23 +617,37 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 
 	log.Printf("[WS] ✅ %s joined room %s (%d participants)", participant.Name, roomID, participantCount)
 
-	// Send join confirmation
+	// Send join confirmation with existing participants info
+	existingParticipants := []string{}
+	room.mu.RLock()
+	for c, p := range room.Participants {
+		if c != conn {
+			existingParticipants = append(existingParticipants, fmt.Sprintf(`{"name":"%s","id":"%s"}`, p.Name, p.ID))
+		}
+	}
+	room.mu.RUnlock()
+
+	existingJSON := "[]"
+	if len(existingParticipants) > 0 {
+		existingJSON = "[" + strings.Join(existingParticipants, ",") + "]"
+	}
+
 	conn.WriteJSON(Message{
 		Type: "joined",
-		Data: json.RawMessage(fmt.Sprintf(`{"name":"%s","id":"%s","isHost":%v}`, participant.Name, participantID, isHost)),
+		Data: json.RawMessage(fmt.Sprintf(`{"name":"%s","id":"%s","isHost":%v,"existing":%s}`, participant.Name, participantID, isHost, existingJSON)),
 	})
 
-	// Notify other participants
+	// Notify other participants that someone joined
 	if participantCount > 1 {
-		joinMsg := Message{
-			Type: "join",
+		partnerJoinedMsg := Message{
+			Type: "partner-joined",
 			Data: json.RawMessage(fmt.Sprintf(`{"name":"%s","id":"%s"}`, participant.Name, participantID)),
 		}
 		room.mu.RLock()
 		for c, p := range room.Participants {
 			if c != conn {
-				c.WriteJSON(joinMsg)
-				log.Printf("[WS] 📢 Notified %s about %s joining", p.Name, participant.Name)
+				c.WriteJSON(partnerJoinedMsg)
+				log.Printf("[WS] 📢 Notified %s about %s joining (partner-joined)", p.Name, participant.Name)
 			}
 		}
 		room.mu.RUnlock()
@@ -692,6 +706,7 @@ func wsHandler(w http.ResponseWriter, r *http.Request) {
 		validTypes := map[string]bool{
 			"chat": true, "offer": true, "answer": true,
 			"ice-candidate": true, "ping": true, "join": true,
+			"partner-joined": true, "leave": true,
 		}
 
 		if !validTypes[message.Type] {

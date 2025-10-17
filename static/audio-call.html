@@ -1017,18 +1017,23 @@
 
                 switch (message.type) {
                     case 'offer':
-                        await handleOffer(message.offer);
+                        const offerData = typeof message.data === 'string' ? JSON.parse(message.data) : message.data;
+                        await handleOffer(offerData);
                         break;
                     case 'answer':
-                        await handleAnswer(message.answer);
+                        const answerData = typeof message.data === 'string' ? JSON.parse(message.data) : message.data;
+                        await handleAnswer(answerData);
                         break;
                     case 'ice-candidate':
-                        await handleIceCandidate(message.candidate);
+                        const candidateData = typeof message.data === 'string' ? JSON.parse(message.data) : message.data;
+                        await handleIceCandidate(candidateData.candidate || candidateData);
                         break;
+                    case 'partner-joined':
                     case 'user-joined':
-                        console.log('[AUDIO] 🎉 User joined:', message.userName);
+                        console.log('[AUDIO] 🎉 Partner joined:', message);
                         document.getElementById('waitingMessage').style.display = 'none';
                         if (isHost) {
+                            console.log('[AUDIO] Host creating offer...');
                             createOffer();
                         }
                         break;
@@ -1078,7 +1083,7 @@
                 console.log('[AUDIO] 📤 Sending offer:', offer);
                 ws.send(JSON.stringify({
                     type: 'offer',
-                    offer: offer
+                    data: JSON.stringify(offer)
                 }));
 
                 console.log('[AUDIO] ✅ Offer sent');
@@ -1112,7 +1117,7 @@
                 console.log('[AUDIO] 📤 Sending answer:', answer);
                 ws.send(JSON.stringify({
                     type: 'answer',
-                    answer: answer
+                    data: JSON.stringify(answer)
                 }));
 
                 console.log('[AUDIO] ✅ Answer sent');
@@ -1145,7 +1150,7 @@
                 if (event.candidate) {
                     ws.send(JSON.stringify({
                         type: 'ice-candidate',
-                        candidate: event.candidate
+                        data: JSON.stringify({ candidate: event.candidate })
                     }));
                 }
             };

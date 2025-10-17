@@ -46,18 +46,38 @@ class EnhancedGIFPicker {
             <div class="enhanced-gif-backdrop" id="gifBackdrop"></div>
             <div class="enhanced-gif-container">
                 <div class="enhanced-gif-header">
-                    <h3>🎬 Choose a GIF</h3>
-                    <button class="enhanced-gif-close" id="gifCloseBtn">✕</button>
+                    <div class="header-title">
+                        <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
+                            <path d="M18 13v-2h-4V9h4V7h-4V5h4V3h-6v10h2v-6h2v6h2zm-8-2H8V9h2V7H8V5h2V3H6v10h4v-2zm-4 6v-2h12v2H6zm0 4v-2h12v2H6z"/>
+                        </svg>
+                        <span>GIF Picker</span>
+                    </div>
+                    <button class="enhanced-gif-close" id="gifCloseBtn" title="Close">
+                        <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <line x1="18" y1="6" x2="6" y2="18"/>
+                            <line x1="6" y1="6" x2="18" y2="18"/>
+                        </svg>
+                    </button>
                 </div>
 
                 <div class="enhanced-gif-search">
+                    <svg class="search-icon" width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <circle cx="11" cy="11" r="8"/>
+                        <path d="m21 21-4.35-4.35"/>
+                    </svg>
                     <input
                         type="text"
                         id="gifSearchInput"
-                        placeholder="Search for GIFs..."
+                        placeholder="Search thousands of GIFs..."
                         autocomplete="off"
                     />
-                    <button id="gifSearchBtn">🔍</button>
+                    <button id="gifClearBtn" class="clear-btn" style="display: none;" title="Clear">
+                        <svg width="16" height="16" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                            <circle cx="12" cy="12" r="10"/>
+                            <line x1="15" y1="9" x2="9" y2="15"/>
+                            <line x1="9" y1="9" x2="15" y2="15"/>
+                        </svg>
+                    </button>
                 </div>
 
                 <div class="enhanced-gif-categories" id="gifCategories"></div>
@@ -65,13 +85,20 @@ class EnhancedGIFPicker {
                 <div class="enhanced-gif-results" id="gifResults">
                     <div class="enhanced-gif-loading">
                         <div class="spinner"></div>
-                        <p>Loading GIFs...</p>
+                        <p>Loading trending GIFs...</p>
                     </div>
                 </div>
 
+                <button id="gifLoadMore" class="load-more-btn" style="display: none;">
+                    <svg width="20" height="20" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                        <polyline points="6 9 12 15 18 9"/>
+                    </svg>
+                    <span>Load More</span>
+                </button>
+
                 <div class="enhanced-gif-footer">
-                    <p>Powered by <strong>Tenor</strong></p>
-                    <button id="gifLoadMore" style="display: none;">Load More</button>
+                    <span>Powered by</span>
+                    <strong>Tenor</strong>
                 </div>
             </div>
         `;
@@ -81,10 +108,28 @@ class EnhancedGIFPicker {
         // Add event listeners
         document.getElementById('gifCloseBtn').addEventListener('click', () => this.close());
         document.getElementById('gifBackdrop').addEventListener('click', () => this.close());
-        document.getElementById('gifSearchBtn').addEventListener('click', () => this.search());
-        document.getElementById('gifSearchInput').addEventListener('keypress', (e) => {
-            if (e.key === 'Enter') this.search();
+
+        const searchInput = document.getElementById('gifSearchInput');
+        const clearBtn = document.getElementById('gifClearBtn');
+
+        searchInput.addEventListener('input', (e) => {
+            clearBtn.style.display = e.target.value ? 'flex' : 'none';
         });
+
+        searchInput.addEventListener('keydown', (e) => {
+            if (e.key === 'Enter') {
+                e.preventDefault();
+                this.search();
+            }
+        });
+
+        clearBtn.addEventListener('click', () => {
+            searchInput.value = '';
+            clearBtn.style.display = 'none';
+            searchInput.focus();
+            this.loadTrending();
+        });
+
         document.getElementById('gifLoadMore').addEventListener('click', () => this.loadMore());
 
         // Render categories
@@ -92,22 +137,28 @@ class EnhancedGIFPicker {
 
         // Add CSS
         this.injectStyles();
+
+        // Focus search input
+        setTimeout(() => searchInput.focus(), 100);
     }
 
     renderCategories() {
         const categoriesEl = document.getElementById('gifCategories');
         categoriesEl.innerHTML = this.trendingCategories.map(cat => `
-            <button class="gif-category-btn" data-query="${cat.query}">
+            <button class="gif-category-btn" data-query="${cat.query}" title="${cat.name}">
                 <span class="category-emoji">${cat.emoji}</span>
-                <span class="category-name">${cat.name}</span>
             </button>
         `).join('');
 
-        // Add click handlers
+        // Add click handlers with animation
         categoriesEl.querySelectorAll('.gif-category-btn').forEach(btn => {
             btn.addEventListener('click', () => {
+                // Remove active from all
+                categoriesEl.querySelectorAll('.gif-category-btn').forEach(b => b.classList.remove('active'));
+                // Add active to clicked
+                btn.classList.add('active');
+
                 const query = btn.dataset.query;
-                document.getElementById('gifSearchInput').value = query;
                 this.searchByQuery(query);
             });
         });
@@ -286,7 +337,7 @@ class EnhancedGIFPicker {
                 width: 100%;
                 height: 100%;
                 z-index: 99999;
-                animation: fadeIn 0.2s ease;
+                animation: fadeIn 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             }
 
             .enhanced-gif-backdrop {
@@ -295,8 +346,9 @@ class EnhancedGIFPicker {
                 left: 0;
                 width: 100%;
                 height: 100%;
-                background: rgba(0, 0, 0, 0.85);
-                backdrop-filter: blur(10px);
+                background: rgba(0, 0, 0, 0.88);
+                backdrop-filter: blur(12px);
+                -webkit-backdrop-filter: blur(12px);
             }
 
             .enhanced-gif-container {
@@ -305,127 +357,200 @@ class EnhancedGIFPicker {
                 left: 50%;
                 transform: translate(-50%, -50%);
                 width: 90%;
-                max-width: 700px;
-                max-height: 90vh;
-                background: linear-gradient(135deg, #1a1a2e 0%, #16213e 100%);
-                border-radius: 20px;
-                box-shadow: 0 20px 60px rgba(0, 0, 0, 0.5);
+                max-width: 720px;
+                max-height: 92vh;
+                background: linear-gradient(145deg, #1a1a2e 0%, #16213e 50%, #0f3460 100%);
+                border-radius: 24px;
+                box-shadow: 0 25px 70px rgba(0, 0, 0, 0.6), 0 0 0 1px rgba(255, 255, 255, 0.08);
                 display: flex;
                 flex-direction: column;
                 overflow: hidden;
+                animation: slideUp 0.3s cubic-bezier(0.4, 0, 0.2, 1);
             }
 
             .enhanced-gif-header {
-                padding: 20px;
-                background: rgba(255, 255, 255, 0.05);
-                border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+                padding: 20px 24px;
+                background: linear-gradient(135deg, rgba(102, 126, 234, 0.12) 0%, rgba(118, 75, 162, 0.12) 100%);
+                border-bottom: 1px solid rgba(255, 255, 255, 0.12);
                 display: flex;
                 justify-content: space-between;
                 align-items: center;
+                gap: 12px;
             }
 
-            .enhanced-gif-header h3 {
-                margin: 0;
-                font-size: 20px;
+            .header-title {
+                display: flex;
+                align-items: center;
+                gap: 12px;
                 color: white;
+                font-size: 18px;
+                font-weight: 600;
+            }
+
+            .header-title svg {
+                color: #667eea;
+                filter: drop-shadow(0 2px 4px rgba(102, 126, 234, 0.4));
             }
 
             .enhanced-gif-close {
-                width: 36px;
-                height: 36px;
+                width: 38px;
+                height: 38px;
+                padding: 0;
                 border: none;
-                background: rgba(255, 255, 255, 0.1);
+                background: rgba(255, 255, 255, 0.08);
                 color: white;
                 border-radius: 50%;
-                font-size: 20px;
                 cursor: pointer;
-                transition: all 0.2s;
+                transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                flex-shrink: 0;
             }
 
             .enhanced-gif-close:hover {
-                background: rgba(255, 68, 68, 0.3);
-                transform: scale(1.1);
+                background: rgba(255, 68, 68, 0.35);
+                transform: scale(1.08) rotate(90deg);
+                box-shadow: 0 4px 12px rgba(255, 68, 68, 0.3);
+            }
+
+            .enhanced-gif-close:active {
+                transform: scale(0.95) rotate(90deg);
             }
 
             .enhanced-gif-search {
-                padding: 20px;
+                padding: 16px 20px;
                 display: flex;
-                gap: 10px;
+                align-items: center;
+                gap: 8px;
+                position: relative;
+            }
+
+            .enhanced-gif-search .search-icon {
+                position: absolute;
+                left: 32px;
+                color: rgba(255, 255, 255, 0.4);
+                pointer-events: none;
+                z-index: 1;
             }
 
             #gifSearchInput {
                 flex: 1;
-                padding: 12px 16px;
-                border: 2px solid rgba(255, 255, 255, 0.1);
-                background: rgba(255, 255, 255, 0.05);
+                padding: 14px 16px 14px 46px;
+                border: 2px solid rgba(255, 255, 255, 0.12);
+                background: rgba(255, 255, 255, 0.06);
                 color: white;
-                border-radius: 12px;
+                border-radius: 14px;
                 font-size: 15px;
                 outline: none;
-                transition: all 0.2s;
+                transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+            }
+
+            #gifSearchInput::placeholder {
+                color: rgba(255, 255, 255, 0.35);
             }
 
             #gifSearchInput:focus {
                 border-color: #667eea;
-                background: rgba(255, 255, 255, 0.08);
+                background: rgba(255, 255, 255, 0.1);
+                box-shadow: 0 0 0 4px rgba(102, 126, 234, 0.15);
             }
 
-            #gifSearchBtn {
-                padding: 12px 20px;
+            #gifSearchInput:focus + .clear-btn {
+                opacity: 1;
+            }
+
+            .clear-btn {
+                position: absolute;
+                right: 28px;
+                width: 32px;
+                height: 32px;
+                padding: 0;
                 border: none;
-                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+                background: rgba(255, 255, 255, 0.1);
                 color: white;
-                border-radius: 12px;
-                font-size: 16px;
+                border-radius: 50%;
                 cursor: pointer;
                 transition: all 0.2s;
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                opacity: 0.7;
             }
 
-            #gifSearchBtn:hover {
-                transform: scale(1.05);
-                box-shadow: 0 4px 12px rgba(102, 126, 234, 0.4);
+            .clear-btn:hover {
+                background: rgba(255, 255, 255, 0.15);
+                transform: scale(1.1);
+                opacity: 1;
+            }
+
+            .clear-btn:active {
+                transform: scale(0.95);
             }
 
             .enhanced-gif-categories {
-                padding: 0 20px 15px;
+                padding: 0 20px 16px;
                 display: flex;
-                gap: 8px;
+                gap: 10px;
                 overflow-x: auto;
                 scrollbar-width: thin;
+                scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
             }
 
             .enhanced-gif-categories::-webkit-scrollbar {
                 height: 6px;
             }
 
+            .enhanced-gif-categories::-webkit-scrollbar-track {
+                background: transparent;
+            }
+
             .enhanced-gif-categories::-webkit-scrollbar-thumb {
-                background: rgba(255, 255, 255, 0.2);
+                background: rgba(255, 255, 255, 0.15);
                 border-radius: 3px;
             }
 
+            .enhanced-gif-categories::-webkit-scrollbar-thumb:hover {
+                background: rgba(255, 255, 255, 0.25);
+            }
+
             .gif-category-btn {
-                padding: 8px 16px;
-                border: 1px solid rgba(255, 255, 255, 0.2);
-                background: rgba(255, 255, 255, 0.05);
+                padding: 10px 14px;
+                min-width: 48px;
+                border: 2px solid rgba(255, 255, 255, 0.15);
+                background: rgba(255, 255, 255, 0.06);
                 color: white;
-                border-radius: 20px;
-                font-size: 14px;
+                border-radius: 50%;
                 cursor: pointer;
-                white-space: nowrap;
-                transition: all 0.2s;
+                transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
                 display: flex;
                 align-items: center;
-                gap: 6px;
+                justify-content: center;
+                flex-shrink: 0;
+                position: relative;
             }
 
             .gif-category-btn:hover {
-                background: rgba(102, 126, 234, 0.3);
+                background: rgba(102, 126, 234, 0.25);
+                border-color: rgba(102, 126, 234, 0.6);
+                transform: translateY(-3px) scale(1.05);
+                box-shadow: 0 6px 16px rgba(102, 126, 234, 0.3);
+            }
+
+            .gif-category-btn.active {
+                background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
                 border-color: #667eea;
-                transform: translateY(-2px);
+                transform: translateY(-3px) scale(1.08);
+                box-shadow: 0 8px 20px rgba(102, 126, 234, 0.5);
+            }
+
+            .gif-category-btn:active {
+                transform: translateY(-1px) scale(1.02);
             }
 
             .category-emoji {
-                font-size: 16px;
+                font-size: 22px;
+                line-height: 1;
             }
 
             .enhanced-gif-results {
@@ -433,30 +558,56 @@ class EnhancedGIFPicker {
                 overflow-y: auto;
                 padding: 20px;
                 display: grid;
-                grid-template-columns: repeat(auto-fill, minmax(150px, 1fr));
-                gap: 12px;
+                grid-template-columns: repeat(auto-fill, minmax(160px, 1fr));
+                gap: 14px;
                 align-content: start;
+                scrollbar-width: thin;
+                scrollbar-color: rgba(255, 255, 255, 0.2) transparent;
+            }
+
+            .enhanced-gif-results::-webkit-scrollbar {
+                width: 8px;
+            }
+
+            .enhanced-gif-results::-webkit-scrollbar-track {
+                background: transparent;
+            }
+
+            .enhanced-gif-results::-webkit-scrollbar-thumb {
+                background: rgba(255, 255, 255, 0.15);
+                border-radius: 4px;
+            }
+
+            .enhanced-gif-results::-webkit-scrollbar-thumb:hover {
+                background: rgba(255, 255, 255, 0.25);
             }
 
             .gif-item {
                 position: relative;
-                border-radius: 12px;
+                border-radius: 14px;
                 overflow: hidden;
                 cursor: pointer;
                 aspect-ratio: 1;
-                background: rgba(255, 255, 255, 0.05);
-                transition: all 0.2s;
+                background: rgba(255, 255, 255, 0.06);
+                transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+                border: 2px solid transparent;
             }
 
             .gif-item:hover {
-                transform: scale(1.05);
-                box-shadow: 0 8px 20px rgba(102, 126, 234, 0.4);
+                transform: translateY(-4px) scale(1.03);
+                box-shadow: 0 12px 28px rgba(102, 126, 234, 0.5);
+                border-color: rgba(102, 126, 234, 0.4);
+            }
+
+            .gif-item:active {
+                transform: translateY(-2px) scale(1.01);
             }
 
             .gif-item img {
                 width: 100%;
                 height: 100%;
                 object-fit: cover;
+                display: block;
             }
 
             .gif-overlay {
@@ -465,12 +616,12 @@ class EnhancedGIFPicker {
                 left: 0;
                 width: 100%;
                 height: 100%;
-                background: rgba(0, 0, 0, 0.7);
+                background: linear-gradient(135deg, rgba(102, 126, 234, 0.85) 0%, rgba(118, 75, 162, 0.85) 100%);
                 display: flex;
                 align-items: center;
                 justify-content: center;
                 opacity: 0;
-                transition: opacity 0.2s;
+                transition: opacity 0.25s cubic-bezier(0.4, 0, 0.2, 1);
             }
 
             .gif-item:hover .gif-overlay {
@@ -480,7 +631,8 @@ class EnhancedGIFPicker {
             .gif-overlay span {
                 color: white;
                 font-weight: 600;
-                font-size: 14px;
+                font-size: 15px;
+                text-shadow: 0 2px 8px rgba(0, 0, 0, 0.3);
             }
 
             .enhanced-gif-loading,
@@ -488,80 +640,203 @@ class EnhancedGIFPicker {
             .gif-error {
                 grid-column: 1 / -1;
                 text-align: center;
-                padding: 40px;
-                color: rgba(255, 255, 255, 0.6);
+                padding: 50px 20px;
+                color: rgba(255, 255, 255, 0.5);
+            }
+
+            .enhanced-gif-loading p,
+            .no-gifs,
+            .gif-error {
+                font-size: 15px;
+                margin: 0;
             }
 
             .spinner {
-                width: 40px;
-                height: 40px;
+                width: 44px;
+                height: 44px;
                 border: 4px solid rgba(255, 255, 255, 0.1);
                 border-top-color: #667eea;
                 border-radius: 50%;
-                animation: spin 0.8s linear infinite;
-                margin: 0 auto 16px;
-            }
-
-            .enhanced-gif-footer {
-                padding: 16px 20px;
-                background: rgba(255, 255, 255, 0.05);
-                border-top: 1px solid rgba(255, 255, 255, 0.1);
-                display: flex;
-                justify-content: space-between;
-                align-items: center;
-                color: rgba(255, 255, 255, 0.5);
-                font-size: 13px;
+                animation: spin 0.7s linear infinite;
+                margin: 0 auto 20px;
             }
 
             #gifLoadMore {
-                padding: 8px 20px;
-                border: 1px solid rgba(102, 126, 234, 0.5);
-                background: rgba(102, 126, 234, 0.2);
+                margin: 0 20px 20px;
+                padding: 14px 24px;
+                border: 2px solid rgba(102, 126, 234, 0.4);
+                background: linear-gradient(135deg, rgba(102, 126, 234, 0.15) 0%, rgba(118, 75, 162, 0.15) 100%);
                 color: white;
-                border-radius: 8px;
+                border-radius: 14px;
                 cursor: pointer;
-                font-size: 13px;
-                transition: all 0.2s;
+                font-size: 15px;
+                font-weight: 600;
+                transition: all 0.25s cubic-bezier(0.4, 0, 0.2, 1);
+                display: flex;
+                align-items: center;
+                justify-content: center;
+                gap: 8px;
+            }
+
+            #gifLoadMore svg {
+                transition: transform 0.25s cubic-bezier(0.4, 0, 0.2, 1);
             }
 
             #gifLoadMore:hover:not(:disabled) {
-                background: rgba(102, 126, 234, 0.4);
-                transform: scale(1.05);
+                background: linear-gradient(135deg, rgba(102, 126, 234, 0.3) 0%, rgba(118, 75, 162, 0.3) 100%);
+                border-color: #667eea;
+                transform: translateY(-2px);
+                box-shadow: 0 6px 16px rgba(102, 126, 234, 0.4);
+            }
+
+            #gifLoadMore:hover:not(:disabled) svg {
+                transform: translateY(2px);
+            }
+
+            #gifLoadMore:active:not(:disabled) {
+                transform: translateY(0);
             }
 
             #gifLoadMore:disabled {
-                opacity: 0.5;
+                opacity: 0.4;
                 cursor: not-allowed;
             }
 
+            .enhanced-gif-footer {
+                padding: 18px 24px;
+                background: linear-gradient(135deg, rgba(102, 126, 234, 0.08) 0%, rgba(118, 75, 162, 0.08) 100%);
+                border-top: 1px solid rgba(255, 255, 255, 0.1);
+                display: flex;
+                justify-content: center;
+                align-items: center;
+                gap: 6px;
+                color: rgba(255, 255, 255, 0.4);
+                font-size: 13px;
+            }
+
+            .enhanced-gif-footer strong {
+                color: #667eea;
+                font-weight: 700;
+            }
+
             @keyframes fadeIn {
-                from { opacity: 0; }
-                to { opacity: 1; }
+                from {
+                    opacity: 0;
+                }
+                to {
+                    opacity: 1;
+                }
             }
 
             @keyframes fadeOut {
-                from { opacity: 1; }
-                to { opacity: 0; }
+                from {
+                    opacity: 1;
+                }
+                to {
+                    opacity: 0;
+                }
+            }
+
+            @keyframes slideUp {
+                from {
+                    opacity: 0;
+                    transform: translate(-50%, -45%);
+                }
+                to {
+                    opacity: 1;
+                    transform: translate(-50%, -50%);
+                }
             }
 
             @keyframes spin {
-                to { transform: rotate(360deg); }
+                to {
+                    transform: rotate(360deg);
+                }
             }
 
             @media (max-width: 768px) {
                 .enhanced-gif-container {
-                    width: 95%;
-                    max-height: 85vh;
+                    width: 96%;
+                    max-height: 88vh;
+                    border-radius: 20px;
                 }
 
-                .enhanced-gif-results {
-                    grid-template-columns: repeat(auto-fill, minmax(120px, 1fr));
+                .enhanced-gif-header {
+                    padding: 16px 18px;
+                }
+
+                .header-title {
+                    font-size: 16px;
+                    gap: 10px;
+                }
+
+                .header-title svg {
+                    width: 20px;
+                    height: 20px;
+                }
+
+                .enhanced-gif-close {
+                    width: 34px;
+                    height: 34px;
+                }
+
+                .enhanced-gif-search {
+                    padding: 12px 16px;
+                }
+
+                #gifSearchInput {
+                    padding: 12px 14px 12px 42px;
+                    font-size: 14px;
+                }
+
+                .clear-btn {
+                    right: 24px;
+                }
+
+                .enhanced-gif-categories {
+                    padding: 0 16px 14px;
                     gap: 8px;
                 }
 
                 .gif-category-btn {
-                    font-size: 12px;
-                    padding: 6px 12px;
+                    padding: 8px 12px;
+                    min-width: 44px;
+                }
+
+                .category-emoji {
+                    font-size: 20px;
+                }
+
+                .enhanced-gif-results {
+                    grid-template-columns: repeat(auto-fill, minmax(130px, 1fr));
+                    gap: 10px;
+                    padding: 16px;
+                }
+
+                #gifLoadMore {
+                    margin: 0 16px 16px;
+                    padding: 12px 20px;
+                    font-size: 14px;
+                }
+
+                .enhanced-gif-footer {
+                    padding: 14px 18px;
+                }
+            }
+
+            @media (max-width: 480px) {
+                .enhanced-gif-results {
+                    grid-template-columns: repeat(auto-fill, minmax(110px, 1fr));
+                    gap: 8px;
+                }
+
+                .gif-category-btn {
+                    padding: 7px 10px;
+                    min-width: 40px;
+                }
+
+                .category-emoji {
+                    font-size: 18px;
                 }
             }
         `;

@@ -443,6 +443,7 @@ document.addEventListener('DOMContentLoaded', async () => {
                         }
                         break;
 
+                    case 'partner-joined':
                     case 'join':
                         console.log('[CALL] 🎯 Partner joined! isInitiator:', isInitiator, 'isHostSession:', isHostSession);
 
