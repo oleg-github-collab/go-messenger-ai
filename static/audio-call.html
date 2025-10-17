@@ -861,18 +861,34 @@
         }
 
         function scheduleReconnect() {
-            if (reconnectAttempts >= maxReconnectAttempts) {
-                displaySystemMessage('Connection lost. Please reload to continue.');
+            if (callEnded) {
+                console.log('[AUDIO] Call ended, not reconnecting');
                 return;
             }
+
+            if (reconnectAttempts >= maxReconnectAttempts) {
+                displaySystemMessage('Connection lost. Please reload to continue.');
+                updateStatus('Disconnected - Reload needed');
+                return;
+            }
+
             reconnectAttempts += 1;
-            const delay = Math.min(5000, 1000 * Math.pow(2, reconnectAttempts));
-            updateStatus(`Connection lost. Reconnecting in ${Math.round(delay / 1000)}s...`);
-            setTimeout(() => {
-                connectWebSocket().catch(err => {
-                    console.error('[AUDIO] Reconnect failed:', err);
+            const delay = Math.min(5000, 1000 * Math.pow(2, reconnectAttempts - 1));
+            console.log(`[AUDIO] ⚠️ Reconnect attempt ${reconnectAttempts}/${maxReconnectAttempts} in ${delay}ms`);
+            updateStatus(`Reconnecting... (${reconnectAttempts}/${maxReconnectAttempts})`);
+
+            setTimeout(async () => {
+                try {
+                    console.log('[AUDIO] 🔄 Attempting reconnect...');
+                    await connectWebSocket();
+                    console.log('[AUDIO] ✅ Reconnected successfully');
+                    reconnectAttempts = 0;
+                    updateStatus('Reconnected');
+                    displaySystemMessage('Connection restored!');
+                } catch (err) {
+                    console.error('[AUDIO] ❌ Reconnect failed:', err);
                     scheduleReconnect();
-                });
+                }
             }, delay);
         }
 
@@ -1254,20 +1270,65 @@
 
         function createVisualizer() {
             const visualizer = document.getElementById('visualizer');
+            const bars = [];
+
             for (let i = 0; i < 20; i++) {
                 const bar = document.createElement('div');
                 bar.className = 'bar';
-                bar.style.height = `${Math.random() * 40 + 10}px`;
+                bar.style.height = '10px';
                 visualizer.appendChild(bar);
+                bars.push(bar);
+            }
 
-                // Animate bars randomly
-                setInterval(() => {
+            // Real audio visualization with Web Audio API
+            try {
+                const audioContext = new (window.AudioContext || window.webkitAudioContext)();
+                const analyser = audioContext.createAnalyser();
+                analyser.fftSize = 64;
+
+                const source = audioContext.createMediaStreamSource(localStream);
+                source.connect(analyser);
+
+                const bufferLength = analyser.frequencyBinCount;
+                const dataArray = new Uint8Array(bufferLength);
+
+                function animateBars() {
+                    requestAnimationFrame(animateBars);
+
                     if (!isMuted && localStream) {
-                        bar.style.height = `${Math.random() * 40 + 10}px`;
+                        analyser.getByteFrequencyData(dataArray);
+
+                        // Map frequency data to bars
+                        for (let i = 0; i < bars.length; i++) {
+                            const dataIndex = Math.floor(i * bufferLength / bars.length);
+                            const value = dataArray[dataIndex];
+                            const height = Math.max(10, (value / 255) * 50 + 10);
+                            bars[i].style.height = `${height}px`;
+                        }
                     } else {
-                        bar.style.height = '10px';
+                        // Reset to idle state
+                        bars.forEach(bar => {
+                            bar.style.height = '10px';
+                        });
                     }
-                }, 200 + Math.random() * 200);
+                }
+
+                animateBars();
+                console.log('[AUDIO] ✅ Real-time audio visualization enabled');
+
+            } catch (error) {
+                console.warn('[AUDIO] ⚠️ Web Audio API not supported, using fallback animation');
+
+                // Fallback: simple random animation
+                setInterval(() => {
+                    bars.forEach(bar => {
+                        if (!isMuted && localStream) {
+                            bar.style.height = `${Math.random() * 40 + 10}px`;
+                        } else {
+                            bar.style.height = '10px';
+                        }
+                    });
+                }, 150);
             }
         }
 
