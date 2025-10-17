@@ -448,27 +448,25 @@ class ProfessionalMeetingSDK {
             const updatedPeer = this.hmsStore?.getState(state => state.localPeer);
             const actualState = updatedPeer?.audioEnabled ?? targetState;
 
-            // If re-enabling and state shows enabled but no audio track, request new permissions
+            // If re-enabling and state shows enabled but no audio track, force unmute
             if (targetState && actualState && updatedPeer?.audioTrack === null) {
-                console.warn('[HMS SDK] Audio enabled but no track - requesting new stream');
+                console.warn('[HMS SDK] Audio enabled but no track - forcing unmute');
 
                 try {
-                    const stream = await navigator.mediaDevices.getUserMedia({
-                        audio: {
-                            echoCancellation: true,
-                            noiseSuppression: true,
-                            autoGainControl: true
-                        }
-                    });
+                    // Force disable then re-enable to trigger track creation
+                    await this.hmsActions.setLocalAudioEnabled(false);
+                    await new Promise(resolve => setTimeout(resolve, 300));
+                    await this.hmsActions.setLocalAudioEnabled(true);
+                    await new Promise(resolve => setTimeout(resolve, 300));
 
-                    // Attach new audio track
-                    const audioTrack = stream.getAudioTracks()[0];
-                    if (audioTrack && this.hmsActions.addTrack) {
-                        await this.hmsActions.addTrack(audioTrack, 'audio');
-                        await new Promise(resolve => setTimeout(resolve, 100));
+                    // Check if track now exists
+                    const finalPeer = this.hmsStore?.getState(state => state.localPeer);
+                    if (!finalPeer?.audioTrack) {
+                        console.error('[HMS SDK] Still no audio track after re-enable');
+                        return false;
                     }
                 } catch (mediaError) {
-                    console.error('[HMS SDK] Failed to get new audio stream:', mediaError);
+                    console.error('[HMS SDK] Failed to re-enable audio:', mediaError);
                     return false;
                 }
             }
@@ -509,23 +507,25 @@ class ProfessionalMeetingSDK {
             const updatedPeer = this.hmsStore?.getState(state => state.localPeer);
             const actualState = updatedPeer?.videoEnabled ?? targetState;
 
-            // If re-enabling and state shows enabled but no video track, request new permissions
+            // If re-enabling and state shows enabled but no video track, force unmute
             if (targetState && actualState && updatedPeer?.videoTrack === null) {
-                console.warn('[HMS SDK] Video enabled but no track - requesting new stream');
+                console.warn('[HMS SDK] Video enabled but no track - forcing unmute');
 
                 try {
-                    const stream = await navigator.mediaDevices.getUserMedia({
-                        video: { width: 1280, height: 720, facingMode: 'user' }
-                    });
+                    // Force disable then re-enable to trigger track creation
+                    await this.hmsActions.setLocalVideoEnabled(false);
+                    await new Promise(resolve => setTimeout(resolve, 300));
+                    await this.hmsActions.setLocalVideoEnabled(true);
+                    await new Promise(resolve => setTimeout(resolve, 300));
 
-                    // Attach new video track
-                    const videoTrack = stream.getVideoTracks()[0];
-                    if (videoTrack && this.hmsActions.addTrack) {
-                        await this.hmsActions.addTrack(videoTrack, 'video');
-                        await new Promise(resolve => setTimeout(resolve, 100));
+                    // Check if track now exists
+                    const finalPeer = this.hmsStore?.getState(state => state.localPeer);
+                    if (!finalPeer?.videoTrack) {
+                        console.error('[HMS SDK] Still no video track after re-enable');
+                        return false;
                     }
                 } catch (mediaError) {
-                    console.error('[HMS SDK] Failed to get new video stream:', mediaError);
+                    console.error('[HMS SDK] Failed to re-enable video:', mediaError);
                     return false;
                 }
             }
