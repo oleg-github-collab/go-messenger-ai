@@ -1202,6 +1202,8 @@ class ProfessionalUIController {
         // Poll toggle
         this.pollBtn?.addEventListener('click', () => this.togglePollModal());
         document.getElementById('closePollBtn')?.addEventListener('click', () => this.togglePollModal());
+        document.getElementById('exportPollResults')?.addEventListener('click', () => this.exportPollResults());
+        document.getElementById('sharePollResults')?.addEventListener('click', () => this.sharePollResults());
 
         // Whiteboard toggle
         this.whiteboardBtn?.addEventListener('click', () => this.toggleWhiteboard());
@@ -1265,6 +1267,23 @@ class ProfessionalUIController {
         this.notetakerStartBtn?.addEventListener('click', () => this.startNotetaker());
         this.notetakerPauseBtn?.addEventListener('click', () => this.pauseNotetaker());
         this.notetakerStopBtn?.addEventListener('click', () => this.stopNotetaker());
+
+        // Transcript filter tabs
+        document.querySelectorAll('.filter-tab').forEach(tab => {
+            tab.addEventListener('click', () => {
+                // Update active state
+                document.querySelectorAll('.filter-tab').forEach(t => t.classList.remove('active'));
+                tab.classList.add('active');
+
+                // Apply filter
+                const filter = tab.dataset.filter;
+                if (filter === 'both') {
+                    this.filterTranscript('all');
+                } else {
+                    this.filterTranscript(filter);
+                }
+            });
+        });
 
         // End call buttons
         this.endCallBtn?.addEventListener('click', () => this.leaveCall());
@@ -2109,6 +2128,11 @@ class ProfessionalUIController {
             this.notetakerInterval = setInterval(() => this.updateNotetakerTimer(), 1000);
             this.logDebug('Notetaker started');
             this.refreshNotetakerStatus(true);
+
+            // Demo: add sample transcript entries
+            if (this.isHost) {
+                this.simulateTranscriptDemo();
+            }
         } catch (error) {
             this.logError('Notetaker start failed', error);
             this.updateNotetakerUI('stopped');
@@ -2351,6 +2375,114 @@ class ProfessionalUIController {
         }
     }
 
+    addTranscriptEntry(speaker, text, timestamp = Date.now()) {
+        const transcriptList = document.getElementById('transcriptList');
+        if (!transcriptList) return;
+
+        // Remove empty state if exists
+        const emptyState = transcriptList.querySelector('.empty-state');
+        if (emptyState) {
+            emptyState.remove();
+        }
+
+        // Create transcript entry
+        const entry = document.createElement('div');
+        entry.className = 'transcript-entry';
+        entry.dataset.timestamp = timestamp;
+
+        const time = new Date(timestamp);
+        const timeStr = time.toLocaleTimeString('en-US', {
+            hour: '2-digit',
+            minute: '2-digit',
+            second: '2-digit'
+        });
+
+        // Determine speaker class
+        const speakerClass = speaker.toLowerCase() === 'you' || speaker === this.userName
+            ? 'speaker-me'
+            : 'speaker-guest';
+
+        entry.innerHTML = `
+            <div class="transcript-header">
+                <span class="transcript-speaker ${speakerClass}">${speaker}</span>
+                <span class="transcript-time">${timeStr}</span>
+            </div>
+            <div class="transcript-text">${this.escapeHtml(text)}</div>
+        `;
+
+        // Add to list
+        transcriptList.appendChild(entry);
+
+        // Auto-scroll to bottom
+        transcriptList.scrollTop = transcriptList.scrollHeight;
+
+        this.logDebug('Transcript entry added', { speaker, timestamp });
+    }
+
+    escapeHtml(text) {
+        const div = document.createElement('div');
+        div.textContent = text;
+        return div.innerHTML;
+    }
+
+    clearTranscript() {
+        const transcriptList = document.getElementById('transcriptList');
+        if (!transcriptList) return;
+
+        transcriptList.innerHTML = `
+            <div class="empty-state">
+                <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor" opacity="0.3">
+                    <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
+                </svg>
+                <p>Start speaking to see transcript...</p>
+                <small>AI will analyze in real-time</small>
+            </div>
+        `;
+
+        this.logDebug('Transcript cleared');
+    }
+
+    filterTranscript(filter) {
+        const transcriptList = document.getElementById('transcriptList');
+        if (!transcriptList) return;
+
+        const entries = transcriptList.querySelectorAll('.transcript-entry');
+
+        entries.forEach(entry => {
+            const speaker = entry.querySelector('.transcript-speaker');
+            if (!speaker) return;
+
+            const speakerText = speaker.textContent.toLowerCase();
+
+            if (filter === 'all') {
+                entry.style.display = 'block';
+            } else if (filter === 'host') {
+                entry.style.display = speaker.classList.contains('speaker-me') ? 'block' : 'none';
+            } else if (filter === 'guest') {
+                entry.style.display = speaker.classList.contains('speaker-guest') ? 'block' : 'none';
+            } else if (filter === 'me') {
+                entry.style.display = speaker.classList.contains('speaker-me') ? 'block' : 'none';
+            }
+        });
+
+        this.logDebug('Transcript filtered', filter);
+    }
+
+    // Simulate transcript entries for demo (remove in production)
+    simulateTranscriptDemo() {
+        setTimeout(() => {
+            this.addTranscriptEntry('Oleh', 'Hello! Let me show you the new AI features.');
+        }, 2000);
+
+        setTimeout(() => {
+            this.addTranscriptEntry('Guest', 'Sounds great! I\'d love to see them.');
+        }, 4000);
+
+        setTimeout(() => {
+            this.addTranscriptEntry('Oleh', 'The transcript is now displaying in real-time with timestamps.');
+        }, 6000);
+    }
+
     toggleChatPanel() {
         if (!this.chatPanel) return;
         const isHidden = this.chatPanel.classList.contains('hidden');
@@ -2395,6 +2527,112 @@ class ProfessionalUIController {
             }
         }
         this.logDebug('Poll modal toggled', !isVisible);
+    }
+
+    exportPollResults() {
+        // Get current poll data
+        const pollQuestion = document.getElementById('resultsPollQuestion')?.textContent || 'Poll Results';
+        const chartItems = document.querySelectorAll('.result-item');
+
+        if (!chartItems || chartItems.length === 0) {
+            alert('No poll results to export');
+            return;
+        }
+
+        // Build export data
+        const results = [];
+        let totalVotes = 0;
+
+        chartItems.forEach((item, index) => {
+            const label = item.querySelector('.result-label')?.textContent || `Option ${index + 1}`;
+            const voteCount = parseInt(item.querySelector('.result-votes')?.textContent || '0');
+            const percentage = item.querySelector('.result-percentage')?.textContent || '0%';
+
+            results.push({
+                option: label,
+                votes: voteCount,
+                percentage: percentage
+            });
+
+            totalVotes += voteCount;
+        });
+
+        // Create CSV content
+        const csvContent = [
+            ['Poll Question', pollQuestion],
+            ['Export Date', new Date().toLocaleString()],
+            ['Total Votes', totalVotes],
+            [],
+            ['Option', 'Votes', 'Percentage'],
+            ...results.map(r => [r.option, r.votes, r.percentage])
+        ].map(row => row.join(',')).join('\n');
+
+        // Create download
+        const blob = new Blob([csvContent], { type: 'text/csv;charset=utf-8;' });
+        const url = URL.createObjectURL(blob);
+        const link = document.createElement('a');
+        link.href = url;
+        link.download = `poll-results-${Date.now()}.csv`;
+        link.click();
+        URL.revokeObjectURL(url);
+
+        this.logDebug('Poll results exported');
+    }
+
+    sharePollResults() {
+        const pollQuestion = document.getElementById('resultsPollQuestion')?.textContent || 'Poll Results';
+        const chartItems = document.querySelectorAll('.result-item');
+
+        if (!chartItems || chartItems.length === 0) {
+            alert('No poll results to share');
+            return;
+        }
+
+        // Build share text
+        let shareText = `📊 Poll Results\n\n"${pollQuestion}"\n\n`;
+
+        chartItems.forEach((item, index) => {
+            const label = item.querySelector('.result-label')?.textContent || `Option ${index + 1}`;
+            const voteCount = parseInt(item.querySelector('.result-votes')?.textContent || '0');
+            const percentage = item.querySelector('.result-percentage')?.textContent || '0%';
+
+            shareText += `${String.fromCharCode(65 + index)}. ${label}\n   ${voteCount} votes (${percentage})\n\n`;
+        });
+
+        const totalVotes = document.getElementById('totalVotes')?.textContent || '0 votes';
+        shareText += `Total: ${totalVotes}`;
+
+        // Copy to clipboard
+        if (navigator.clipboard) {
+            navigator.clipboard.writeText(shareText).then(() => {
+                alert('Poll results copied to clipboard! You can now paste and share them.');
+                this.logDebug('Poll results shared');
+            }).catch(err => {
+                console.error('Failed to copy:', err);
+                this.fallbackCopyToClipboard(shareText);
+            });
+        } else {
+            this.fallbackCopyToClipboard(shareText);
+        }
+    }
+
+    fallbackCopyToClipboard(text) {
+        const textArea = document.createElement('textarea');
+        textArea.value = text;
+        textArea.style.position = 'fixed';
+        textArea.style.left = '-999999px';
+        document.body.appendChild(textArea);
+        textArea.select();
+
+        try {
+            document.execCommand('copy');
+            alert('Poll results copied to clipboard!');
+        } catch (err) {
+            alert('Failed to copy results. Please copy manually.');
+            prompt('Copy this text:', text);
+        }
+
+        document.body.removeChild(textArea);
     }
 
     toggleWhiteboard() {
