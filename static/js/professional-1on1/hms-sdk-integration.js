@@ -436,42 +436,44 @@ class ProfessionalMeetingSDK {
             const currentState = peer?.audioEnabled ?? true;
             const targetState = !currentState;
 
-            console.debug('[HMS SDK] Audio toggle:', { currentState, targetState });
+            console.debug('[HMS SDK] Audio toggle:', { currentState, targetState, hasTrack: !!peer?.audioTrack });
 
-            // Use HMS SDK method
+            // If enabling and no track exists, we need to request media permissions first
+            if (targetState && !peer?.audioTrack) {
+                console.log('[HMS SDK] No audio track - requesting media permissions');
+
+                try {
+                    // Request audio track through navigator
+                    const stream = await navigator.mediaDevices.getUserMedia({ audio: true });
+
+                    // Replace the audio track in HMS
+                    const audioTrack = stream.getAudioTracks()[0];
+                    if (audioTrack) {
+                        await this.hmsActions.setLocalAudioEnabled(true);
+                        await new Promise(resolve => setTimeout(resolve, 500));
+
+                        // Verify track was added
+                        const verifyPeer = this.hmsStore?.getState(state => state.localPeer);
+                        console.log('[HMS SDK] Audio track added:', { hasTrack: !!verifyPeer?.audioTrack, enabled: verifyPeer?.audioEnabled });
+                        return verifyPeer?.audioEnabled ?? true;
+                    }
+                } catch (mediaError) {
+                    console.error('[HMS SDK] Failed to get audio permissions:', mediaError);
+                    return false;
+                }
+            }
+
+            // Normal toggle
             await this.hmsActions.setLocalAudioEnabled(targetState);
 
             // Wait for state propagation
-            await new Promise(resolve => setTimeout(resolve, 200));
+            await new Promise(resolve => setTimeout(resolve, 300));
 
             // Verify the change
             const updatedPeer = this.hmsStore?.getState(state => state.localPeer);
             const actualState = updatedPeer?.audioEnabled ?? targetState;
 
-            // If re-enabling and state shows enabled but no audio track, force unmute
-            if (targetState && actualState && updatedPeer?.audioTrack === null) {
-                console.warn('[HMS SDK] Audio enabled but no track - forcing unmute');
-
-                try {
-                    // Force disable then re-enable to trigger track creation
-                    await this.hmsActions.setLocalAudioEnabled(false);
-                    await new Promise(resolve => setTimeout(resolve, 300));
-                    await this.hmsActions.setLocalAudioEnabled(true);
-                    await new Promise(resolve => setTimeout(resolve, 300));
-
-                    // Check if track now exists
-                    const finalPeer = this.hmsStore?.getState(state => state.localPeer);
-                    if (!finalPeer?.audioTrack) {
-                        console.error('[HMS SDK] Still no audio track after re-enable');
-                        return false;
-                    }
-                } catch (mediaError) {
-                    console.error('[HMS SDK] Failed to re-enable audio:', mediaError);
-                    return false;
-                }
-            }
-
-            console.debug('[HMS SDK] Audio toggle complete:', actualState);
+            console.debug('[HMS SDK] Audio toggle complete:', { actualState, hasTrack: !!updatedPeer?.audioTrack });
             return actualState;
 
         } catch (error) {
@@ -495,42 +497,50 @@ class ProfessionalMeetingSDK {
             const currentState = peer?.videoEnabled ?? true;
             const targetState = !currentState;
 
-            console.debug('[HMS SDK] Video toggle:', { currentState, targetState });
+            console.debug('[HMS SDK] Video toggle:', { currentState, targetState, hasTrack: !!peer?.videoTrack });
 
-            // First attempt: use HMS SDK method
+            // If enabling and no track exists, we need to request media permissions first
+            if (targetState && !peer?.videoTrack) {
+                console.log('[HMS SDK] No video track - requesting media permissions');
+
+                try {
+                    // Request video track through navigator
+                    const stream = await navigator.mediaDevices.getUserMedia({
+                        video: {
+                            width: { ideal: 1280 },
+                            height: { ideal: 720 },
+                            facingMode: 'user'
+                        }
+                    });
+
+                    // Replace the video track in HMS
+                    const videoTrack = stream.getVideoTracks()[0];
+                    if (videoTrack) {
+                        await this.hmsActions.setLocalVideoEnabled(true);
+                        await new Promise(resolve => setTimeout(resolve, 500));
+
+                        // Verify track was added
+                        const verifyPeer = this.hmsStore?.getState(state => state.localPeer);
+                        console.log('[HMS SDK] Video track added:', { hasTrack: !!verifyPeer?.videoTrack, enabled: verifyPeer?.videoEnabled });
+                        return verifyPeer?.videoEnabled ?? true;
+                    }
+                } catch (mediaError) {
+                    console.error('[HMS SDK] Failed to get video permissions:', mediaError);
+                    return false;
+                }
+            }
+
+            // Normal toggle
             await this.hmsActions.setLocalVideoEnabled(targetState);
 
             // Wait for state propagation
-            await new Promise(resolve => setTimeout(resolve, 200));
+            await new Promise(resolve => setTimeout(resolve, 300));
 
             // Verify the change
             const updatedPeer = this.hmsStore?.getState(state => state.localPeer);
             const actualState = updatedPeer?.videoEnabled ?? targetState;
 
-            // If re-enabling and state shows enabled but no video track, force unmute
-            if (targetState && actualState && updatedPeer?.videoTrack === null) {
-                console.warn('[HMS SDK] Video enabled but no track - forcing unmute');
-
-                try {
-                    // Force disable then re-enable to trigger track creation
-                    await this.hmsActions.setLocalVideoEnabled(false);
-                    await new Promise(resolve => setTimeout(resolve, 300));
-                    await this.hmsActions.setLocalVideoEnabled(true);
-                    await new Promise(resolve => setTimeout(resolve, 300));
-
-                    // Check if track now exists
-                    const finalPeer = this.hmsStore?.getState(state => state.localPeer);
-                    if (!finalPeer?.videoTrack) {
-                        console.error('[HMS SDK] Still no video track after re-enable');
-                        return false;
-                    }
-                } catch (mediaError) {
-                    console.error('[HMS SDK] Failed to re-enable video:', mediaError);
-                    return false;
-                }
-            }
-
-            console.debug('[HMS SDK] Video toggle complete:', actualState);
+            console.debug('[HMS SDK] Video toggle complete:', { actualState, hasTrack: !!updatedPeer?.videoTrack });
             return actualState;
 
         } catch (error) {

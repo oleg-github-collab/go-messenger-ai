@@ -6,6 +6,24 @@
 (function() {
     console.log('[INTEGRATION-PATCH] Applying enhanced features integration...');
 
+    // Wait for HMS to be fully ready before initializing enhanced features
+    function waitForHMSReady(sdk, callback, maxAttempts = 20) {
+        let attempts = 0;
+
+        const checkInterval = setInterval(() => {
+            attempts++;
+
+            if (sdk && sdk.hmsActions && sdk.hmsStore && sdk.isJoined) {
+                clearInterval(checkInterval);
+                console.log('[INTEGRATION] HMS is ready, initializing enhanced features...');
+                callback();
+            } else if (attempts >= maxAttempts) {
+                clearInterval(checkInterval);
+                console.warn('[INTEGRATION] HMS not ready after', attempts, 'attempts');
+            }
+        }, 500);
+    }
+
     // Store original methods
     const originalInit = ProfessionalUIController.prototype.initializeAsHost;
     const originalInitGuest = ProfessionalUIController.prototype.initializeAsGuest;
@@ -15,11 +33,11 @@
         // Call original initialization
         const result = await originalInit.apply(this, args);
 
-        // Initialize enhanced features after HMS is ready
-        if (this.sdk && this.sdk.hmsStore) {
-            console.log('[INTEGRATION] Initializing enhanced features for host...');
-
+        // Wait for HMS to be fully ready
+        waitForHMSReady(this.sdk, () => {
             try {
+                console.log('[INTEGRATION] Initializing enhanced features for host...');
+
                 // Initialize Professional Notetaker
                 if (typeof ProfessionalAINotetaker !== 'undefined') {
                     const roomID = this.roomCode || this.sdk.roomCode || 'default';
@@ -32,19 +50,34 @@
                 // Initialize Enhanced Chat
                 if (typeof EnhancedProfessionalChat !== 'undefined') {
                     this.enhancedChat = new EnhancedProfessionalChat(this.sdk);
+                    console.log('[INTEGRATION] ✅ Enhanced Chat initialized');
 
-                    // Subscribe to HMS messages
-                    if (this.sdk.hmsStore && this.sdk.hmsStore.subscribe) {
-                        this.sdk.hmsStore.subscribe((message) => {
-                            if (message && message.type === 'BROADCAST') {
+                    // Listen to HMS notification events for messages
+                    if (this.sdk.hmsNotifications) {
+                        this.sdk.hmsNotifications.onNotification((notification) => {
+                            if (notification.type === 'NEW_MESSAGE' && notification.data) {
+                                const message = notification.data;
                                 const sender = message.senderName || 'Unknown';
                                 const messageString = message.message || '';
-                                this.enhancedChat.handleIncomingMessage(sender, messageString);
-                            }
-                        }, 'HMSMessage');
-                    }
 
-                    console.log('[INTEGRATION] ✅ Enhanced Chat initialized');
+                                if (this.enhancedChat) {
+                                    // Handle reactions separately
+                                    try {
+                                        const data = JSON.parse(messageString);
+                                        if (data.type === 'reaction') {
+                                            this.enhancedChat.handleIncomingReaction(data.messageId, data.emoji);
+                                            return;
+                                        }
+                                    } catch (err) {
+                                        // Not JSON, continue normally
+                                    }
+
+                                    this.enhancedChat.handleIncomingMessage(sender, messageString);
+                                }
+                            }
+                        });
+                        console.log('[INTEGRATION] ✅ HMS message listener attached');
+                    }
                 } else {
                     console.warn('[INTEGRATION] EnhancedProfessionalChat not available');
                 }
@@ -52,7 +85,7 @@
             } catch (error) {
                 console.error('[INTEGRATION] ❌ Failed to initialize enhanced features:', error);
             }
-        }
+        });
 
         return result;
     };
@@ -62,11 +95,11 @@
         // Call original initialization
         const result = await originalInitGuest.apply(this, args);
 
-        // Initialize enhanced features after HMS is ready
-        if (this.sdk && this.sdk.hmsStore) {
-            console.log('[INTEGRATION] Initializing enhanced features for guest...');
-
+        // Wait for HMS to be fully ready
+        waitForHMSReady(this.sdk, () => {
             try {
+                console.log('[INTEGRATION] Initializing enhanced features for guest...');
+
                 // Initialize Professional Notetaker (guests can't start, but can see it)
                 if (typeof ProfessionalAINotetaker !== 'undefined') {
                     const roomID = this.roomCode || this.sdk.roomCode || 'default';
@@ -77,37 +110,42 @@
                 // Initialize Enhanced Chat
                 if (typeof EnhancedProfessionalChat !== 'undefined') {
                     this.enhancedChat = new EnhancedProfessionalChat(this.sdk);
+                    console.log('[INTEGRATION] ✅ Enhanced Chat initialized');
 
-                    // Subscribe to HMS messages
-                    if (this.sdk.hmsStore && this.sdk.hmsStore.subscribe) {
-                        this.sdk.hmsStore.subscribe((message) => {
-                            if (message && message.type === 'BROADCAST') {
+                    // Listen to HMS notification events for messages
+                    if (this.sdk.hmsNotifications) {
+                        this.sdk.hmsNotifications.onNotification((notification) => {
+                            if (notification.type === 'NEW_MESSAGE' && notification.data) {
+                                const message = notification.data;
                                 const sender = message.senderName || 'Unknown';
                                 const messageString = message.message || '';
 
-                                // Handle reactions separately
-                                try {
-                                    const data = JSON.parse(messageString);
-                                    if (data.type === 'reaction') {
-                                        this.enhancedChat.handleIncomingReaction(data.messageId, data.emoji);
-                                        return;
+                                if (this.enhancedChat) {
+                                    // Handle reactions separately
+                                    try {
+                                        const data = JSON.parse(messageString);
+                                        if (data.type === 'reaction') {
+                                            this.enhancedChat.handleIncomingReaction(data.messageId, data.emoji);
+                                            return;
+                                        }
+                                    } catch (err) {
+                                        // Not JSON, continue normally
                                     }
-                                } catch (err) {
-                                    // Not JSON, continue normally
+
+                                    this.enhancedChat.handleIncomingMessage(sender, messageString);
                                 }
-
-                                this.enhancedChat.handleIncomingMessage(sender, messageString);
                             }
-                        }, 'HMSMessage');
+                        });
+                        console.log('[INTEGRATION] ✅ HMS message listener attached');
                     }
-
-                    console.log('[INTEGRATION] ✅ Enhanced Chat initialized');
+                } else {
+                    console.warn('[INTEGRATION] EnhancedProfessionalChat not available');
                 }
 
             } catch (error) {
                 console.error('[INTEGRATION] ❌ Failed to initialize enhanced features:', error);
             }
-        }
+        });
 
         return result;
     };
