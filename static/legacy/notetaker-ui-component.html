@@ -1,0 +1,258 @@
+<!--
+    AI Notetaker UI Component
+    Universal for 1-on-1 and Group Calls
+
+    Include in call page with:
+    1. CSS: <link rel="stylesheet" href="/static/css/notetaker-complete.css">
+    2. Insert this HTML before closing </body>
+    3. Initialize with JavaScript (see bottom of this file)
+-->
+
+<!-- Floating Notetaker Panel -->
+<div id="notetakerFloatingPanel" class="notetaker-floating-panel hidden">
+    <!-- Header -->
+    <div class="notetaker-header">
+        <h3>🤖 AI Notetaker</h3>
+        <div class="notetaker-header-actions">
+            <button id="notetakerMinimizeBtn" title="Minimize">−</button>
+            <button id="notetakerCloseBtn" title="Close">✕</button>
+        </div>
+    </div>
+
+    <!-- Settings Panel -->
+    <div class="notetaker-settings">
+        <!-- Role Preset Selection -->
+        <div class="setting-group">
+            <label>📋 Role Preset</label>
+            <select id="notetakerRoleSelect">
+                <option value="">🎯 General Meeting</option>
+                <option value="language-teacher">📚 Language Teacher</option>
+                <option value="therapist">🧠 Therapist</option>
+                <option value="business-coach">💼 Business Coach</option>
+                <option value="medical-consultant">⚕️ Medical Consultant</option>
+                <option value="tutor">🎓 Academic Tutor</option>
+                <option value="sales-training">📈 Sales Training</option>
+                <option value="interview">🎤 Job Interview</option>
+                <option value="legal-consultation">⚖️ Legal Consultation</option>
+                <option value="brainstorming">💡 Brainstorming</option>
+                <option value="project-planning">📋 Project Planning</option>
+                <option value="customer-support">🛟 Customer Support</option>
+                <option value="performance-review">📊 Performance Review</option>
+                <option value="investor-pitch">💰 Investor Pitch</option>
+            </select>
+        </div>
+
+        <!-- Language Selection -->
+        <div class="setting-group">
+            <label>🌍 Language</label>
+            <select id="notetakerLanguageSelect">
+                <option value="en-US">English (US)</option>
+                <option value="uk-UA">Українська</option>
+                <option value="es-ES">Español</option>
+                <option value="fr-FR">Français</option>
+                <option value="de-DE">Deutsch</option>
+                <option value="it-IT">Italiano</option>
+                <option value="pt-BR">Português (BR)</option>
+                <option value="ru-RU">Русский</option>
+                <option value="pl-PL">Polski</option>
+                <option value="cs-CZ">Čeština</option>
+            </select>
+        </div>
+
+        <!-- Color Scheme -->
+        <div class="setting-group">
+            <label>🎨 Color Scheme</label>
+            <button class="color-scheme-btn" id="editColorSchemeBtn">
+                <div class="color-dots">
+                    <span class="color-dot" style="background: var(--notetaker-color-positive)"></span>
+                    <span class="color-dot" style="background: var(--notetaker-color-negative)"></span>
+                    <span class="color-dot" style="background: var(--notetaker-color-question)"></span>
+                    <span class="color-dot" style="background: var(--notetaker-color-action)"></span>
+                </div>
+                <span>Customize Colors</span>
+            </button>
+        </div>
+
+        <!-- OpenAI Integration (Optional) -->
+        <div class="setting-group">
+            <label>
+                <input type="checkbox" id="notetakerUseOpenAI">
+                Use OpenAI for Enhanced Analysis
+            </label>
+        </div>
+    </div>
+
+    <!-- Participant Selector (Shown only for group calls) -->
+    <div id="notetakerParticipantSelector" class="participant-selector hidden">
+        <div class="participant-header">
+            <h4>👥 Record Participants</h4>
+            <span class="selection-count">0 of 0 selected</span>
+        </div>
+        <div class="participant-list" id="notetakerParticipantList">
+            <!-- Dynamically populated -->
+        </div>
+        <div style="margin-top: 10px; display: flex; gap: 8px;">
+            <button class="control-btn" style="flex: 1; padding: 8px; font-size: 12px;" onclick="notetaker?.participantSelector?.selectAll()">
+                Select All
+            </button>
+            <button class="control-btn" style="flex: 1; padding: 8px; font-size: 12px;" onclick="notetaker?.participantSelector?.deselectAll()">
+                Deselect All
+            </button>
+        </div>
+    </div>
+
+    <!-- Recording Controls -->
+    <div class="notetaker-controls">
+        <button class="control-btn start" id="notetakerStartBtn">
+            <span>▶️</span>
+            <span>Start</span>
+        </button>
+        <button class="control-btn pause" id="notetakerPauseBtn" style="display: none;">
+            <span>⏸️</span>
+            <span>Pause</span>
+        </button>
+        <button class="control-btn stop" id="notetakerStopBtn" style="display: none;">
+            <span>⏹️</span>
+            <span>Stop</span>
+        </button>
+    </div>
+
+    <!-- Live Transcript -->
+    <div class="notetaker-live-transcript" id="notetakerLiveTranscript">
+        <div style="text-align: center; padding: 40px 20px; color: #9ca3af;">
+            <p>Press Start to begin recording</p>
+        </div>
+    </div>
+
+    <!-- Status Bar -->
+    <div class="notetaker-status">
+        <div class="status-indicator">
+            <span class="status-dot" id="notetakerStatusDot"></span>
+            <span id="notetakerStatusText">Ready</span>
+        </div>
+        <div class="status-stats">
+            <div class="stat-item">
+                <span class="stat-label">⏱️</span>
+                <span class="stat-value" id="notetakerDuration">00:00</span>
+            </div>
+            <div class="stat-item">
+                <span class="stat-label">📝</span>
+                <span class="stat-value" id="notetakerWordCount">0</span>
+            </div>
+        </div>
+    </div>
+
+    <!-- Actions (bottom) -->
+    <div class="notetaker-controls" style="border-top: 1px solid #e5e7eb; border-bottom: none;">
+        <button class="control-btn" style="background: #667eea; color: white;" id="notetakerViewFullBtn">
+            <span>📖</span>
+            <span>View Full Transcript</span>
+        </button>
+        <button class="control-btn" style="background: #10b981; color: white;" id="notetakerSaveBtn">
+            <span>💾</span>
+            <span>Save</span>
+        </button>
+    </div>
+</div>
+
+<!-- Reopen Button (shown when panel is closed) -->
+<button id="notetakerReopenBtn" class="notetaker-reopen-btn" style="
+    position: fixed;
+    bottom: 30px;
+    right: 30px;
+    width: 60px;
+    height: 60px;
+    border-radius: 50%;
+    background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+    border: none;
+    color: white;
+    font-size: 24px;
+    box-shadow: 0 10px 40px rgba(102, 126, 234, 0.4);
+    cursor: pointer;
+    z-index: 9998;
+    transition: all 300ms ease;
+    display: none;
+" onmouseover="this.style.transform='scale(1.1)'" onmouseout="this.style.transform='scale(1)'">
+    🤖
+</button>
+
+<!-- Full Transcript Viewer Modal -->
+<!-- Created dynamically by full-transcript-viewer.js -->
+
+<!-- Color Scheme Editor Modal -->
+<!-- Created dynamically by color-scheme-editor.js -->
+
+<script type="module">
+/**
+ * Initialize Enhanced Notetaker
+ *
+ * Usage in your call page:
+ *
+ * import { createEnhancedNotetaker } from '/static/js/notetaker/index-enhanced.js';
+ *
+ * // Get room and call type info
+ * const roomID = getRoomIDFromURL();
+ * const isHost = sessionStorage.getItem('isHost') === 'true';
+ * const isGroupCall = false; // or true for group calls
+ *
+ * // Create and initialize notetaker
+ * window.notetaker = createEnhancedNotetaker(roomID, isHost, isGroupCall);
+ * await notetaker.initialize();
+ *
+ * // Add audio streams when available
+ * // For 1-on-1 calls:
+ * await notetaker.addAudioStream(localStream, 'local', 'You');
+ * await notetaker.addAudioStream(remoteStream, 'remote', 'Guest');
+ *
+ * // For group calls:
+ * await notetaker.addAudioStream(localStream, userID, userName);
+ * // Add participant to selector
+ * notetaker.addParticipant(userID, userName, localStream, true); // true = self
+ *
+ * // When remote participants join:
+ * notetaker.addParticipant(participantID, participantName, stream, false);
+ * await notetaker.addAudioStream(stream, participantID, participantName);
+ *
+ * // When participants leave:
+ * notetaker.removeParticipant(participantID);
+ *
+ * // Cleanup on page unload
+ * window.addEventListener('beforeunload', async () => {
+ *     await notetaker.cleanup();
+ * });
+ */
+
+// Example initialization (commented out - implement in your call page)
+/*
+import { createEnhancedNotetaker } from '/static/js/notetaker/index-enhanced.js';
+import { globalEvents } from '/static/js/core/events.js';
+
+// Initialize notetaker
+async function initNotetaker() {
+    const roomID = 'test-room-123';
+    const isHost = true;
+    const isGroupCall = false;
+
+    window.notetaker = createEnhancedNotetaker(roomID, isHost, isGroupCall);
+    await notetaker.initialize();
+
+    console.log('Notetaker initialized:', notetaker.getState());
+}
+
+// Listen for notetaker events
+globalEvents.on('notetaker:recording-started', () => {
+    console.log('Recording started!');
+});
+
+globalEvents.on('transcription:entry-added', (entry) => {
+    console.log('New transcript entry:', entry);
+});
+
+globalEvents.on('notetaker:recording-stopped', ({ history, stats }) => {
+    console.log('Recording stopped:', { entries: history.length, stats });
+});
+
+// Initialize when page loads
+// initNotetaker();
+*/
+</script>

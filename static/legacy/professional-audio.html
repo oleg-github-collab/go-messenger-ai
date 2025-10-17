@@ -1,0 +1,170 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <meta name="mobile-web-app-capable" content="yes">
+    <title>Audio Call - Professional</title>
+    <link rel="stylesheet" href="/css/professional-audio.css">
+</head>
+<body>
+    <!-- Loading Screen -->
+    <div class="loading-screen" id="loadingScreen">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <h2 id="loadingMessage">Connecting...</h2>
+        </div>
+    </div>
+
+    <!-- Audio Call Interface -->
+    <div class="audio-call-container" id="audioCallContainer" style="display: none;">
+        <!-- Animated Background -->
+        <div class="audio-bg-animation">
+            <div class="audio-wave wave-1"></div>
+            <div class="audio-wave wave-2"></div>
+            <div class="audio-wave wave-3"></div>
+        </div>
+
+        <!-- Top Info Bar -->
+        <div class="audio-top-bar">
+            <div class="call-duration" id="callDuration">00:00</div>
+            <div class="connection-status" id="connectionStatus">
+                <span class="status-dot"></span>
+                <span>Connected</span>
+            </div>
+        </div>
+
+        <!-- Main Audio Visualizer Area -->
+        <div class="audio-main-area">
+            <!-- Local User Avatar -->
+            <div class="audio-avatar local-avatar">
+                <div class="avatar-circle" id="localAvatarCircle">
+                    <div class="avatar-initial" id="localInitial">Y</div>
+                    <svg class="audio-ring" viewBox="0 0 200 200">
+                        <circle class="ring-bg" cx="100" cy="100" r="95" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="3"/>
+                        <circle class="ring-active" id="localAudioRing" cx="100" cy="100" r="95" fill="none" stroke="url(#gradient1)" stroke-width="3" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <div class="avatar-name" id="localName">You</div>
+                <div class="avatar-status" id="localStatus">
+                    <span class="mic-icon" id="localMicIcon">🎤</span>
+                </div>
+            </div>
+
+            <!-- Remote User Avatar -->
+            <div class="audio-avatar remote-avatar" id="remoteAvatar" style="display: none;">
+                <div class="avatar-circle" id="remoteAvatarCircle">
+                    <div class="avatar-initial" id="remoteInitial">G</div>
+                    <svg class="audio-ring" viewBox="0 0 200 200">
+                        <circle class="ring-bg" cx="100" cy="100" r="95" fill="none" stroke="rgba(255,255,255,0.1)" stroke-width="3"/>
+                        <circle class="ring-active" id="remoteAudioRing" cx="100" cy="100" r="95" fill="none" stroke="url(#gradient2)" stroke-width="3" stroke-linecap="round"/>
+                    </svg>
+                </div>
+                <div class="avatar-name" id="remoteName">Guest</div>
+                <div class="avatar-status" id="remoteStatus">
+                    <span class="mic-icon">🔇</span>
+                </div>
+            </div>
+
+            <!-- Waiting Message -->
+            <div class="waiting-message" id="waitingMessage">
+                <div class="waiting-icon">⏳</div>
+                <p>Waiting for others to join...</p>
+            </div>
+        </div>
+
+        <!-- Center Visualizer Bars -->
+        <div class="center-visualizer" id="centerVisualizer">
+            <div class="viz-bar"></div>
+            <div class="viz-bar"></div>
+            <div class="viz-bar"></div>
+            <div class="viz-bar"></div>
+            <div class="viz-bar"></div>
+            <div class="viz-bar"></div>
+            <div class="viz-bar"></div>
+        </div>
+
+        <!-- Bottom Controls -->
+        <div class="audio-controls">
+            <button class="audio-control-btn" id="micBtn" title="Toggle Microphone">
+                <svg class="icon-on" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <path d="M12 1a3 3 0 0 0-3 3v8a3 3 0 0 0 6 0V4a3 3 0 0 0-3-3z"/>
+                    <path d="M19 10v2a7 7 0 0 1-14 0v-2"/>
+                    <line x1="12" y1="19" x2="12" y2="23"/>
+                    <line x1="8" y1="23" x2="16" y2="23"/>
+                </svg>
+                <svg class="icon-off" style="display:none;" width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <line x1="1" y1="1" x2="23" y2="23"/>
+                    <path d="M9 9v3a3 3 0 0 0 5.12 2.12M15 9.34V4a3 3 0 0 0-5.94-.6"/>
+                    <path d="M17 16.95A7 7 0 0 1 5 12v-2m14 0v2a7 7 0 0 1-.11 1.23"/>
+                    <line x1="12" y1="19" x2="12" y2="23"/>
+                    <line x1="8" y1="23" x2="16" y2="23"/>
+                </svg>
+            </button>
+
+            <button class="audio-control-btn speaker-btn" id="speakerBtn" title="Toggle Speaker">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <polygon points="11 5 6 9 2 9 2 15 6 15 11 19 11 5"/>
+                    <path d="M19.07 4.93a10 10 0 0 1 0 14.14M15.54 8.46a5 5 0 0 1 0 7.07"/>
+                </svg>
+            </button>
+
+            <button class="audio-control-btn leave-btn" id="leaveBtn" title="Leave Call">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
+                    <path d="M12 9v2m0 4h.01m-6.938 4h13.856c1.54 0 2.502-1.667 1.732-3L13.732 4c-.77-1.333-2.694-1.333-3.464 0L3.34 16c-.77 1.333.192 3 1.732 3z"/>
+                </svg>
+            </button>
+
+            <button class="audio-control-btn" id="settingsBtn" title="Settings">
+                <svg width="28" height="28" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
+                    <circle cx="12" cy="12" r="3"/>
+                    <path d="M12 1v6m0 6v6m6-12h-6m-6 0H1m22 5h-6m-6 0H1"/>
+                </svg>
+            </button>
+        </div>
+    </div>
+
+    <!-- SVG Gradients -->
+    <svg width="0" height="0" style="position: absolute;">
+        <defs>
+            <linearGradient id="gradient1" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style="stop-color:#667eea;stop-opacity:1" />
+                <stop offset="100%" style="stop-color:#764ba2;stop-opacity:1" />
+            </linearGradient>
+            <linearGradient id="gradient2" x1="0%" y1="0%" x2="100%" y2="100%">
+                <stop offset="0%" style="stop-color:#00f2fe;stop-opacity:1" />
+                <stop offset="100%" style="stop-color:#4facfe;stop-opacity:1" />
+            </linearGradient>
+        </defs>
+    </svg>
+
+    <!-- Hidden Audio Elements -->
+    <audio id="localAudio" autoplay muted></audio>
+    <audio id="remoteAudio" autoplay playsinline></audio>
+
+    <!-- Scripts -->
+    <script src="https://sdk.100ms.live/beta/hms.js"></script>
+    <script src="/js/professional-1on1/hms-sdk-integration.js"></script>
+    <script src="/js/professional-audio/audio-controller.js"></script>
+    <script>
+        // Initialize based on URL params
+        const urlParams = new URLSearchParams(window.location.search);
+        const isHost = urlParams.has('create');
+        const roomCode = urlParams.get('room');
+        const inviteCode = urlParams.get('invite');
+        const userName = urlParams.get('name') || (isHost ? 'Oleh' : 'Guest');
+
+        const audioController = new AudioCallController();
+
+        if (isHost) {
+            audioController.initializeAsHost(inviteCode);
+        } else if (roomCode) {
+            audioController.initializeAsGuest(roomCode, userName);
+        } else {
+            alert('Invalid call parameters');
+            window.location.href = '/home';
+        }
+    </script>
+</body>
+</html>

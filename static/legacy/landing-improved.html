@@ -1,0 +1,679 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+
+    <!-- SEO Meta Tags -->
+    <title>Kaminskyi AI Messenger - Smart Video Calls with AI-Powered Transcription & Insights</title>
+    <meta name="description" content="Professional video conferencing platform with AI-powered transcription, real-time insights, and smart meeting analysis. Host unlimited meetings with automatic note-taking and action item extraction.">
+    <meta name="keywords" content="video conferencing, AI transcription, meeting notes, video calls, online meetings, collaboration tools, AI assistant, meeting insights, GPT-4o">
+    <meta name="author" content="Oleh Kaminskyi">
+    <meta name="robots" content="index, follow">
+    <link rel="canonical" href="https://your-domain.com/">
+
+    <!-- Open Graph / Facebook -->
+    <meta property="og:type" content="website">
+    <meta property="og:url" content="https://your-domain.com/">
+    <meta property="og:title" content="Kaminskyi AI Messenger - Smart Video Calls with AI Transcription">
+    <meta property="og:description" content="Host professional video meetings with automatic AI transcription, real-time insights, and smart action item extraction.">
+    <meta property="og:image" content="https://your-domain.com/static/assets/og-image.jpg">
+
+    <!-- Twitter -->
+    <meta property="twitter:card" content="summary_large_image">
+    <meta property="twitter:url" content="https://your-domain.com/">
+    <meta property="twitter:title" content="Kaminskyi AI Messenger - AI-Powered Video Conferencing">
+    <meta property="twitter:description" content="Professional meetings with automatic transcription and AI insights.">
+    <meta property="twitter:image" content="https://your-domain.com/static/assets/twitter-image.jpg">
+
+    <!-- Favicon -->
+    <link rel="icon" type="image/png" sizes="32x32" href="/static/assets/favicon-32x32.png">
+    <link rel="icon" type="image/png" sizes="16x16" href="/static/assets/favicon-16x16.png">
+    <link rel="apple-touch-icon" sizes="180x180" href="/static/assets/apple-touch-icon.png">
+
+    <!-- Structured Data (Schema.org) -->
+    <script type="application/ld+json">
+    {
+      "@context": "https://schema.org",
+      "@type": "SoftwareApplication",
+      "name": "Kaminskyi AI Messenger",
+      "applicationCategory": "CommunicationApplication",
+      "description": "AI-powered video conferencing platform with automatic transcription and meeting insights",
+      "operatingSystem": "Web",
+      "offers": {
+        "@type": "Offer",
+        "price": "0",
+        "priceCurrency": "USD"
+      },
+      "aggregateRating": {
+        "@type": "AggregateRating",
+        "ratingValue": "4.8",
+        "ratingCount": "127"
+      },
+      "features": [
+        "HD Video Conferencing",
+        "AI-Powered Transcription",
+        "Real-time Insights",
+        "Action Item Extraction",
+        "Screen Sharing",
+        "Recording & Playback"
+      ]
+    }
+    </script>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        :root {
+            --primary: #4ECDC4;
+            --secondary: #FF6B6B;
+            --accent: #FFE66D;
+            --dark: #1a1a2e;
+            --darker: #16213e;
+            --light: #0f3460;
+            --text: #FFFFFF;
+            --text-muted: #94a1b2;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, 'Helvetica Neue', sans-serif;
+            background: var(--dark);
+            color: var(--text);
+            line-height: 1.6;
+        }
+
+        /* Navigation */
+        nav {
+            position: fixed;
+            top: 0;
+            width: 100%;
+            background: rgba(26, 26, 46, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 1rem 2rem;
+            z-index: 1000;
+            border-bottom: 1px solid var(--light);
+        }
+
+        .nav-container {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .logo {
+            font-size: 1.5rem;
+            font-weight: 700;
+            color: var(--primary);
+            text-decoration: none;
+        }
+
+        .nav-links {
+            display: flex;
+            gap: 2rem;
+            list-style: none;
+        }
+
+        .nav-links a {
+            color: var(--text);
+            text-decoration: none;
+            transition: color 0.3s;
+        }
+
+        .nav-links a:hover {
+            color: var(--primary);
+        }
+
+        .cta-button {
+            background: var(--primary);
+            color: var(--dark);
+            padding: 0.75rem 1.5rem;
+            border-radius: 8px;
+            text-decoration: none;
+            font-weight: 600;
+            transition: transform 0.3s, box-shadow 0.3s;
+        }
+
+        .cta-button:hover {
+            transform: translateY(-2px);
+            box-shadow: 0 8px 20px rgba(78, 205, 196, 0.3);
+        }
+
+        /* Hero Section */
+        .hero {
+            min-height: 100vh;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            text-align: center;
+            padding: 6rem 2rem 4rem;
+            background: linear-gradient(135deg, var(--dark) 0%, var(--darker) 50%, var(--light) 100%);
+            position: relative;
+            overflow: hidden;
+        }
+
+        .hero::before {
+            content: '';
+            position: absolute;
+            width: 500px;
+            height: 500px;
+            background: radial-gradient(circle, rgba(78, 205, 196, 0.1) 0%, transparent 70%);
+            border-radius: 50%;
+            top: 10%;
+            right: 10%;
+            animation: float 6s ease-in-out infinite;
+        }
+
+        @keyframes float {
+            0%, 100% { transform: translateY(0px); }
+            50% { transform: translateY(-20px); }
+        }
+
+        .hero-content {
+            max-width: 800px;
+            position: relative;
+            z-index: 1;
+        }
+
+        h1 {
+            font-size: 3.5rem;
+            margin-bottom: 1.5rem;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+            -webkit-background-clip: text;
+            -webkit-text-fill-color: transparent;
+            background-clip: text;
+        }
+
+        .hero p {
+            font-size: 1.25rem;
+            color: var(--text-muted);
+            margin-bottom: 2rem;
+        }
+
+        .hero-buttons {
+            display: flex;
+            gap: 1rem;
+            justify-content: center;
+            flex-wrap: wrap;
+        }
+
+        .btn-primary {
+            background: var(--primary);
+            color: var(--dark);
+            padding: 1rem 2rem;
+            border-radius: 12px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 1.1rem;
+            transition: all 0.3s;
+            display: inline-flex;
+            align-items: center;
+            gap: 0.5rem;
+        }
+
+        .btn-primary:hover {
+            transform: translateY(-3px);
+            box-shadow: 0 10px 30px rgba(78, 205, 196, 0.4);
+        }
+
+        .btn-secondary {
+            background: transparent;
+            color: var(--text);
+            padding: 1rem 2rem;
+            border: 2px solid var(--primary);
+            border-radius: 12px;
+            text-decoration: none;
+            font-weight: 600;
+            font-size: 1.1rem;
+            transition: all 0.3s;
+        }
+
+        .btn-secondary:hover {
+            background: var(--primary);
+            color: var(--dark);
+        }
+
+        /* Features Section */
+        .features {
+            padding: 6rem 2rem;
+            background: var(--darker);
+        }
+
+        .section-title {
+            text-align: center;
+            font-size: 2.5rem;
+            margin-bottom: 3rem;
+        }
+
+        .features-grid {
+            max-width: 1200px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(300px, 1fr));
+            gap: 2rem;
+        }
+
+        .feature-card {
+            background: var(--dark);
+            padding: 2rem;
+            border-radius: 16px;
+            border: 1px solid var(--light);
+            transition: transform 0.3s, border-color 0.3s;
+        }
+
+        .feature-card:hover {
+            transform: translateY(-5px);
+            border-color: var(--primary);
+        }
+
+        .feature-icon {
+            font-size: 3rem;
+            margin-bottom: 1rem;
+        }
+
+        .feature-card h3 {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+            color: var(--primary);
+        }
+
+        .feature-card p {
+            color: var(--text-muted);
+        }
+
+        /* How It Works */
+        .how-it-works {
+            padding: 6rem 2rem;
+            background: var(--dark);
+        }
+
+        .steps {
+            max-width: 1000px;
+            margin: 0 auto;
+            display: flex;
+            flex-direction: column;
+            gap: 3rem;
+        }
+
+        .step {
+            display: flex;
+            align-items: center;
+            gap: 2rem;
+        }
+
+        .step-number {
+            min-width: 60px;
+            height: 60px;
+            background: var(--primary);
+            color: var(--dark);
+            border-radius: 50%;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 1.5rem;
+            font-weight: 700;
+        }
+
+        .step-content h3 {
+            font-size: 1.5rem;
+            margin-bottom: 0.5rem;
+        }
+
+        .step-content p {
+            color: var(--text-muted);
+        }
+
+        /* Pricing */
+        .pricing {
+            padding: 6rem 2rem;
+            background: var(--darker);
+        }
+
+        .pricing-cards {
+            max-width: 1000px;
+            margin: 0 auto;
+            display: grid;
+            grid-template-columns: repeat(auto-fit, minmax(280px, 1fr));
+            gap: 2rem;
+        }
+
+        .pricing-card {
+            background: var(--dark);
+            padding: 2rem;
+            border-radius: 16px;
+            border: 1px solid var(--light);
+            text-align: center;
+        }
+
+        .pricing-card.featured {
+            border-color: var(--primary);
+            transform: scale(1.05);
+        }
+
+        .plan-name {
+            font-size: 1.5rem;
+            margin-bottom: 1rem;
+        }
+
+        .plan-price {
+            font-size: 3rem;
+            font-weight: 700;
+            color: var(--primary);
+            margin-bottom: 0.5rem;
+        }
+
+        .plan-period {
+            color: var(--text-muted);
+            margin-bottom: 2rem;
+        }
+
+        .plan-features {
+            list-style: none;
+            margin-bottom: 2rem;
+        }
+
+        .plan-features li {
+            padding: 0.5rem 0;
+            color: var(--text-muted);
+        }
+
+        .plan-features li::before {
+            content: "✓ ";
+            color: var(--primary);
+            font-weight: 700;
+        }
+
+        /* CTA Section */
+        .cta-section {
+            padding: 6rem 2rem;
+            background: linear-gradient(135deg, var(--primary) 0%, var(--accent) 100%);
+            text-align: center;
+        }
+
+        .cta-section h2 {
+            font-size: 2.5rem;
+            color: var(--dark);
+            margin-bottom: 1.5rem;
+        }
+
+        .cta-section p {
+            font-size: 1.25rem;
+            color: var(--darker);
+            margin-bottom: 2rem;
+        }
+
+        /* Footer */
+        footer {
+            background: var(--darker);
+            padding: 3rem 2rem;
+            text-align: center;
+            border-top: 1px solid var(--light);
+        }
+
+        .footer-links {
+            display: flex;
+            justify-content: center;
+            gap: 2rem;
+            margin-bottom: 1.5rem;
+            flex-wrap: wrap;
+        }
+
+        .footer-links a {
+            color: var(--text-muted);
+            text-decoration: none;
+        }
+
+        .footer-links a:hover {
+            color: var(--primary);
+        }
+
+        /* Responsive */
+        @media (max-width: 768px) {
+            h1 {
+                font-size: 2.5rem;
+            }
+
+            .hero p {
+                font-size: 1.1rem;
+            }
+
+            .hero-buttons {
+                flex-direction: column;
+            }
+
+            .nav-links {
+                display: none;
+            }
+
+            .step {
+                flex-direction: column;
+                text-align: center;
+            }
+        }
+    </style>
+</head>
+<body>
+    <!-- Navigation -->
+    <nav>
+        <div class="nav-container">
+            <a href="/" class="logo">🎥 Kaminskyi Messenger</a>
+            <ul class="nav-links">
+                <li><a href="#features">Features</a></li>
+                <li><a href="#how-it-works">How It Works</a></li>
+                <li><a href="#pricing">Pricing</a></li>
+            </ul>
+            <a href="/login" class="cta-button">Host Login</a>
+        </div>
+    </nav>
+
+    <!-- Hero Section -->
+    <section class="hero">
+        <div class="hero-content">
+            <h1>Smart Video Meetings with AI-Powered Insights</h1>
+            <p>
+                Host professional video conferences with automatic transcription,
+                real-time AI insights, and intelligent action item extraction.
+                Transform your meetings into actionable outcomes.
+            </p>
+            <div class="hero-buttons">
+                <a href="/login" class="btn-primary">
+                    <span>Start Free Meeting</span>
+                    <span>→</span>
+                </a>
+                <a href="#features" class="btn-secondary">Learn More</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- Features Section -->
+    <section id="features" class="features">
+        <h2 class="section-title">Powerful Features for Modern Teams</h2>
+        <div class="features-grid">
+            <div class="feature-card">
+                <div class="feature-icon">🎥</div>
+                <h3>HD Video Conferencing</h3>
+                <p>Crystal-clear video calls powered by Daily.co with support for up to 20 participants. Screen sharing, chat, and professional quality.</p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">🎤</div>
+                <h3>1-on-1 Audio Calls</h3>
+                <p>Private peer-to-peer audio conversations with superior quality and low latency. Perfect for sensitive discussions.</p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">📝</div>
+                <h3>AI Transcription</h3>
+                <p>Automatic speech-to-text powered by OpenAI Whisper. Get accurate transcripts with speaker identification and timestamps.</p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">🤖</div>
+                <h3>GPT-4o Insights</h3>
+                <p>AI-generated summaries, key points, and action items. Never miss important decisions or tasks from your meetings.</p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">🎨</div>
+                <h3>Color-Coded Transcripts</h3>
+                <p>Easy-to-read transcripts with automatic speaker identification and color coding. Navigate with timestamp links.</p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">🔒</div>
+                <h3>Secure & Private</h3>
+                <p>End-to-end encryption for calls. Your data is protected with industry-standard security protocols.</p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">📊</div>
+                <h3>Role-Specific Analysis</h3>
+                <p>Tailored insights for teachers, therapists, coaches, and more. Get relevant analysis for your profession.</p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">💾</div>
+                <h3>Recording & Export</h3>
+                <p>Automatic recording with cloud storage. Export transcripts in PDF, DOCX, and JSON formats.</p>
+            </div>
+
+            <div class="feature-card">
+                <div class="feature-icon">⚡</div>
+                <h3>Instant Setup</h3>
+                <p>No downloads required. Share a link and start your meeting in seconds. Works on all devices.</p>
+            </div>
+        </div>
+    </section>
+
+    <!-- How It Works -->
+    <section id="how-it-works" class="how-it-works">
+        <h2 class="section-title">How It Works</h2>
+        <div class="steps">
+            <div class="step">
+                <div class="step-number">1</div>
+                <div class="step-content">
+                    <h3>Create Your Meeting</h3>
+                    <p>Log in as host and choose between group video call, 1-on-1 audio, or traditional video call. Get a shareable link instantly.</p>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">2</div>
+                <div class="step-content">
+                    <h3>Invite Participants</h3>
+                    <p>Share your meeting link via email, SMS, or WhatsApp. Guests can join without any account or downloads.</p>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">3</div>
+                <div class="step-content">
+                    <h3>Host Your Meeting</h3>
+                    <p>Enjoy HD video, crystal-clear audio, screen sharing, and chat. Start recording to capture everything automatically.</p>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">4</div>
+                <div class="step-content">
+                    <h3>Get AI Insights</h3>
+                    <p>After your meeting, receive an AI-generated transcript with summaries, key points, action items, and decision tracking.</p>
+                </div>
+            </div>
+
+            <div class="step">
+                <div class="step-number">5</div>
+                <div class="step-content">
+                    <h3>Export & Share</h3>
+                    <p>Download transcripts in your preferred format. Share insights with your team or integrate with your workflow.</p>
+                </div>
+            </div>
+        </div>
+    </section>
+
+    <!-- Pricing -->
+    <section id="pricing" class="pricing">
+        <h2 class="section-title">Simple, Transparent Pricing</h2>
+        <div class="pricing-cards">
+            <div class="pricing-card">
+                <div class="plan-name">Free</div>
+                <div class="plan-price">$0</div>
+                <div class="plan-period">Forever</div>
+                <ul class="plan-features">
+                    <li>Up to 40 minutes per meeting</li>
+                    <li>10 participants max</li>
+                    <li>HD video quality</li>
+                    <li>Screen sharing</li>
+                    <li>Basic transcription</li>
+                </ul>
+                <a href="/login" class="btn-primary">Get Started</a>
+            </div>
+
+            <div class="pricing-card featured">
+                <div class="plan-name">Pro</div>
+                <div class="plan-price">$19</div>
+                <div class="plan-period">per month</div>
+                <ul class="plan-features">
+                    <li>Unlimited meeting duration</li>
+                    <li>20 participants max</li>
+                    <li>4K video quality</li>
+                    <li>AI-powered transcription</li>
+                    <li>GPT-4o insights</li>
+                    <li>Role-specific analysis</li>
+                    <li>Export in all formats</li>
+                    <li>Priority support</li>
+                </ul>
+                <a href="/login" class="btn-primary">Start Pro Trial</a>
+            </div>
+
+            <div class="pricing-card">
+                <div class="plan-name">Enterprise</div>
+                <div class="plan-price">Custom</div>
+                <div class="plan-period">Contact us</div>
+                <ul class="plan-features">
+                    <li>Unlimited everything</li>
+                    <li>Custom branding</li>
+                    <li>Advanced analytics</li>
+                    <li>API access</li>
+                    <li>Dedicated support</li>
+                    <li>SLA guarantee</li>
+                    <li>Custom integrations</li>
+                </ul>
+                <a href="mailto:contact@example.com" class="btn-primary">Contact Sales</a>
+            </div>
+        </div>
+    </section>
+
+    <!-- CTA Section -->
+    <section class="cta-section">
+        <h2>Ready to Transform Your Meetings?</h2>
+        <p>Join thousands of teams using AI-powered video conferencing</p>
+        <a href="/login" class="btn-primary" style="background: var(--dark); color: var(--text);">
+            Start Your Free Meeting Now →
+        </a>
+    </section>
+
+    <!-- Footer -->
+    <footer>
+        <div class="footer-links">
+            <a href="/privacy">Privacy Policy</a>
+            <a href="/terms">Terms of Service</a>
+            <a href="/docs">Documentation</a>
+            <a href="mailto:support@example.com">Support</a>
+            <a href="/api">API</a>
+        </div>
+        <p style="color: var(--text-muted);">
+            © 2025 Kaminskyi AI Messenger. Built with ❤️ using Daily.co & OpenAI.
+        </p>
+    </footer>
+
+    <!-- Analytics (Add your tracking code) -->
+    <!-- Google Analytics -->
+    <!-- <script async src="https://www.googletagmanager.com/gtag/js?id=GA_MEASUREMENT_ID"></script> -->
+</body>
+</html>

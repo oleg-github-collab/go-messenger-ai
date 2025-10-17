@@ -1,0 +1,477 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Group Call - Daily.co</title>
+    <script src="https://unpkg.com/@daily-co/daily-js"></script>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', sans-serif;
+            background: #000;
+            color: white;
+            overflow: hidden;
+        }
+
+        #container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+
+        #dailyFrame {
+            width: 100%;
+            height: 100%;
+        }
+
+        /* Controls */
+        .controls {
+            position: fixed;
+            bottom: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            display: flex;
+            gap: 15px;
+            background: rgba(0, 0, 0, 0.8);
+            padding: 15px 25px;
+            border-radius: 40px;
+            backdrop-filter: blur(10px);
+            z-index: 1000;
+        }
+
+        .btn {
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            border: none;
+            background: rgba(255, 255, 255, 0.2);
+            color: white;
+            cursor: pointer;
+            font-size: 20px;
+            transition: all 0.2s;
+        }
+
+        .btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.1);
+        }
+
+        .btn.active {
+            background: #10b981;
+        }
+
+        .btn.end {
+            background: #ef4444;
+        }
+
+        /* Self View */
+        .self-view {
+            position: fixed;
+            bottom: 80px;
+            right: 20px;
+            width: 200px;
+            height: 150px;
+            border-radius: 12px;
+            overflow: hidden;
+            border: 2px solid rgba(255, 255, 255, 0.3);
+            cursor: move;
+            z-index: 999;
+            background: #000;
+        }
+
+        .self-view video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+            transform: scaleX(-1);
+        }
+
+        /* Chat */
+        .chat-overlay {
+            position: fixed;
+            top: 0;
+            right: -400px;
+            width: 400px;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            backdrop-filter: blur(20px);
+            z-index: 2000;
+            transition: right 0.3s;
+            display: flex;
+            flex-direction: column;
+        }
+
+        .chat-overlay.open {
+            right: 0;
+        }
+
+        .chat-header {
+            padding: 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .chat-messages {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .message {
+            margin-bottom: 15px;
+            padding: 10px 15px;
+            background: rgba(255, 255, 255, 0.1);
+            border-radius: 12px;
+        }
+
+        .message.self {
+            background: #3b82f6;
+            align-self: flex-end;
+        }
+
+        .chat-input {
+            padding: 20px;
+            border-top: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            gap: 10px;
+        }
+
+        .chat-input input {
+            flex: 1;
+            padding: 12px;
+            border-radius: 20px;
+            border: none;
+            background: rgba(255, 255, 255, 0.1);
+            color: white;
+        }
+
+        .chat-input button {
+            padding: 12px 24px;
+            border-radius: 20px;
+            border: none;
+            background: #3b82f6;
+            color: white;
+            cursor: pointer;
+        }
+
+        /* Raise Hand Mobile */
+        .raise-hand-mobile {
+            position: fixed;
+            top: 20px;
+            right: 20px;
+            width: 50px;
+            height: 50px;
+            border-radius: 50%;
+            background: #fbbf24;
+            border: none;
+            font-size: 24px;
+            cursor: pointer;
+            z-index: 1001;
+            display: none;
+        }
+
+        .raise-hand-mobile.active {
+            background: #10b981;
+        }
+
+        @media (max-width: 768px) {
+            .raise-hand-mobile {
+                display: block;
+            }
+            .chat-overlay {
+                width: 100%;
+            }
+        }
+    </style>
+</head>
+<body>
+    <div id="container">
+        <div id="dailyFrame"></div>
+
+        <!-- Self View -->
+        <div class="self-view" id="selfView">
+            <video id="selfVideo" autoplay muted playsinline></video>
+        </div>
+
+        <!-- Raise Hand Mobile -->
+        <button class="raise-hand-mobile" id="raiseHandMobile">✋</button>
+
+        <!-- Controls -->
+        <div class="controls">
+            <button class="btn" id="micBtn" title="Mic">🎤</button>
+            <button class="btn" id="cameraBtn" title="Camera">📹</button>
+            <button class="btn end" id="endBtn" title="Leave">📞</button>
+            <button class="btn" id="chatBtn" title="Chat">💬</button>
+            <button class="btn" id="raiseHandBtn" title="Raise Hand">✋</button>
+        </div>
+
+        <!-- Chat -->
+        <div class="chat-overlay" id="chatOverlay">
+            <div class="chat-header">
+                <h3>Chat</h3>
+                <button class="btn" id="closeChat">✕</button>
+            </div>
+            <div class="chat-messages" id="chatMessages"></div>
+            <div class="chat-input">
+                <input type="text" id="chatInput" placeholder="Type a message...">
+                <button id="sendBtn">Send</button>
+            </div>
+        </div>
+    </div>
+
+    <script>
+        // Get room from URL
+        const roomID = window.location.pathname.split('/').filter(x => x)[1];
+        const urlParams = new URLSearchParams(window.location.search);
+        const userName = urlParams.get('name') || 'Guest';
+
+        let callFrame = null;
+        let chatMessages = [];
+        let handRaised = false;
+
+        // Initialize
+        init();
+
+        async function init() {
+            try {
+                // Get room URL from backend
+                const response = await fetch(`/api/daily/create-room?roomId=${roomID}&userName=${userName}`, {
+                    method: 'POST',
+                    credentials: 'include'
+                });
+                const data = await response.json();
+
+                // Create Daily call
+                callFrame = window.DailyIframe.createFrame(document.getElementById('dailyFrame'), {
+                    showLeaveButton: false,
+                    showFullscreenButton: false,
+                    showLocalVideo: true,
+                    showParticipantsBar: false
+                });
+
+                // Join
+                await callFrame.join({ url: data.roomUrl, userName: data.userName || userName });
+
+                // Setup
+                setupControls();
+                setupChat();
+                setupSelfView();
+                setupEventListeners();
+
+                console.log('[DAILY] ✅ Initialized');
+            } catch (err) {
+                console.error('[DAILY] ❌ Error:', err);
+                alert('Failed to join call: ' + err.message);
+            }
+        }
+
+        function setupControls() {
+            // Mic
+            document.getElementById('micBtn').onclick = async () => {
+                const localAudio = callFrame.localAudio();
+                await callFrame.setLocalAudio(!localAudio);
+            };
+
+            // Camera
+            document.getElementById('cameraBtn').onclick = async () => {
+                const localVideo = callFrame.localVideo();
+                await callFrame.setLocalVideo(!localVideo);
+            };
+
+            // End call
+            document.getElementById('endBtn').onclick = async () => {
+                await callFrame.leave();
+                window.location.href = '/home';
+            };
+
+            // Chat
+            document.getElementById('chatBtn').onclick = () => toggleChat();
+            document.getElementById('closeChat').onclick = () => toggleChat();
+
+            // Raise hand - desktop
+            document.getElementById('raiseHandBtn').onclick = () => toggleRaiseHand();
+
+            // Raise hand - mobile
+            document.getElementById('raiseHandMobile').onclick = () => toggleRaiseHand();
+        }
+
+        function setupChat() {
+            document.getElementById('sendBtn').onclick = () => sendMessage();
+            document.getElementById('chatInput').onkeypress = (e) => {
+                if (e.key === 'Enter') sendMessage();
+            };
+        }
+
+        function setupSelfView() {
+            const selfView = document.getElementById('selfView');
+            const selfVideo = document.getElementById('selfVideo');
+
+            // Get local video track
+            const updateSelfView = () => {
+                const local = callFrame.participants().local;
+                if (local && local.tracks?.video?.persistentTrack) {
+                    selfVideo.srcObject = new MediaStream([local.tracks.video.persistentTrack]);
+                }
+            };
+
+            // Update on camera changes
+            callFrame.on('participant-updated', (e) => {
+                if (e.participant.local) updateSelfView();
+            });
+
+            updateSelfView();
+
+            // Make draggable
+            makeDraggable(selfView);
+        }
+
+        function makeDraggable(element) {
+            let isDragging = false;
+            let offsetX, offsetY;
+
+            element.onmousedown = element.ontouchstart = (e) => {
+                isDragging = true;
+                const event = e.touches ? e.touches[0] : e;
+                const rect = element.getBoundingClientRect();
+                offsetX = event.clientX - rect.left;
+                offsetY = event.clientY - rect.top;
+                e.preventDefault();
+            };
+
+            document.onmousemove = document.ontouchmove = (e) => {
+                if (!isDragging) return;
+                const event = e.touches ? e.touches[0] : e;
+                element.style.left = (event.clientX - offsetX) + 'px';
+                element.style.top = (event.clientY - offsetY) + 'px';
+                element.style.right = 'auto';
+                element.style.bottom = 'auto';
+            };
+
+            document.onmouseup = document.ontouchend = () => {
+                isDragging = false;
+            };
+        }
+
+        function setupEventListeners() {
+            // App messages
+            callFrame.on('app-message', (event) => {
+                const { type, data } = event.data;
+
+                if (type === 'chat') {
+                    chatMessages.push({
+                        user: data.userName,
+                        message: data.message,
+                        self: false,
+                        timestamp: Date.now()
+                    });
+                    renderChat();
+                } else if (type === 'raise-hand') {
+                    console.log(`✋ ${data.userName} raised hand`);
+                    showNotification(`✋ ${data.userName} raised hand`);
+                }
+            });
+
+            // Track state changes
+            callFrame.on('participant-updated', (e) => {
+                if (e.participant.local) {
+                    const micBtn = document.getElementById('micBtn');
+                    const camBtn = document.getElementById('cameraBtn');
+                    micBtn.classList.toggle('active', e.participant.audio);
+                    camBtn.classList.toggle('active', e.participant.video);
+                }
+            });
+        }
+
+        function toggleChat() {
+            const overlay = document.getElementById('chatOverlay');
+            overlay.classList.toggle('open');
+        }
+
+        function sendMessage() {
+            const input = document.getElementById('chatInput');
+            const message = input.value.trim();
+            if (!message) return;
+
+            const local = callFrame.participants().local;
+
+            // Send to others
+            callFrame.sendAppMessage({
+                type: 'chat',
+                data: {
+                    userName: local.user_name,
+                    message: message
+                }
+            }, '*');
+
+            // Add locally
+            chatMessages.push({
+                user: local.user_name,
+                message: message,
+                self: true,
+                timestamp: Date.now()
+            });
+
+            renderChat();
+            input.value = '';
+        }
+
+        function renderChat() {
+            const container = document.getElementById('chatMessages');
+            container.innerHTML = chatMessages.map(msg => `
+                <div class="message ${msg.self ? 'self' : ''}">
+                    <strong>${msg.user}:</strong> ${msg.message}
+                </div>
+            `).join('');
+            container.scrollTop = container.scrollHeight;
+        }
+
+        function toggleRaiseHand() {
+            handRaised = !handRaised;
+            const local = callFrame.participants().local;
+
+            // Update UI
+            document.getElementById('raiseHandBtn').classList.toggle('active', handRaised);
+            document.getElementById('raiseHandMobile').classList.toggle('active', handRaised);
+
+            // Send to others
+            if (handRaised) {
+                callFrame.sendAppMessage({
+                    type: 'raise-hand',
+                    data: {
+                        userName: local.user_name,
+                        raised: true
+                    }
+                }, '*');
+            }
+
+            console.log('✋ Hand', handRaised ? 'raised' : 'lowered');
+        }
+
+        function showNotification(message) {
+            const div = document.createElement('div');
+            div.textContent = message;
+            div.style.cssText = `
+                position: fixed;
+                top: 20px;
+                left: 50%;
+                transform: translateX(-50%);
+                background: rgba(0, 0, 0, 0.9);
+                color: white;
+                padding: 15px 25px;
+                border-radius: 8px;
+                z-index: 9999;
+            `;
+            document.body.appendChild(div);
+            setTimeout(() => div.remove(), 3000);
+        }
+    </script>
+</body>
+</html>

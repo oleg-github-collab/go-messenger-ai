@@ -1,0 +1,1002 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no">
+    <meta name="apple-mobile-web-app-capable" content="yes">
+    <title>Group Call - Kaminskyi Messenger</title>
+
+    <!-- Base CSS -->
+    <link rel="stylesheet" href="/static/css/base/variables.css">
+    <link rel="stylesheet" href="/static/css/base/reset.css">
+    <link rel="stylesheet" href="/static/css/base/animations.css">
+
+    <!-- Component CSS -->
+    <link rel="stylesheet" href="/static/css/components/buttons.css">
+    <link rel="stylesheet" href="/static/css/components/video-grid.css">
+
+    <!-- Notetaker CSS -->
+    <link rel="stylesheet" href="/static/css/notetaker-complete.css">
+
+    <style>
+        body {
+            margin: 0;
+            padding: 0;
+            font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
+            background: #000;
+            overflow: hidden;
+        }
+
+        /* Settings Screen */
+        .settings-screen {
+            position: fixed;
+            top: 0;
+            left: 0;
+            width: 100%;
+            height: 100%;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            z-index: 1000;
+        }
+
+        .settings-screen.hidden {
+            display: none;
+        }
+
+        .settings-container {
+            background: white;
+            border-radius: 20px;
+            padding: 40px;
+            max-width: 500px;
+            width: 90%;
+            box-shadow: 0 20px 60px rgba(0,0,0,0.3);
+        }
+
+        .settings-title {
+            margin: 0 0 30px 0;
+            color: #1f2937;
+            font-size: 28px;
+            text-align: center;
+        }
+
+        .preview-container {
+            position: relative;
+            width: 100%;
+            aspect-ratio: 16/9;
+            background: #000;
+            border-radius: 12px;
+            overflow: hidden;
+            margin-bottom: 24px;
+        }
+
+        #previewVideo {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .form-group {
+            margin-bottom: 20px;
+        }
+
+        .form-group label {
+            display: block;
+            font-size: 14px;
+            font-weight: 600;
+            color: #374151;
+            margin-bottom: 8px;
+        }
+
+        .form-group input,
+        .form-group select {
+            width: 100%;
+            padding: 12px;
+            border: 2px solid #e5e7eb;
+            border-radius: 10px;
+            font-size: 16px;
+            transition: border-color 0.3s;
+        }
+
+        .form-group input:focus,
+        .form-group select:focus {
+            outline: none;
+            border-color: #667eea;
+        }
+
+        .settings-toggles {
+            display: flex;
+            gap: 12px;
+            margin-bottom: 24px;
+        }
+
+        .toggle-item {
+            flex: 1;
+            background: #f9fafb;
+            padding: 16px;
+            border-radius: 12px;
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .toggle-info {
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            color: #374151;
+            font-weight: 500;
+        }
+
+        .toggle-switch {
+            position: relative;
+            width: 50px;
+            height: 28px;
+        }
+
+        .toggle-switch input {
+            opacity: 0;
+            width: 0;
+            height: 0;
+        }
+
+        .toggle-slider {
+            position: absolute;
+            cursor: pointer;
+            top: 0;
+            left: 0;
+            right: 0;
+            bottom: 0;
+            background-color: #cbd5e1;
+            transition: 0.3s;
+            border-radius: 28px;
+        }
+
+        .toggle-slider:before {
+            position: absolute;
+            content: "";
+            height: 20px;
+            width: 20px;
+            left: 4px;
+            bottom: 4px;
+            background-color: white;
+            transition: 0.3s;
+            border-radius: 50%;
+        }
+
+        .toggle-switch input:checked + .toggle-slider {
+            background-color: #667eea;
+        }
+
+        .toggle-switch input:checked + .toggle-slider:before {
+            transform: translateX(22px);
+        }
+
+        .join-button {
+            width: 100%;
+            padding: 16px;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+            color: white;
+            border: none;
+            border-radius: 12px;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: transform 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            gap: 10px;
+        }
+
+        .join-button:hover {
+            transform: translateY(-2px);
+        }
+
+        /* Group Call Container */
+        .group-call-container {
+            position: relative;
+            width: 100%;
+            height: 100vh;
+            background: #0f0f0f;
+            transition: opacity 0.3s ease;
+        }
+
+        /* Participants Grid */
+        .participants-grid {
+            display: grid;
+            gap: 8px;
+            padding: 8px;
+            height: 100%;
+            width: 100%;
+        }
+
+        .participants-grid[data-count="1"] { grid-template-columns: 1fr; }
+        .participants-grid[data-count="2"] { grid-template-columns: repeat(2, 1fr); }
+        .participants-grid[data-count="3"],
+        .participants-grid[data-count="4"] { grid-template-columns: repeat(2, 1fr); }
+        .participants-grid[data-count="5"],
+        .participants-grid[data-count="6"] { grid-template-columns: repeat(3, 1fr); }
+        .participants-grid[data-count="7"],
+        .participants-grid[data-count="8"],
+        .participants-grid[data-count="9"] { grid-template-columns: repeat(3, 1fr); }
+
+        .participant-tile {
+            position: relative;
+            background: #1a1a1a;
+            border-radius: 12px;
+            overflow: hidden;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .participant-tile video {
+            width: 100%;
+            height: 100%;
+            object-fit: cover;
+        }
+
+        .participant-name {
+            position: absolute;
+            bottom: 12px;
+            left: 12px;
+            background: rgba(0,0,0,0.7);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+        }
+
+        .speaking-indicator {
+            position: absolute;
+            top: 12px;
+            left: 12px;
+            background: rgba(16, 185, 129, 0.9);
+            color: white;
+            padding: 6px 12px;
+            border-radius: 8px;
+            font-size: 12px;
+            font-weight: 600;
+            display: none;
+            align-items: center;
+            gap: 6px;
+        }
+
+        .participant-tile.speaking .speaking-indicator {
+            display: flex;
+        }
+
+        /* Control Bar */
+        .control-bar {
+            position: fixed;
+            bottom: 30px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(31, 41, 55, 0.95);
+            backdrop-filter: blur(10px);
+            padding: 16px 24px;
+            border-radius: 16px;
+            display: flex;
+            gap: 16px;
+            z-index: 1000;
+        }
+
+        .control-button {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            border: none;
+            background: #374151;
+            color: white;
+            cursor: pointer;
+            transition: all 0.3s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+            font-size: 24px;
+        }
+
+        .control-button:hover {
+            background: #4b5563;
+            transform: scale(1.1);
+        }
+
+        .control-button.active {
+            background: #ef4444;
+        }
+
+        .control-button.leave {
+            background: #ef4444;
+        }
+
+        .control-button.leave:hover {
+            background: #dc2626;
+        }
+
+        .control-button.more {
+            font-size: 28px;
+        }
+
+        .control-more-menu {
+            position: fixed;
+            bottom: 110px;
+            right: 24px;
+            background: rgba(17, 24, 39, 0.92);
+            border-radius: 16px;
+            padding: 12px 0;
+            box-shadow: 0 20px 50px rgba(0, 0, 0, 0.45);
+            display: none;
+            flex-direction: column;
+            gap: 4px;
+            z-index: 1100;
+            border: 1px solid rgba(148, 163, 184, 0.2);
+            min-width: 180px;
+        }
+
+        .control-more-menu.open {
+            display: flex;
+        }
+
+        .control-more-menu button {
+            background: transparent;
+            border: none;
+            color: #f3f4f6;
+            font-size: 14px;
+            text-align: left;
+            padding: 10px 18px;
+            cursor: pointer;
+            display: flex;
+            align-items: center;
+            gap: 10px;
+            transition: background 0.2s ease;
+        }
+
+        .control-more-menu button:hover {
+            background: rgba(148, 163, 184, 0.18);
+        }
+
+        .control-more-menu button.danger {
+            color: #f87171;
+        }
+
+        @media (max-width: 768px) {
+            #shareScreenBtn {
+                display: none;
+            }
+
+            #moreOptionsBtn {
+                display: flex;
+            }
+
+            .control-bar {
+                bottom: 20px;
+                padding: 14px 18px;
+                gap: 12px;
+            }
+
+            .control-button {
+                width: 52px;
+                height: 52px;
+            }
+        }
+
+        @media (min-width: 769px) {
+            #moreOptionsBtn {
+                display: none;
+            }
+        }
+
+        /* Connection Status */
+        .connection-status {
+            position: fixed;
+            top: 20px;
+            left: 50%;
+            transform: translateX(-50%);
+            background: rgba(31, 41, 55, 0.95);
+            color: white;
+            padding: 12px 24px;
+            border-radius: 12px;
+            font-size: 14px;
+            font-weight: 500;
+            z-index: 1000;
+            transition: opacity 0.3s ease, transform 0.3s ease;
+        }
+
+        .group-call-container.controls-hidden .control-bar {
+            opacity: 0;
+            pointer-events: none;
+            transform: translate(-50%, 120px);
+        }
+
+        .group-call-container.controls-hidden .connection-status {
+            opacity: 0;
+            transform: translate(-50%, -10px);
+        }
+    </style>
+</head>
+<body>
+    <!-- Settings Screen -->
+    <div class="settings-screen" id="settingsScreen">
+        <div class="settings-container">
+            <h1 class="settings-title">Join Group Call 👥</h1>
+
+            <div class="preview-container">
+                <video id="previewVideo" autoplay muted playsinline></video>
+            </div>
+
+            <div class="form-group">
+                <label>Your Name</label>
+                <input type="text" id="nameInput" placeholder="Enter your name" maxlength="30">
+            </div>
+
+            <div class="settings-toggles">
+                <div class="toggle-item">
+                    <div class="toggle-info">
+                        <span>📹</span>
+                        <span>Camera</span>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="cameraToggle" checked>
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+
+                <div class="toggle-item">
+                    <div class="toggle-info">
+                        <span>🎤</span>
+                        <span>Mic</span>
+                    </div>
+                    <label class="toggle-switch">
+                        <input type="checkbox" id="micToggle" checked>
+                        <span class="toggle-slider"></span>
+                    </label>
+                </div>
+            </div>
+
+            <button class="join-button" id="joinButton">
+                <span>Join Call</span>
+            </button>
+        </div>
+    </div>
+
+    <!-- Group Call Container -->
+    <div class="group-call-container hidden controls-visible" id="groupCallContainer">
+        <!-- Connection Status -->
+        <div class="connection-status" id="connectionStatus">Connecting...</div>
+
+        <!-- Participants Grid -->
+        <div class="participants-grid" id="participantsGrid" data-count="1">
+            <!-- Participants dynamically added -->
+        </div>
+
+        <!-- Control Bar -->
+        <div class="control-bar">
+            <button class="control-button" id="toggleMicBtn" title="Mute/Unmute">🎤</button>
+            <button class="control-button" id="toggleCameraBtn" title="Camera On/Off">📹</button>
+            <button class="control-button" id="shareScreenBtn" title="Share Screen">🖥️</button>
+            <button class="control-button more" id="moreOptionsBtn" title="More options">⋯</button>
+            <button class="control-button leave" id="leaveBtn" title="Leave Call">📞</button>
+        </div>
+
+        <div class="control-more-menu" id="moreMenu">
+            <button data-action="toggle-mic">Toggle Mic</button>
+            <button data-action="toggle-camera">Toggle Camera</button>
+            <button data-action="share-screen">Share Screen</button>
+            <button data-action="leave" class="danger">Leave Call</button>
+        </div>
+    </div>
+
+    <!-- Insert Notetaker UI Component Here -->
+    <!-- Floating Notetaker Panel -->
+    <div id="notetakerFloatingPanel" class="notetaker-floating-panel hidden">
+        <div class="notetaker-header">
+            <h3>🤖 AI Notetaker</h3>
+            <div class="notetaker-header-actions">
+                <button id="notetakerMinimizeBtn" title="Minimize">−</button>
+                <button id="notetakerCloseBtn" title="Close">✕</button>
+            </div>
+        </div>
+
+        <div class="notetaker-settings">
+            <div class="setting-group">
+                <label>📋 Role Preset</label>
+                <select id="notetakerRoleSelect">
+                    <option value="">🎯 General Meeting</option>
+                    <option value="brainstorming">💡 Brainstorming</option>
+                    <option value="project-planning">📋 Project Planning</option>
+                    <option value="business-coach">💼 Business Meeting</option>
+                </select>
+            </div>
+
+            <div class="setting-group">
+                <label>🌍 Language</label>
+                <select id="notetakerLanguageSelect">
+                    <option value="en-US">English</option>
+                    <option value="uk-UA">Українська</option>
+                </select>
+            </div>
+        </div>
+
+        <!-- Participant Selector -->
+        <div id="notetakerParticipantSelector" class="participant-selector">
+            <div class="participant-header">
+                <h4>👥 Record Participants</h4>
+                <span class="selection-count">0 of 0 selected</span>
+            </div>
+            <div class="participant-list" id="notetakerParticipantList"></div>
+        </div>
+
+        <div class="notetaker-controls">
+            <button class="control-btn start" id="notetakerStartBtn">▶️ Start</button>
+            <button class="control-btn pause" id="notetakerPauseBtn" style="display: none;">⏸️ Pause</button>
+            <button class="control-btn stop" id="notetakerStopBtn" style="display: none;">⏹️ Stop</button>
+        </div>
+
+        <div class="notetaker-live-transcript" id="notetakerLiveTranscript">
+            <div style="text-align: center; padding: 40px 20px; color: #9ca3af;">
+                <p>Press Start to begin recording</p>
+            </div>
+        </div>
+
+        <div class="notetaker-status">
+            <div class="status-indicator">
+                <span class="status-dot" id="notetakerStatusDot"></span>
+                <span id="notetakerStatusText">Ready</span>
+            </div>
+            <div class="status-stats">
+                <div class="stat-item">
+                    <span class="stat-label">⏱️</span>
+                    <span class="stat-value" id="notetakerDuration">00:00</span>
+                </div>
+                <div class="stat-item">
+                    <span class="stat-label">📝</span>
+                    <span class="stat-value" id="notetakerWordCount">0</span>
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <script type="module">
+        import { createEnhancedNotetaker } from '/static/js/notetaker/index-enhanced.js';
+        import { globalEvents } from '/static/js/core/events.js';
+        import { Logger } from '/static/js/core/logger.js';
+
+        const logger = new Logger('GROUP-CALL');
+        const groupCallContainerEl = document.getElementById('groupCallContainer');
+        const connectionStatusEl = document.getElementById('connectionStatus');
+        const toggleMicBtn = document.getElementById('toggleMicBtn');
+        const toggleCameraBtn = document.getElementById('toggleCameraBtn');
+        const shareScreenBtn = document.getElementById('shareScreenBtn');
+        const leaveBtn = document.getElementById('leaveBtn');
+        const moreOptionsBtn = document.getElementById('moreOptionsBtn');
+        const moreMenu = document.getElementById('moreMenu');
+
+        let wakeLock = null;
+        let wakeLockRequested = false;
+        const wakeLockSupported = 'wakeLock' in navigator;
+        let controlsAutoHideTimer = null;
+        let controlsVisible = true;
+        let menuOpen = false;
+        let callEnded = false;
+
+        // Get room ID from URL
+        function getRoomIDFromURL() {
+            const path = window.location.pathname;
+            const parts = path.split('/');
+            return parts[parts.length - 1] || parts[parts.length - 2];
+        }
+
+        const roomID = getRoomIDFromURL();
+        let socket = null;
+        let localStream = null;
+        let participants = new Map();
+        let notetaker = null;
+        let myUserID = null;
+        let myName = '';
+
+        function showControls(force = false) {
+            if (!groupCallContainerEl) return;
+            controlsVisible = true;
+            groupCallContainerEl.classList.add('controls-visible');
+            groupCallContainerEl.classList.remove('controls-hidden');
+            if (force) {
+                startAutoHideTimer();
+            } else {
+                restartAutoHideTimer();
+            }
+        }
+
+        function hideControls() {
+            if (!groupCallContainerEl) return;
+            if (menuOpen) return;
+            controlsVisible = false;
+            groupCallContainerEl.classList.add('controls-hidden');
+            groupCallContainerEl.classList.remove('controls-visible');
+            stopAutoHideTimer();
+        }
+
+        function startAutoHideTimer() {
+            stopAutoHideTimer();
+            controlsAutoHideTimer = setTimeout(() => hideControls(), 6000);
+        }
+
+        function restartAutoHideTimer() {
+            stopAutoHideTimer();
+            if (menuOpen) return;
+            controlsAutoHideTimer = setTimeout(() => hideControls(), 6000);
+        }
+
+        function stopAutoHideTimer() {
+            if (controlsAutoHideTimer) {
+                clearTimeout(controlsAutoHideTimer);
+                controlsAutoHideTimer = null;
+            }
+        }
+
+        function setupInteractionListeners() {
+            if (!groupCallContainerEl) return;
+            ['pointerdown', 'pointermove', 'touchstart', 'keydown'].forEach(eventName => {
+                groupCallContainerEl.addEventListener(eventName, handleUserInteraction, { passive: true });
+            });
+            document.addEventListener('pointermove', handleUserInteraction, { passive: true });
+            document.addEventListener('touchstart', handleUserInteraction, { passive: true });
+            document.addEventListener('visibilitychange', handleVisibilityChange);
+            window.addEventListener('pagehide', releaseWakeLock);
+        }
+
+        function handleUserInteraction() {
+            showControls();
+            if (wakeLockSupported) {
+                requestWakeLock();
+                wakeLockRequested = true;
+            }
+            if (menuOpen) {
+                closeMoreMenu();
+            }
+        }
+
+        async function requestWakeLock() {
+            if (!wakeLockSupported || callEnded) return;
+            try {
+                if (wakeLock) {
+                    await wakeLock.release();
+                }
+                wakeLock = await navigator.wakeLock.request('screen');
+                wakeLock.addEventListener('release', () => {
+                    wakeLock = null;
+                });
+            } catch (error) {
+                logger.warn('Wake lock request failed', error);
+            }
+        }
+
+        async function releaseWakeLock() {
+            if (wakeLock) {
+                try {
+                    await wakeLock.release();
+                } catch (error) {
+                    logger.warn('Wake lock release failed', error);
+                }
+                wakeLock = null;
+            }
+        }
+
+        function handleVisibilityChange() {
+            if (document.visibilityState === 'visible') {
+                restartAutoHideTimer();
+                if (wakeLockRequested) {
+                    requestWakeLock();
+                }
+            } else {
+                releaseWakeLock();
+            }
+        }
+
+        function toggleMoreMenu() {
+            if (!moreMenu) return;
+            menuOpen = !menuOpen;
+            if (menuOpen) {
+                moreMenu.classList.add('open');
+                stopAutoHideTimer();
+                showControls(true);
+            } else {
+                moreMenu.classList.remove('open');
+                restartAutoHideTimer();
+            }
+        }
+
+        function closeMoreMenu() {
+            if (!moreMenu || !menuOpen) return;
+            menuOpen = false;
+            moreMenu.classList.remove('open');
+            restartAutoHideTimer();
+        }
+
+        function initializeCallExperience() {
+            setupInteractionListeners();
+            showControls(true);
+            if (wakeLockSupported) {
+                requestWakeLock();
+            }
+        }
+
+        moreOptionsBtn?.addEventListener('click', (event) => {
+            event.stopPropagation();
+            toggleMoreMenu();
+        });
+
+        moreMenu?.addEventListener('click', (event) => {
+            if (!(event.target instanceof HTMLButtonElement)) {
+                return;
+            }
+            const action = event.target.dataset.action;
+            switch (action) {
+                case 'toggle-mic':
+                    toggleMicBtn?.click();
+                    break;
+                case 'toggle-camera':
+                    toggleCameraBtn?.click();
+                    break;
+                case 'share-screen':
+                    shareScreenBtn?.click();
+                    break;
+                case 'leave':
+                    leaveBtn?.click();
+                    break;
+            }
+            closeMoreMenu();
+        });
+
+        document.addEventListener('click', (event) => {
+            if (!menuOpen) return;
+            if (event.target === moreOptionsBtn) return;
+            if (moreMenu && !moreMenu.contains(event.target)) {
+                closeMoreMenu();
+            }
+        });
+
+        document.addEventListener('keydown', (event) => {
+            if (event.key === 'Escape') {
+                closeMoreMenu();
+            }
+        });
+
+        // Initialize Socket.IO
+        function initializeSocket() {
+            const socketURL = window.location.origin;
+            socket = io(socketURL, {
+                path: '/socket.io/',
+                transports: ['websocket', 'polling']
+            });
+
+            socket.on('connect', () => {
+                logger.log('✅ Connected to SFU server');
+                if (connectionStatusEl) {
+                    connectionStatusEl.textContent = 'Connected';
+                }
+                showControls(true);
+            });
+
+            socket.on('disconnect', () => {
+                logger.warn('⚠️ Disconnected from SFU server');
+                if (connectionStatusEl) {
+                    connectionStatusEl.textContent = 'Disconnected';
+                }
+                showControls(true);
+            });
+
+            // SFU events
+            socket.on('user-joined', ({ userID, userName }) => {
+                logger.log(`👤 User joined: ${userName}`);
+                addParticipant(userID, userName);
+            });
+
+            socket.on('user-left', ({ userID }) => {
+                logger.log(`👋 User left: ${userID}`);
+                removeParticipant(userID);
+            });
+
+            socket.on('stream-data', ({ userID, stream }) => {
+                logger.log(`📺 Received stream from: ${userID}`);
+                updateParticipantStream(userID, stream);
+            });
+
+            return socket;
+        }
+
+        // Settings Screen
+        async function initializeSettings() {
+            try {
+                const stream = await navigator.mediaDevices.getUserMedia({
+                    video: true,
+                    audio: true
+                });
+
+                document.getElementById('previewVideo').srcObject = stream;
+                localStream = stream;
+
+                logger.log('✅ Preview stream ready');
+            } catch (error) {
+                logger.error('❌ Failed to get media:', error);
+                alert('Could not access camera/microphone');
+            }
+        }
+
+        // Join Call
+        document.getElementById('joinButton').addEventListener('click', async () => {
+            myName = document.getElementById('nameInput').value.trim() || 'Guest';
+            const cameraEnabled = document.getElementById('cameraToggle').checked;
+            const micEnabled = document.getElementById('micToggle').checked;
+
+            // Apply settings
+            if (!cameraEnabled) {
+                localStream.getVideoTracks().forEach(track => track.enabled = false);
+            }
+            if (!micEnabled) {
+                localStream.getAudioTracks().forEach(track => track.enabled = false);
+            }
+
+            // Hide settings, show call
+            document.getElementById('settingsScreen').classList.add('hidden');
+            document.getElementById('groupCallContainer').classList.remove('hidden');
+            initializeCallExperience();
+
+            // Generate user ID
+            myUserID = 'user_' + Date.now() + '_' + Math.random().toString(36).substr(2, 9);
+
+            // Join SFU room
+            socket.emit('join-sfu', { roomID, userID: myUserID, userName: myName });
+
+            // Add self to grid
+            addLocalParticipant();
+
+            // Initialize Notetaker
+            await initializeNotetaker();
+
+            logger.log('✅ Joined call:', { roomID, userID: myUserID, name: myName });
+        });
+
+        // Add local participant to grid
+        function addLocalParticipant() {
+            const grid = document.getElementById('participantsGrid');
+            const tile = document.createElement('div');
+            tile.className = 'participant-tile local';
+            tile.id = `participant-${myUserID}`;
+            tile.innerHTML = `
+                <video autoplay muted playsinline></video>
+                <div class="speaking-indicator">🎤 Speaking</div>
+                <div class="participant-name">${myName} (You)</div>
+            `;
+
+            const video = tile.querySelector('video');
+            video.srcObject = localStream;
+
+            grid.appendChild(tile);
+            updateGridLayout();
+        }
+
+        // Add remote participant
+        function addParticipant(userID, userName) {
+            if (participants.has(userID)) return;
+
+            const grid = document.getElementById('participantsGrid');
+            const tile = document.createElement('div');
+            tile.className = 'participant-tile';
+            tile.id = `participant-${userID}`;
+            tile.innerHTML = `
+                <video autoplay playsinline></video>
+                <div class="speaking-indicator">🎤 Speaking</div>
+                <div class="participant-name">${userName}</div>
+            `;
+
+            grid.appendChild(tile);
+            participants.set(userID, { userName, tile });
+            updateGridLayout();
+
+            // Add to notetaker
+            if (notetaker) {
+                notetaker.addParticipant(userID, userName, null, false);
+            }
+        }
+
+        // Remove participant
+        function removeParticipant(userID) {
+            const participant = participants.get(userID);
+            if (!participant) return;
+
+            participant.tile.remove();
+            participants.delete(userID);
+            updateGridLayout();
+
+            // Remove from notetaker
+            if (notetaker) {
+                notetaker.removeParticipant(userID);
+            }
+        }
+
+        // Update participant stream
+        function updateParticipantStream(userID, stream) {
+            const participant = participants.get(userID);
+            if (!participant) return;
+
+            const video = participant.tile.querySelector('video');
+            video.srcObject = stream;
+
+            // Add to notetaker
+            if (notetaker) {
+                notetaker.participantSelector.updateParticipantStream(userID, stream);
+            }
+        }
+
+        // Update grid layout
+        function updateGridLayout() {
+            const grid = document.getElementById('participantsGrid');
+            const count = grid.children.length;
+            grid.setAttribute('data-count', count);
+        }
+
+        // Initialize Notetaker
+        async function initializeNotetaker() {
+            const isHost = true; // In group calls, everyone can be a notetaker
+
+            notetaker = createEnhancedNotetaker(roomID, isHost, true); // true = group call
+            await notetaker.initialize();
+
+            // Add local stream
+            await notetaker.addAudioStream(localStream, myUserID, myName);
+            notetaker.addParticipant(myUserID, myName, localStream, true);
+
+            logger.log('✅ Notetaker initialized');
+        }
+
+        // Control Buttons
+        toggleMicBtn?.addEventListener('click', () => {
+            if (!localStream) return;
+            showControls(true);
+            const audioTrack = localStream.getAudioTracks()[0];
+            audioTrack.enabled = !audioTrack.enabled;
+            toggleMicBtn.classList.toggle('active', !audioTrack.enabled);
+        });
+
+        toggleCameraBtn?.addEventListener('click', () => {
+            if (!localStream) return;
+            showControls(true);
+            const videoTrack = localStream.getVideoTracks()[0];
+            videoTrack.enabled = !videoTrack.enabled;
+            toggleCameraBtn.classList.toggle('active', !videoTrack.enabled);
+        });
+
+        leaveBtn?.addEventListener('click', () => {
+            if (confirm('Leave call?')) {
+                callEnded = true;
+                stopAutoHideTimer();
+                releaseWakeLock();
+                window.location.href = '/';
+            }
+        });
+
+        // Initialize
+        initializeSocket();
+        initializeSettings();
+
+        // Cleanup
+        window.addEventListener('beforeunload', async () => {
+            callEnded = true;
+            stopAutoHideTimer();
+            if (notetaker) {
+                await notetaker.cleanup();
+            }
+            if (localStream) {
+                localStream.getTracks().forEach(track => track.stop());
+            }
+            releaseWakeLock();
+        });
+    </script>
+
+    <!-- Socket.IO -->
+    <script src="/socket.io/socket.io.js"></script>
+</body>
+</html>
