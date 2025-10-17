@@ -691,6 +691,7 @@ class ProfessionalUIController {
 
             this.hideLoading();
             this.showCallUI();
+            this.initializeAINotetaker();
             this.initializeEngagementFeatures();
 
             console.log('[UI Controller] ✅ Joined call successfully');
@@ -1746,6 +1747,78 @@ class ProfessionalUIController {
         // Show AI Notetaker trigger button
         if (this.aiNotetakerTrigger) {
             this.aiNotetakerTrigger.style.display = 'flex';
+        }
+    }
+
+    /**
+     * Initialize AI Notetaker
+     */
+    initializeAINotetaker() {
+        console.log('[UI Controller] Initializing AI Notetaker');
+
+        if (typeof ProfessionalNotetaker === 'undefined') {
+            console.warn('[UI Controller] ProfessionalNotetaker class not loaded');
+            return;
+        }
+
+        try {
+            // Initialize notetaker instance
+            this.professionalNotetaker = new ProfessionalNotetaker(
+                this.sdk,
+                this.roomCode || this.sdk?.hmsRoomId
+            );
+
+            // Bind button handlers
+            if (this.notetakerStartBtn) {
+                this.notetakerStartBtn.addEventListener('click', async () => {
+                    await this.professionalNotetaker.startRecording();
+                    this.updateNotetakerUI('recording');
+                });
+            }
+
+            if (this.notetakerPauseBtn) {
+                this.notetakerPauseBtn.addEventListener('click', async () => {
+                    await this.professionalNotetaker.pauseRecording();
+                    this.updateNotetakerUI('paused');
+                });
+            }
+
+            if (this.notetakerStopBtn) {
+                this.notetakerStopBtn.addEventListener('click', async () => {
+                    await this.professionalNotetaker.stopRecording();
+                    this.updateNotetakerUI('stopped');
+                });
+            }
+
+            console.log('[UI Controller] ✅ AI Notetaker initialized');
+        } catch (error) {
+            console.error('[UI Controller] ❌ Failed to initialize AI Notetaker:', error);
+        }
+    }
+
+    /**
+     * Update Notetaker UI based on state
+     */
+    updateNotetakerUI(state) {
+        if (state === 'recording') {
+            if (this.notetakerStartBtn) this.notetakerStartBtn.style.display = 'none';
+            if (this.notetakerPauseBtn) this.notetakerPauseBtn.style.display = 'flex';
+            if (this.notetakerStopBtn) this.notetakerStopBtn.style.display = 'flex';
+            if (this.notetakerStatusEl) this.notetakerStatusEl.textContent = 'Recording...';
+            if (this.notetakerTimerEl) this.notetakerTimerEl.style.display = 'block';
+            if (this.aiNotetakerTrigger) this.aiNotetakerTrigger.classList.add('recording');
+        } else if (state === 'paused') {
+            if (this.notetakerStatusEl) this.notetakerStatusEl.textContent = 'Paused';
+        } else if (state === 'stopped') {
+            if (this.notetakerStartBtn) this.notetakerStartBtn.style.display = 'flex';
+            if (this.notetakerPauseBtn) this.notetakerPauseBtn.style.display = 'none';
+            if (this.notetakerStopBtn) this.notetakerStopBtn.style.display = 'none';
+            if (this.notetakerStatusEl) this.notetakerStatusEl.textContent = 'Ready to record';
+            if (this.notetakerTimerEl) {
+                this.notetakerTimerEl.style.display = 'none';
+                this.notetakerTimerEl.textContent = '00:00';
+            }
+            if (this.aiNotetakerTrigger) this.aiNotetakerTrigger.classList.remove('recording');
         }
     }
 
