@@ -426,43 +426,51 @@ class ProfessionalMeetingSDK {
      * Toggle local audio
      */
     async toggleAudio() {
-        if (!this.hmsActions || !this.hmsStore) {
-            console.error('[HMS SDK] toggleAudio - HMS not ready');
+        console.log('[HMS SDK] toggleAudio called');
+
+        if (!this.hmsActions) {
+            console.error('[HMS SDK] hmsActions not available');
+            return false;
+        }
+
+        if (!this.hmsStore) {
+            console.error('[HMS SDK] hmsStore not available');
             return false;
         }
 
         try {
-            const state = this.hmsStore.getState();
-            const peer = state.localPeer;
-            const currentlyEnabled = peer?.audioEnabled ?? false;
-            const targetState = !currentlyEnabled;
+            // Get current peer state
+            const peer = this.hmsStore.getState((state) => state.localPeer);
 
-            console.log('[HMS SDK] Audio toggle:', {
-                current: currentlyEnabled,
-                target: targetState,
-                hasTrack: !!peer?.audioTrack
-            });
-
-            if (targetState) {
-                // ENABLE audio
-                await this.hmsActions.setLocalAudioEnabled(true);
-            } else {
-                // DISABLE audio
-                await this.hmsActions.setLocalAudioEnabled(false);
+            if (!peer) {
+                console.error('[HMS SDK] Local peer not found');
+                return false;
             }
 
-            // Wait for state update
-            await new Promise(resolve => setTimeout(resolve, 200));
+            const isCurrentlyEnabled = peer.audioEnabled === true;
+            const newState = !isCurrentlyEnabled;
 
-            const finalState = this.hmsStore.getState();
-            const finalPeer = finalState.localPeer;
-            const actualState = finalPeer?.audioEnabled ?? false;
+            console.log('[HMS SDK] Audio state:', {
+                currentEnabled: isCurrentlyEnabled,
+                targetEnabled: newState,
+                hasAudioTrack: !!peer.audioTrack
+            });
 
-            console.log('[HMS SDK] Audio toggle result:', actualState);
-            return actualState;
+            // Toggle using HMS method
+            await this.hmsActions.setLocalAudioEnabled(newState);
+
+            // Give HMS time to update
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            // Check result
+            const updatedPeer = this.hmsStore.getState((state) => state.localPeer);
+            const finalState = updatedPeer?.audioEnabled === true;
+
+            console.log('[HMS SDK] Audio toggled to:', finalState);
+            return finalState;
 
         } catch (error) {
-            console.error('[HMS SDK] Audio toggle error:', error);
+            console.error('[HMS SDK] toggleAudio failed:', error);
             return false;
         }
     }
@@ -471,43 +479,51 @@ class ProfessionalMeetingSDK {
      * Toggle local video
      */
     async toggleVideo() {
-        if (!this.hmsActions || !this.hmsStore) {
-            console.error('[HMS SDK] toggleVideo - HMS not ready');
+        console.log('[HMS SDK] toggleVideo called');
+
+        if (!this.hmsActions) {
+            console.error('[HMS SDK] hmsActions not available');
+            return false;
+        }
+
+        if (!this.hmsStore) {
+            console.error('[HMS SDK] hmsStore not available');
             return false;
         }
 
         try {
-            const state = this.hmsStore.getState();
-            const peer = state.localPeer;
-            const currentlyEnabled = peer?.videoEnabled ?? false;
-            const targetState = !currentlyEnabled;
+            // Get current peer state
+            const peer = this.hmsStore.getState((state) => state.localPeer);
 
-            console.log('[HMS SDK] Video toggle:', {
-                current: currentlyEnabled,
-                target: targetState,
-                hasTrack: !!peer?.videoTrack
-            });
-
-            if (targetState) {
-                // ENABLE video
-                await this.hmsActions.setLocalVideoEnabled(true);
-            } else {
-                // DISABLE video
-                await this.hmsActions.setLocalVideoEnabled(false);
+            if (!peer) {
+                console.error('[HMS SDK] Local peer not found');
+                return false;
             }
 
-            // Wait for state update
-            await new Promise(resolve => setTimeout(resolve, 200));
+            const isCurrentlyEnabled = peer.videoEnabled === true;
+            const newState = !isCurrentlyEnabled;
 
-            const finalState = this.hmsStore.getState();
-            const finalPeer = finalState.localPeer;
-            const actualState = finalPeer?.videoEnabled ?? false;
+            console.log('[HMS SDK] Video state:', {
+                currentEnabled: isCurrentlyEnabled,
+                targetEnabled: newState,
+                hasVideoTrack: !!peer.videoTrack
+            });
 
-            console.log('[HMS SDK] Video toggle result:', actualState);
-            return actualState;
+            // Toggle using HMS method
+            await this.hmsActions.setLocalVideoEnabled(newState);
+
+            // Give HMS time to update
+            await new Promise(resolve => setTimeout(resolve, 500));
+
+            // Check result
+            const updatedPeer = this.hmsStore.getState((state) => state.localPeer);
+            const finalState = updatedPeer?.videoEnabled === true;
+
+            console.log('[HMS SDK] Video toggled to:', finalState);
+            return finalState;
 
         } catch (error) {
-            console.error('[HMS SDK] Video toggle error:', error);
+            console.error('[HMS SDK] toggleVideo failed:', error);
             return false;
         }
     }
