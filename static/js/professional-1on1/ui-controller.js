@@ -1065,7 +1065,7 @@ class ProfessionalUIController {
             return;
         }
 
-        // Mic toggle - simplified and working
+        // Mic toggle - 100ms SDK official pattern
         this.micBtn?.addEventListener('click', async () => {
             if (!this.sdk || !this.sdk.hmsActions || !this.sdk.hmsStore) {
                 console.error('[UI] SDK not ready');
@@ -1073,37 +1073,33 @@ class ProfessionalUIController {
             }
 
             if (this.micBtn.disabled) return;
-
             this.micBtn.disabled = true;
 
             try {
-                // Get current state directly from store
-                const currentlyEnabled = this.sdk.hmsStore.getState((state) => {
-                    return state.localPeer?.audioEnabled === true;
-                });
+                // Use 100ms selector pattern
+                const currentAudioEnabled = this.sdk.hmsStore.getState(
+                    this.sdk.hmsStore.getState.bind(this.sdk.hmsStore),
+                    state => state.localPeer?.audioEnabled
+                );
 
-                console.log('[UI] Mic currently:', currentlyEnabled);
+                console.log('[UI] Current audio state:', currentAudioEnabled);
 
-                // Toggle to opposite
-                const newState = !currentlyEnabled;
-                await this.sdk.hmsActions.setLocalAudioEnabled(newState);
+                // Toggle
+                await this.sdk.hmsActions.setLocalAudioEnabled(!currentAudioEnabled);
 
-                console.log('[UI] Mic toggled to:', newState);
+                console.log('[UI] Audio toggled to:', !currentAudioEnabled);
 
-                // Update UI
-                this.updateMicUI(newState);
+                // Update UI immediately
+                this.updateMicUI(!currentAudioEnabled);
 
             } catch (error) {
-                console.error('[UI] Mic toggle error:', error);
-                alert('Failed to toggle microphone');
+                console.error('[UI] Mic error:', error);
             } finally {
-                setTimeout(() => {
-                    this.micBtn.disabled = false;
-                }, 300);
+                setTimeout(() => { this.micBtn.disabled = false; }, 200);
             }
         });
 
-        // Camera toggle - simplified and working
+        // Camera toggle - 100ms SDK official pattern
         this.cameraBtn?.addEventListener('click', async () => {
             if (!this.sdk || !this.sdk.hmsActions || !this.sdk.hmsStore) {
                 console.error('[UI] SDK not ready');
@@ -1111,33 +1107,29 @@ class ProfessionalUIController {
             }
 
             if (this.cameraBtn.disabled) return;
-
             this.cameraBtn.disabled = true;
 
             try {
-                // Get current state directly from store
-                const currentlyEnabled = this.sdk.hmsStore.getState((state) => {
-                    return state.localPeer?.videoEnabled === true;
-                });
+                // Use 100ms selector pattern
+                const currentVideoEnabled = this.sdk.hmsStore.getState(
+                    this.sdk.hmsStore.getState.bind(this.sdk.hmsStore),
+                    state => state.localPeer?.videoEnabled
+                );
 
-                console.log('[UI] Camera currently:', currentlyEnabled);
+                console.log('[UI] Current video state:', currentVideoEnabled);
 
-                // Toggle to opposite
-                const newState = !currentlyEnabled;
-                await this.sdk.hmsActions.setLocalVideoEnabled(newState);
+                // Toggle
+                await this.sdk.hmsActions.setLocalVideoEnabled(!currentVideoEnabled);
 
-                console.log('[UI] Camera toggled to:', newState);
+                console.log('[UI] Video toggled to:', !currentVideoEnabled);
 
-                // Update UI
-                this.updateCameraUI(newState);
+                // Update UI immediately
+                this.updateCameraUI(!currentVideoEnabled);
 
             } catch (error) {
-                console.error('[UI] Camera toggle error:', error);
-                alert('Failed to toggle camera');
+                console.error('[UI] Camera error:', error);
             } finally {
-                setTimeout(() => {
-                    this.cameraBtn.disabled = false;
-                }, 300);
+                setTimeout(() => { this.cameraBtn.disabled = false; }, 200);
             }
         });
 
@@ -1485,7 +1477,26 @@ class ProfessionalUIController {
             }, selectTracks)
         );
 
-        this.logDebug('Subscribed to HMS store updates');
+        // Subscribe to local audio/video state changes - AUTO UPDATE UI
+        this.storeSubscriptions.push(
+            hmsStore.subscribe((state) => {
+                const audioEnabled = state?.localPeer?.audioEnabled;
+                if (audioEnabled !== undefined) {
+                    this.updateMicUI(audioEnabled);
+                }
+            }, state => state?.localPeer?.audioEnabled)
+        );
+
+        this.storeSubscriptions.push(
+            hmsStore.subscribe((state) => {
+                const videoEnabled = state?.localPeer?.videoEnabled;
+                if (videoEnabled !== undefined) {
+                    this.updateCameraUI(videoEnabled);
+                }
+            }, state => state?.localPeer?.videoEnabled)
+        );
+
+        this.logDebug('Subscribed to HMS store updates + audio/video state');
 
         try {
             const initialPeers = hmsStore.getState(selectPeers) || [];

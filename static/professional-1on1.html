@@ -12,8 +12,7 @@
     <link rel="stylesheet" href="/static/css/professional-1on1-enhanced.css">
     <link rel="stylesheet" href="/static/css/professional-1on1-fixes.css">
     <link rel="stylesheet" href="/static/css/professional-chat-enhanced.css">
-    <link rel="stylesheet" href="/static/css/professional-notetaker-modal.css">
-    <link rel="stylesheet" href="/static/css/professional-mobile-ultra.css">
+    <link rel="stylesheet" href="/static/css/professional-notetaker-new.css">
     <link rel="stylesheet" href="/static/css/professional-mobile-intuitive.css">
 </head>
 <body>
@@ -237,86 +236,53 @@
             <span class="icon">🤖</span>
         </button>
 
-        <!-- AI Notetaker Side Panel -->
-        <div class="notetaker-panel" id="notetakerPanel">
-            <div class="notetaker-panel-header">
-                <div class="notetaker-panel-title">
-                    <div class="notetaker-icon">🤖</div>
-                    <h3 class="notetaker-title">AI Notetaker</h3>
-                </div>
-                <button class="notetaker-close-btn" id="closeNotetakerPanel">✕</button>
+        <!-- AI Notetaker Panel - НОВИЙ ДИЗАЙН -->
+        <div id="notetakerPanel">
+            <!-- Header -->
+            <div class="notetaker-header">
+                <h2 class="notetaker-title">🤖 AI Notetaker</h2>
+                <p class="notetaker-subtitle">Real-time meeting transcription</p>
             </div>
 
-            <div class="notetaker-panel-content">
-                <!-- Status Card -->
-                <div class="notetaker-status-card">
-                    <div class="notetaker-status" id="notetakerStatus">Ready to record</div>
-                    <div class="notetaker-timer" id="notetakerTimer" style="display: none;">00:00</div>
+            <!-- Status Bar -->
+            <div class="notetaker-status-bar">
+                <div class="notetaker-status">
+                    <span class="status-dot" id="notetakerStatusDot"></span>
+                    <span class="status-text" id="notetakerStatus">Ready</span>
                 </div>
+                <div class="notetaker-timer" id="notetakerTimer">0:00</div>
+            </div>
 
-                <!-- Settings -->
-                <div class="notetaker-settings">
-                    <div class="notetaker-settings-title">Settings</div>
-                    <div class="notetaker-setting-item">
-                        <div class="notetaker-setting-label">Live Transcription</div>
-                        <div class="notetaker-toggle active" id="transcriptionToggle"></div>
-                    </div>
-                    <div class="notetaker-setting-item">
-                        <div class="notetaker-setting-label">AI Analysis</div>
-                        <div class="notetaker-toggle active" id="aiAnalysisToggle"></div>
-                    </div>
+            <!-- Controls -->
+            <div class="notetaker-controls">
+                <button class="notetaker-btn start" id="startNotetakerBtn">
+                    ⏺ Start Recording
+                </button>
+                <button class="notetaker-btn pause" id="pauseNotetakerBtn" style="display:none;">
+                    ⏸ Pause
+                </button>
+                <button class="notetaker-btn stop" id="stopNotetakerBtn" style="display:none;">
+                    ⏹ Stop
+                </button>
+            </div>
+
+            <!-- Transcript -->
+            <div class="notetaker-transcript" id="notetakerTranscriptList">
+                <div class="transcript-empty">
+                    <div class="transcript-empty-icon">📝</div>
+                    <div class="transcript-empty-text">Click Start to begin recording</div>
                 </div>
+            </div>
 
-                <!-- Controls -->
-                <div class="notetaker-controls">
-                    <button class="notetaker-btn start" id="startNotetakerBtn">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                            <circle cx="12" cy="12" r="8"/>
-                        </svg>
-                        <span>Start</span>
-                    </button>
-                    <button class="notetaker-btn pause" id="pauseNotetakerBtn" style="display: none;">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                            <rect x="6" y="4" width="4" height="16"/><rect x="14" y="4" width="4" height="16"/>
-                        </svg>
-                        <span>Pause</span>
-                    </button>
-                    <button class="notetaker-btn stop" id="stopNotetakerBtn" style="display: none;">
-                        <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                            <rect x="6" y="6" width="12" height="12"/>
-                        </svg>
-                        <span>Stop</span>
-                    </button>
+            <!-- Stats -->
+            <div class="notetaker-stats">
+                <div class="stat-item">
+                    <span class="stat-value" id="statDuration">0:00</span>
+                    <span class="stat-label">Duration</span>
                 </div>
-
-                <!-- Live Transcript -->
-                <div class="notetaker-transcript">
-                    <div class="notetaker-transcript-title">Live Transcript</div>
-                    <div id="notetakerTranscriptList">
-                        <div class="transcript-empty">
-                            <div class="transcript-empty-icon">📝</div>
-                            <div class="transcript-empty-text">Start recording to see live transcript...</div>
-                        </div>
-                    </div>
-                </div>
-
-                <!-- AI Analysis Results (Hidden initially) -->
-                <div id="aiAnalysisResults" style="display: none;">
-                    <div class="ai-analysis-card">
-                        <div class="ai-analysis-title">
-                            <span>🤖</span>
-                            <span>AI Summary</span>
-                        </div>
-                        <div class="ai-analysis-content" id="aiSummaryContent"></div>
-                    </div>
-
-                    <div class="ai-analysis-card">
-                        <div class="ai-analysis-title">
-                            <span>✅</span>
-                            <span>Action Items</span>
-                        </div>
-                        <div id="aiActionItemsList"></div>
-                    </div>
+                <div class="stat-item">
+                    <span class="stat-value" id="statWords">0</span>
+                    <span class="stat-label">Words</span>
                 </div>
             </div>
         </div>
