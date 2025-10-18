@@ -59,6 +59,15 @@ class ProfessionalUIController {
         this.notetakerPauseBtn = document.getElementById('pauseNotetakerBtn');
         this.notetakerStopBtn = document.getElementById('stopNotetakerBtn');
         this.notetakerTranscriptList = document.getElementById('notetakerTranscriptList');
+        this.transcriptionToggle = document.getElementById('transcriptionToggle');
+        this.aiAnalysisToggle = document.getElementById('aiAnalysisToggle');
+        this.aiAnalysisResults = document.getElementById('aiAnalysisResults');
+        this.aiSummaryContent = document.getElementById('aiSummaryContent');
+        this.aiActionItemsList = document.getElementById('aiActionItemsList');
+
+        // AI Notetaker settings
+        this.transcriptionEnabled = true;
+        this.aiAnalysisEnabled = true;
         this.chatPanel = document.querySelector('.chat-panel');
         this.pollModal = document.getElementById('pollModal');
         this.reactionsPanel = document.getElementById('reactionsPanel');
@@ -1303,6 +1312,19 @@ class ProfessionalUIController {
 
         this.closeNotetakerPanel?.addEventListener('click', () => {
             this.notetakerPanel?.classList.remove('open');
+        });
+
+        // AI Notetaker settings toggles
+        this.transcriptionToggle?.addEventListener('click', () => {
+            this.transcriptionEnabled = !this.transcriptionEnabled;
+            this.transcriptionToggle.classList.toggle('active', this.transcriptionEnabled);
+            console.log('[UI Controller] Transcription:', this.transcriptionEnabled ? 'enabled' : 'disabled');
+        });
+
+        this.aiAnalysisToggle?.addEventListener('click', () => {
+            this.aiAnalysisEnabled = !this.aiAnalysisEnabled;
+            this.aiAnalysisToggle.classList.toggle('active', this.aiAnalysisEnabled);
+            console.log('[UI Controller] AI Analysis:', this.aiAnalysisEnabled ? 'enabled' : 'disabled');
         });
 
         this.setupReactionButtons();

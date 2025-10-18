@@ -13,7 +13,7 @@
     <link rel="stylesheet" href="/static/css/professional-1on1-fixes.css">
     <link rel="stylesheet" href="/static/css/professional-chat-enhanced.css">
     <link rel="stylesheet" href="/static/css/professional-notetaker-modal.css">
-    <link rel="stylesheet" href="/static/css/professional-mobile-native.css">
+    <link rel="stylesheet" href="/static/css/professional-mobile-ultra.css">
 </head>
 <body>
     <!-- Preview Screen -->
@@ -253,6 +253,19 @@
                     <div class="notetaker-timer" id="notetakerTimer" style="display: none;">00:00</div>
                 </div>
 
+                <!-- Settings -->
+                <div class="notetaker-settings">
+                    <div class="notetaker-settings-title">Settings</div>
+                    <div class="notetaker-setting-item">
+                        <div class="notetaker-setting-label">Live Transcription</div>
+                        <div class="notetaker-toggle active" id="transcriptionToggle"></div>
+                    </div>
+                    <div class="notetaker-setting-item">
+                        <div class="notetaker-setting-label">AI Analysis</div>
+                        <div class="notetaker-toggle active" id="aiAnalysisToggle"></div>
+                    </div>
+                </div>
+
                 <!-- Controls -->
                 <div class="notetaker-controls">
                     <button class="notetaker-btn start" id="startNotetakerBtn">
@@ -279,9 +292,29 @@
                 <div class="notetaker-transcript">
                     <div class="notetaker-transcript-title">Live Transcript</div>
                     <div id="notetakerTranscriptList">
-                        <p style="text-align: center; color: rgba(255,255,255,0.4); padding: 20px;">
-                            Start recording to see transcript...
-                        </p>
+                        <div class="transcript-empty">
+                            <div class="transcript-empty-icon">📝</div>
+                            <div class="transcript-empty-text">Start recording to see live transcript...</div>
+                        </div>
+                    </div>
+                </div>
+
+                <!-- AI Analysis Results (Hidden initially) -->
+                <div id="aiAnalysisResults" style="display: none;">
+                    <div class="ai-analysis-card">
+                        <div class="ai-analysis-title">
+                            <span>🤖</span>
+                            <span>AI Summary</span>
+                        </div>
+                        <div class="ai-analysis-content" id="aiSummaryContent"></div>
+                    </div>
+
+                    <div class="ai-analysis-card">
+                        <div class="ai-analysis-title">
+                            <span>✅</span>
+                            <span>Action Items</span>
+                        </div>
+                        <div id="aiActionItemsList"></div>
                     </div>
                 </div>
             </div>
