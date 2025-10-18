@@ -202,11 +202,38 @@ class ProfessionalCall {
             }
         });
 
-        // Subscribe to peers changes - simple selector
-        this.hmsStore.subscribe((peers) => {
-            console.log('[HMS] Peers update:', peers);
-            this.handlePeersUpdate(peers);
-        }, state => Object.values(state.peers || {}));
+        // Subscribe to local peer changes
+        this.hmsStore.subscribe((localPeer) => {
+            if (!localPeer) return;
+            console.log('[HMS] Local peer update:', localPeer);
+
+            // Attach local video track
+            if (localPeer.videoTrack) {
+                this.hmsActions.attachVideo(localPeer.videoTrack, this.localVideo);
+                console.log('[HMS] ✅ Local video attached');
+            } else {
+                console.log('[HMS] No local video track');
+            }
+        }, state => state.localPeer);
+
+        // Subscribe to remote peers changes
+        this.hmsStore.subscribe((remotePeers) => {
+            console.log('[HMS] Remote peers update:', remotePeers);
+
+            remotePeers.forEach(peer => {
+                // Attach remote video track
+                if (peer.videoTrack) {
+                    this.hmsActions.attachVideo(peer.videoTrack, this.remoteVideo);
+                    console.log('[HMS] ✅ Remote video attached for peer:', peer.name);
+                }
+
+                // Attach remote audio track
+                if (peer.audioTrack) {
+                    this.hmsActions.attachVideo(peer.audioTrack, this.remoteVideo);
+                    console.log('[HMS] ✅ Remote audio attached for peer:', peer.name);
+                }
+            });
+        }, state => Object.values(state.peers || {}).filter(p => !p.isLocal));
 
         // Subscribe to local peer audio state
         this.hmsStore.subscribe((enabled) => {
@@ -333,33 +360,6 @@ class ProfessionalCall {
         }
     }
 
-    handlePeersUpdate(peers) {
-        console.log('[App] Handling peers update, count:', peers.length);
-
-        // Find local and remote peers
-        const localPeer = peers.find(p => p.isLocal);
-        const remotePeer = peers.find(p => !p.isLocal);
-
-        // Attach local video - Use HMS SDK attachVideo method
-        if (localPeer?.videoTrack) {
-            console.log('[App] Attaching local video track');
-            this.hmsActions.attachVideo(localPeer.videoTrack.id, this.localVideo);
-        }
-
-        // Attach remote video
-        if (remotePeer?.videoTrack) {
-            console.log('[App] Attaching remote video track');
-            this.hmsActions.attachVideo(remotePeer.videoTrack.id, this.remoteVideo);
-        }
-
-        // Attach remote audio
-        if (remotePeer?.audioTrack) {
-            console.log('[App] Attaching remote audio track');
-            // Audio goes to same video element for remote
-            const audioElement = this.remoteVideo;
-            audioElement.srcObject = new MediaStream([remotePeer.audioTrack]);
-        }
-    }
 
     // Call controls - EXACTLY as per 100ms docs
     async toggleMic() {
