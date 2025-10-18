@@ -1216,6 +1216,7 @@ class ProfessionalUIController {
                 this.screenShareBtn.disabled = false;
             }
         });
+        */
 
         // Chat send with Enter key
         this.chatInput?.addEventListener('keydown', async (e) => {

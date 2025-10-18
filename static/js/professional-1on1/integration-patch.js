@@ -24,6 +24,12 @@
         }, 500);
     }
 
+    // Check if ProfessionalUIController exists
+    if (typeof ProfessionalUIController === 'undefined') {
+        console.error('[INTEGRATION-PATCH] ProfessionalUIController not loaded yet!');
+        return;
+    }
+
     // Store original methods
     const originalInit = ProfessionalUIController.prototype.initializeAsHost;
     const originalInitGuest = ProfessionalUIController.prototype.initializeAsGuest;
