@@ -202,38 +202,34 @@ class ProfessionalCall {
             }
         });
 
-        // Subscribe to local peer changes
-        this.hmsStore.subscribe((localPeer) => {
-            if (!localPeer) return;
-            console.log('[HMS] Local peer update:', localPeer);
+        // Subscribe to ALL peers and render their videos
+        this.hmsStore.subscribe((peers) => {
+            if (!peers || peers.length === 0) return;
 
-            // Attach local video track
-            if (localPeer.videoTrack) {
-                this.hmsActions.attachVideo(localPeer.videoTrack, this.localVideo);
-                console.log('[HMS] ✅ Local video attached');
-            } else {
-                console.log('[HMS] No local video track');
-            }
-        }, state => state.localPeer);
+            console.log('[HMS] Peers update, count:', peers.length);
 
-        // Subscribe to remote peers changes
-        this.hmsStore.subscribe((remotePeers) => {
-            console.log('[HMS] Remote peers update:', remotePeers);
+            peers.forEach(peer => {
+                console.log('[HMS] Peer:', peer.name, 'isLocal:', peer.isLocal, 'hasVideo:', !!peer.videoTrack);
 
-            remotePeers.forEach(peer => {
-                // Attach remote video track
-                if (peer.videoTrack) {
-                    this.hmsActions.attachVideo(peer.videoTrack, this.remoteVideo);
-                    console.log('[HMS] ✅ Remote video attached for peer:', peer.name);
+                // Render local peer video
+                if (peer.isLocal && peer.videoTrack) {
+                    console.log('[HMS] Attaching local video, track ID:', peer.videoTrack);
+                    this.renderVideo(peer.videoTrack, this.localVideo, 'local');
                 }
 
-                // Attach remote audio track
-                if (peer.audioTrack) {
-                    this.hmsActions.attachVideo(peer.audioTrack, this.remoteVideo);
-                    console.log('[HMS] ✅ Remote audio attached for peer:', peer.name);
+                // Render remote peer video
+                if (!peer.isLocal && peer.videoTrack) {
+                    console.log('[HMS] Attaching remote video, track ID:', peer.videoTrack);
+                    this.renderVideo(peer.videoTrack, this.remoteVideo, 'remote');
+                }
+
+                // Attach remote audio
+                if (!peer.isLocal && peer.audioTrack) {
+                    console.log('[HMS] Attaching remote audio');
+                    this.renderVideo(peer.audioTrack, this.remoteVideo, 'remote-audio');
                 }
             });
-        }, state => Object.values(state.peers || {}).filter(p => !p.isLocal));
+        }, state => Object.values(state.peers || {}));
 
         // Subscribe to local peer audio state
         this.hmsStore.subscribe((enabled) => {
@@ -360,6 +356,37 @@ class ProfessionalCall {
         }
     }
 
+
+    renderVideo(trackId, videoElement, label) {
+        if (!trackId || !videoElement) {
+            console.error('[App] Invalid trackId or element for', label);
+            return;
+        }
+
+        console.log(`[App] Rendering ${label} video, track:`, trackId);
+
+        // Subscribe to track changes - attach when enabled, detach when disabled
+        this.hmsStore.subscribe((track) => {
+            if (!track) {
+                console.log(`[App] No track for ${label}`);
+                return;
+            }
+
+            console.log(`[App] Track update for ${label}:`, track.enabled ? 'enabled' : 'disabled');
+
+            if (track.enabled) {
+                this.hmsActions.attachVideo(track.id, videoElement);
+                console.log(`[App] ✅ Attached ${label} video, track ID:`, track.id);
+            } else {
+                this.hmsActions.detachVideo(track.id, videoElement);
+                console.log(`[App] Detached ${label} video`);
+            }
+        }, state => {
+            // Find track by ID in state
+            const allTracks = state.tracks || {};
+            return allTracks[trackId];
+        });
+    }
 
     // Call controls - EXACTLY as per 100ms docs
     async toggleMic() {
