@@ -8,6 +8,9 @@ class EnhancedProfessionalChat {
         this.hmsSDK = hmsSDK;
         this.messages = [];
         this.replyingTo = null;
+        this.activePolls = new Map(); // pollId -> poll data
+        this.pollVotes = new Map(); // pollId -> user's vote(s)
+        this.userVotedPolls = new Set(); // Track which polls user voted in
 
         // UI Elements
         this.chatPanel = document.getElementById('chatPanel');

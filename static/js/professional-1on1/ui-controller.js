@@ -127,6 +127,10 @@ class ProfessionalUIController {
         this.controlsAutoHideTimer = null;
         this.engagementInitialized = false;
         this.wakeLock = null;
+        this.lastInteractionTime = 0;
+        this.interactionThrottle = 200; // Throttle to prevent jittering
+        this.audioToggleInProgress = false;
+        this.videoToggleInProgress = false;
         this.boundHandleInteraction = this.handleUserInteraction.bind(this);
         this.boundHandleStageTap = this.handleStageTap.bind(this);
         this.boundFullscreenChange = this.onFullscreenChange.bind(this);
@@ -810,6 +814,14 @@ class ProfessionalUIController {
     }
 
     handleUserInteraction() {
+        // Throttle to prevent jittering from mousemove spam
+        const now = Date.now();
+        if (now - this.lastInteractionTime < this.interactionThrottle) {
+            // Still restart timer even when throttled
+            this.restartControlsAutoHideTimer();
+            return;
+        }
+        this.lastInteractionTime = now;
         this.showControls();
     }
 
@@ -1053,18 +1065,26 @@ class ProfessionalUIController {
             return;
         }
 
-        // Mic toggle
+        // Mic toggle with race condition protection
         this.micBtn?.addEventListener('click', async () => {
             if (!this.sdk) {
                 this.logWarn('Mic toggle ignored - SDK not initialized');
                 return;
             }
-            if (this.micBtn.disabled) return;
 
+            // Prevent race conditions from rapid clicks
+            if (this.audioToggleInProgress || this.micBtn.disabled) {
+                this.logDebug('Mic toggle ignored - already in progress');
+                return;
+            }
+
+            this.audioToggleInProgress = true;
             this.micBtn.disabled = true;
+
             try {
                 this.logDebug('Mic toggle requested');
                 const enabled = await this.sdk.toggleAudio();
+
                 if (typeof enabled === 'boolean') {
                     this.micBtn.classList.toggle('active', enabled);
                     this.micBtn.dataset.active = enabled ? 'true' : 'false';
@@ -1077,29 +1097,39 @@ class ProfessionalUIController {
                         iconOff.style.display = enabled ? 'none' : 'block';
                     }
 
-                    this.logDebug('Mic state', enabled);
+                    this.logDebug('Mic state updated:', enabled);
                 } else {
-                    this.logWarn('Mic toggle skipped - track not ready');
+                    this.logWarn('Mic toggle returned invalid state');
                 }
             } catch (error) {
-                this.logError('Mic toggle failed', error);
+                this.logError('Mic toggle failed:', error);
             } finally {
+                // Always re-enable button and clear flag
                 this.micBtn.disabled = false;
+                this.audioToggleInProgress = false;
             }
         });
 
-        // Camera toggle
+        // Camera toggle with race condition protection
         this.cameraBtn?.addEventListener('click', async () => {
             if (!this.sdk) {
                 this.logWarn('Camera toggle ignored - SDK not initialized');
                 return;
             }
-            if (this.cameraBtn.disabled) return;
 
+            // Prevent race conditions from rapid clicks
+            if (this.videoToggleInProgress || this.cameraBtn.disabled) {
+                this.logDebug('Camera toggle ignored - already in progress');
+                return;
+            }
+
+            this.videoToggleInProgress = true;
             this.cameraBtn.disabled = true;
+
             try {
                 this.logDebug('Camera toggle requested');
                 const enabled = await this.sdk.toggleVideo();
+
                 if (typeof enabled === 'boolean') {
                     this.cameraBtn.classList.toggle('active', enabled);
                     this.cameraBtn.dataset.active = enabled ? 'true' : 'false';
@@ -1112,14 +1142,16 @@ class ProfessionalUIController {
                         iconOff.style.display = enabled ? 'none' : 'block';
                     }
 
-                    this.logDebug('Camera state', enabled);
+                    this.logDebug('Camera state updated:', enabled);
                 } else {
-                    this.logWarn('Camera toggle skipped - track not ready');
+                    this.logWarn('Camera toggle returned invalid state');
                 }
             } catch (error) {
-                this.logError('Camera toggle failed', error);
+                this.logError('Camera toggle failed:', error);
             } finally {
+                // Always re-enable button and clear flag
                 this.cameraBtn.disabled = false;
+                this.videoToggleInProgress = false;
             }
         });
 

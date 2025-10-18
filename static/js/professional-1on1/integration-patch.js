@@ -52,6 +52,15 @@
                     this.enhancedChat = new EnhancedProfessionalChat(this.sdk);
                     console.log('[INTEGRATION] ✅ Enhanced Chat initialized');
 
+                    // Wire up poll creation button
+                    const createPollBtn = document.getElementById('createPollBtn');
+                    if (createPollBtn) {
+                        createPollBtn.addEventListener('click', () => {
+                            this.enhancedChat.createPoll();
+                        });
+                        console.log('[INTEGRATION] ✅ Poll creation button wired');
+                    }
+
                     // Listen to HMS notification events for messages
                     if (this.sdk.hmsNotifications) {
                         this.sdk.hmsNotifications.onNotification((notification) => {
@@ -111,6 +120,15 @@
                 if (typeof EnhancedProfessionalChat !== 'undefined') {
                     this.enhancedChat = new EnhancedProfessionalChat(this.sdk);
                     console.log('[INTEGRATION] ✅ Enhanced Chat initialized');
+
+                    // Wire up poll creation button (guest mode)
+                    const createPollBtn = document.getElementById('createPollBtn');
+                    if (createPollBtn) {
+                        createPollBtn.addEventListener('click', () => {
+                            this.enhancedChat.createPoll();
+                        });
+                        console.log('[INTEGRATION] ✅ Poll creation button wired (guest)');
+                    }
 
                     // Listen to HMS notification events for messages
                     if (this.sdk.hmsNotifications) {
