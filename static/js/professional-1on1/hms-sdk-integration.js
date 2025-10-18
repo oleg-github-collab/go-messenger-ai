@@ -423,96 +423,60 @@ class ProfessionalMeetingSDK {
     }
 
     /**
-     * Toggle audio - 100ms best practices
-     * Uses selectIsLocalAudioEnabled selector for reliable state management
+     * Toggle audio - 100ms SDK official pattern
      */
     async toggleAudio() {
-        console.log('[HMS SDK] toggleAudio called');
-
         if (!this.hmsActions || !this.hmsStore) {
-            console.error('[HMS SDK] HMS not ready - actions or store missing');
+            console.error('[HMS SDK] Not initialized');
             return false;
         }
 
         try {
-            // Use 100ms selector for current state (best practice)
-            const selectIsLocalAudioEnabled = (state) => {
-                return state.localPeer?.audioEnabled ?? false;
-            };
-
-            const currentlyEnabled = this.hmsStore.getState(selectIsLocalAudioEnabled);
-            const targetState = !currentlyEnabled;
-
-            console.log('[HMS SDK] Audio toggle:', {
-                current: currentlyEnabled,
-                target: targetState
+            // Get current state using EXACT pattern from 100ms docs
+            const enabled = this.hmsStore.getState((state) => {
+                return state.localPeer && state.localPeer.audioEnabled === true;
             });
 
-            // Use 100ms API to toggle
-            await this.hmsActions.setLocalAudioEnabled(targetState);
+            console.log('[HMS SDK] Audio current:', enabled, '-> toggle to:', !enabled);
 
-            // Wait for state to propagate through HMS store
-            await new Promise(resolve => setTimeout(resolve, 100));
+            // Toggle using official API
+            await this.hmsActions.setLocalAudioEnabled(!enabled);
 
-            // Verify using selector
-            const finalState = this.hmsStore.getState(selectIsLocalAudioEnabled);
-
-            console.log('[HMS SDK] Audio toggled successfully:', finalState);
-            return finalState;
+            // Return new state (no delay needed - reactive store)
+            return !enabled;
 
         } catch (error) {
-            console.error('[HMS SDK] Audio toggle error:', error);
-
-            // Fallback: return current state
-            const selectIsLocalAudioEnabled = (state) => state.localPeer?.audioEnabled ?? false;
-            return this.hmsStore.getState(selectIsLocalAudioEnabled);
+            console.error('[HMS SDK] toggleAudio failed:', error);
+            return false;
         }
     }
 
     /**
-     * Toggle video - 100ms best practices
-     * Uses selectIsLocalVideoEnabled selector for reliable state management
+     * Toggle video - 100ms SDK official pattern
      */
     async toggleVideo() {
-        console.log('[HMS SDK] toggleVideo called');
-
         if (!this.hmsActions || !this.hmsStore) {
-            console.error('[HMS SDK] HMS not ready - actions or store missing');
+            console.error('[HMS SDK] Not initialized');
             return false;
         }
 
         try {
-            // Use 100ms selector for current state (best practice)
-            const selectIsLocalVideoEnabled = (state) => {
-                return state.localPeer?.videoEnabled ?? false;
-            };
-
-            const currentlyEnabled = this.hmsStore.getState(selectIsLocalVideoEnabled);
-            const targetState = !currentlyEnabled;
-
-            console.log('[HMS SDK] Video toggle:', {
-                current: currentlyEnabled,
-                target: targetState
+            // Get current state using EXACT pattern from 100ms docs
+            const enabled = this.hmsStore.getState((state) => {
+                return state.localPeer && state.localPeer.videoEnabled === true;
             });
 
-            // Use 100ms API to toggle
-            await this.hmsActions.setLocalVideoEnabled(targetState);
+            console.log('[HMS SDK] Video current:', enabled, '-> toggle to:', !enabled);
 
-            // Wait for state to propagate through HMS store
-            await new Promise(resolve => setTimeout(resolve, 100));
+            // Toggle using official API
+            await this.hmsActions.setLocalVideoEnabled(!enabled);
 
-            // Verify using selector
-            const finalState = this.hmsStore.getState(selectIsLocalVideoEnabled);
-
-            console.log('[HMS SDK] Video toggled successfully:', finalState);
-            return finalState;
+            // Return new state (no delay needed - reactive store)
+            return !enabled;
 
         } catch (error) {
-            console.error('[HMS SDK] Video toggle error:', error);
-
-            // Fallback: return current state
-            const selectIsLocalVideoEnabled = (state) => state.localPeer?.videoEnabled ?? false;
-            return this.hmsStore.getState(selectIsLocalVideoEnabled);
+            console.error('[HMS SDK] toggleVideo failed:', error);
+            return false;
         }
     }
 
