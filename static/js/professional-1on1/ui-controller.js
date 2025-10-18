@@ -1060,16 +1060,23 @@ class ProfessionalUIController {
      * Initialize NEW Call Controls
      */
     initializeCallControls() {
+        console.log('[UI] ========== INITIALIZING CALL CONTROLS ==========');
+        console.log('[UI] ProfessionalCallControls class:', typeof ProfessionalCallControls);
+        console.log('[UI] this.sdk:', !!this.sdk);
+        console.log('[UI] this.sdk.hmsActions:', !!this.sdk?.hmsActions);
+        console.log('[UI] this.sdk.hmsStore:', !!this.sdk?.hmsStore);
+
         if (typeof ProfessionalCallControls === 'undefined') {
-            console.error('[UI] Call Controls class not loaded');
+            console.error('[UI] ❌ Call Controls class NOT LOADED!');
             return;
         }
 
         try {
             this.callControls = new ProfessionalCallControls(this, this.sdk);
-            console.log('[UI] ✅ Call Controls initialized');
+            console.log('[UI] ✅ Call Controls initialized successfully');
         } catch (error) {
-            console.error('[UI] ❌ Call Controls error:', error);
+            console.error('[UI] ❌ Call Controls initialization FAILED:', error);
+            console.error('[UI] Error stack:', error.stack);
         }
     }
 

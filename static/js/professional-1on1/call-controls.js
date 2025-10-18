@@ -5,6 +5,11 @@
 
 class ProfessionalCallControls {
     constructor(uiController, hmsSDK) {
+        console.log('[CALL CONTROLS] ========== INITIALIZING ==========');
+        console.log('[CALL CONTROLS] SDK present:', !!hmsSDK);
+        console.log('[CALL CONTROLS] SDK.hmsActions:', !!hmsSDK?.hmsActions);
+        console.log('[CALL CONTROLS] SDK.hmsStore:', !!hmsSDK?.hmsStore);
+
         this.ui = uiController;
         this.sdk = hmsSDK;
 
@@ -16,11 +21,16 @@ class ProfessionalCallControls {
         this.raiseHandBtn = document.getElementById('raiseHandBtn');
         this.endCallBtn = document.getElementById('endCallBtn');
 
+        console.log('[CALL CONTROLS] Button elements:');
+        console.log('  micBtn:', !!this.micBtn);
+        console.log('  cameraBtn:', !!this.cameraBtn);
+        console.log('  endCallBtn:', !!this.endCallBtn);
+
         // State
         this.isScreenSharing = false;
 
         this.init();
-        console.log('[CALL CONTROLS] Initialized');
+        console.log('[CALL CONTROLS] ========== READY ==========');
     }
 
     init() {
