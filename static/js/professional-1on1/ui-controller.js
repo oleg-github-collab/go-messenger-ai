@@ -672,7 +672,7 @@ class ProfessionalUIController {
             this.showLoading('Activating AI features...');
 
             await this.setupVideoUI();
-            this.setupEventListeners();
+            this.initializeCallControls();
             this.subscribeToRoomUpdates();
             if (this.renderedMessageIds) {
                 this.renderedMessageIds.clear();
@@ -1057,14 +1057,30 @@ class ProfessionalUIController {
     }
 
     /**
-     * Setup event listeners for controls
+     * Initialize NEW Call Controls
      */
-    setupEventListeners() {
-        if (this.controlsBound) {
-            this.logDebug('Controls already initialized, skipping rebinding');
+    initializeCallControls() {
+        if (typeof ProfessionalCallControls === 'undefined') {
+            console.error('[UI] Call Controls class not loaded');
             return;
         }
 
+        try {
+            this.callControls = new ProfessionalCallControls(this, this.sdk);
+            console.log('[UI] ✅ Call Controls initialized');
+        } catch (error) {
+            console.error('[UI] ❌ Call Controls error:', error);
+        }
+    }
+
+    /**
+     * OLD setupEventListeners - REPLACED by ProfessionalCallControls
+     */
+    setupEventListeners() {
+        // Call controls are now handled by ProfessionalCallControls class
+        // Only keeping non-control event listeners here
+
+        /* OLD CONTROL BUTTONS CODE REMOVED - now in call-controls.js:
         // Mic toggle - 100ms SDK official pattern
         this.micBtn?.addEventListener('click', async () => {
             if (!this.sdk || !this.sdk.hmsActions || !this.sdk.hmsStore) {
