@@ -47,18 +47,21 @@ document.addEventListener('DOMContentLoaded', () => {
         const hostName = document.getElementById('hostNameInput').value.trim() || 'Oleh';
         meetingTypeModal.style.display = 'none';
 
-        // Create room using new API
+        // Create room using Professional API
         createMeetingBtn.disabled = true;
         const originalHTML = createMeetingBtn.innerHTML;
         createMeetingBtn.innerHTML = '<span class="btn-icon">⏳</span> Creating AI Room...';
 
         try {
-            const response = await fetch('/api/rooms/create', {
+            const response = await fetch('/api/professional/create-room', {
                 method: 'POST',
                 credentials: 'include',
                 headers: {
                     'Content-Type': 'application/json'
-                }
+                },
+                body: JSON.stringify({
+                    host_name: hostName
+                })
             });
 
             if (response.ok) {
