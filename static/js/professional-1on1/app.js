@@ -75,7 +75,11 @@ class ProfessionalCall {
 
         // Initialize 100ms SDK - EXACTLY as per docs
         try {
-            const { HMSReactiveStore } = await import('https://sdk.100ms.live/beta/hms.js');
+            // SDK loaded via script tag, use global HMSReactiveStore
+            if (typeof HMSReactiveStore === 'undefined') {
+                throw new Error('HMSReactiveStore not loaded');
+            }
+
             const hms = new HMSReactiveStore();
 
             this.hmsActions = hms.getHMSActions();
@@ -85,7 +89,7 @@ class ProfessionalCall {
             console.log('[App] ✅ 100ms SDK initialized');
         } catch (error) {
             console.error('[App] ❌ SDK init failed:', error);
-            alert('Failed to initialize SDK');
+            alert('Failed to initialize SDK: ' + error.message);
             return;
         }
 
@@ -177,11 +181,11 @@ class ProfessionalCall {
             }
         });
 
-        // Subscribe to peers changes - EXACTLY as per docs
+        // Subscribe to peers changes - simple selector
         this.hmsStore.subscribe((peers) => {
             console.log('[HMS] Peers update:', peers);
             this.handlePeersUpdate(peers);
-        }, selectPeers);
+        }, state => Object.values(state.peers || {}));
 
         // Subscribe to local peer audio state
         this.hmsStore.subscribe((enabled) => {
@@ -189,7 +193,7 @@ class ProfessionalCall {
                 this.isAudioMuted = !enabled;
                 this.updateMicUI();
             }
-        }, selectIsLocalAudioEnabled);
+        }, state => state.localPeer?.audioEnabled);
 
         // Subscribe to local peer video state
         this.hmsStore.subscribe((enabled) => {
@@ -197,7 +201,7 @@ class ProfessionalCall {
                 this.isVideoMuted = !enabled;
                 this.updateCameraUI();
             }
-        }, selectIsLocalVideoEnabled);
+        }, state => state.localPeer?.videoEnabled);
 
         // Subscribe to screen share state
         this.hmsStore.subscribe((isSharing) => {
@@ -205,7 +209,7 @@ class ProfessionalCall {
                 this.isScreenSharing = isSharing;
                 this.updateScreenShareUI();
             }
-        }, selectIsLocalScreenShared);
+        }, state => state.localPeer?.auxiliaryTracks?.length > 0);
     }
 
     setupUIListeners() {
@@ -352,7 +356,8 @@ class ProfessionalCall {
         console.log('[App] Toggling mic...');
 
         try {
-            const enabled = this.hmsStore.getState(selectIsLocalAudioEnabled);
+            const state = this.hmsStore.getState();
+            const enabled = state.localPeer?.audioEnabled;
             await this.hmsActions.setLocalAudioEnabled(!enabled);
             console.log('[App] ✅ Mic toggled to:', !enabled);
         } catch (error) {
@@ -364,7 +369,8 @@ class ProfessionalCall {
         console.log('[App] Toggling camera...');
 
         try {
-            const enabled = this.hmsStore.getState(selectIsLocalVideoEnabled);
+            const state = this.hmsStore.getState();
+            const enabled = state.localPeer?.videoEnabled;
             await this.hmsActions.setLocalVideoEnabled(!enabled);
             console.log('[App] ✅ Camera toggled to:', !enabled);
         } catch (error) {
@@ -633,12 +639,6 @@ class AINotetaker {
         return div.innerHTML;
     }
 }
-
-// 100ms Selectors - EXACTLY as per docs
-const selectPeers = (state) => state.peers;
-const selectIsLocalAudioEnabled = (state) => state.localPeer?.audioEnabled;
-const selectIsLocalVideoEnabled = (state) => state.localPeer?.videoEnabled;
-const selectIsLocalScreenShared = (state) => state.localPeer?.auxiliaryTracks?.length > 0;
 
 // Initialize app
 const app = new ProfessionalCall();
