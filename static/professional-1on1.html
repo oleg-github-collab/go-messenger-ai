@@ -2,863 +2,453 @@
 <html lang="en">
 <head>
     <meta charset="UTF-8">
-    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover">
-    <meta name="apple-mobile-web-app-capable" content="yes">
-    <meta name="mobile-web-app-capable" content="yes">
-    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-    <meta name="theme-color" content="#0a0a0f">
-    <title>Professional 1-on-1 - AI Meeting Assistant</title>
-    <link rel="stylesheet" href="/static/css/professional-1on1.css">
-    <link rel="stylesheet" href="/static/css/professional-1on1-enhanced.css">
-    <link rel="stylesheet" href="/static/css/professional-1on1-fixes.css">
-    <link rel="stylesheet" href="/static/css/professional-chat-enhanced.css">
-    <link rel="stylesheet" href="/static/css/professional-notetaker-new.css">
-    <link rel="stylesheet" href="/static/css/professional-mobile-intuitive.css">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Professional Video Call</title>
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+            background: #1a1a1a;
+            color: #fff;
+            overflow: hidden;
+        }
+
+        /* Preview Screen */
+        #preview-screen {
+            display: flex;
+            flex-direction: column;
+            align-items: center;
+            justify-content: center;
+            height: 100vh;
+            background: linear-gradient(135deg, #667eea 0%, #764ba2 100%);
+        }
+
+        #preview-screen.hidden {
+            display: none;
+        }
+
+        .preview-container {
+            background: rgba(0, 0, 0, 0.3);
+            backdrop-filter: blur(10px);
+            border-radius: 16px;
+            padding: 40px;
+            max-width: 500px;
+            width: 90%;
+        }
+
+        .preview-video {
+            width: 100%;
+            height: 300px;
+            background: #000;
+            border-radius: 12px;
+            margin-bottom: 24px;
+            object-fit: cover;
+        }
+
+        .preview-controls {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            margin-bottom: 24px;
+        }
+
+        .preview-btn {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            border: none;
+            background: rgba(255, 255, 255, 0.2);
+            color: #fff;
+            font-size: 24px;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .preview-btn:hover {
+            background: rgba(255, 255, 255, 0.3);
+            transform: scale(1.05);
+        }
+
+        .preview-btn.active {
+            background: #4ade80;
+        }
+
+        .preview-btn.muted {
+            background: #ef4444;
+        }
+
+        .join-btn {
+            width: 100%;
+            padding: 16px;
+            border: none;
+            border-radius: 12px;
+            background: #4ade80;
+            color: #000;
+            font-size: 18px;
+            font-weight: 600;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .join-btn:hover {
+            background: #22c55e;
+            transform: translateY(-2px);
+        }
+
+        /* Call Screen */
+        #call-screen {
+            display: none;
+            height: 100vh;
+            position: relative;
+        }
+
+        #call-screen.active {
+            display: flex;
+            flex-direction: column;
+        }
+
+        /* Video Container */
+        .video-container {
+            flex: 1;
+            position: relative;
+            background: #000;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        #remote-video {
+            width: 100%;
+            height: 100%;
+            object-fit: contain;
+        }
+
+        #local-video {
+            position: absolute;
+            bottom: 20px;
+            right: 20px;
+            width: 200px;
+            height: 150px;
+            border-radius: 12px;
+            object-fit: cover;
+            border: 2px solid #4ade80;
+            box-shadow: 0 4px 12px rgba(0, 0, 0, 0.5);
+        }
+
+        /* Call Controls */
+        .call-controls {
+            display: flex;
+            gap: 16px;
+            justify-content: center;
+            padding: 24px;
+            background: rgba(0, 0, 0, 0.8);
+            backdrop-filter: blur(10px);
+        }
+
+        .control-btn {
+            width: 56px;
+            height: 56px;
+            border-radius: 50%;
+            border: none;
+            background: rgba(255, 255, 255, 0.1);
+            color: #fff;
+            font-size: 24px;
+            cursor: pointer;
+            transition: all 0.2s;
+            display: flex;
+            align-items: center;
+            justify-content: center;
+        }
+
+        .control-btn:hover {
+            background: rgba(255, 255, 255, 0.2);
+            transform: scale(1.05);
+        }
+
+        .control-btn.active {
+            background: #4ade80;
+        }
+
+        .control-btn.muted {
+            background: #ef4444;
+        }
+
+        .control-btn.end-call {
+            background: #ef4444;
+        }
+
+        .control-btn.end-call:hover {
+            background: #dc2626;
+        }
+
+        /* AI Notetaker Panel */
+        .notetaker-trigger {
+            position: absolute;
+            top: 20px;
+            right: 20px;
+            padding: 12px 24px;
+            border: none;
+            border-radius: 8px;
+            background: rgba(0, 0, 0, 0.6);
+            color: #fff;
+            cursor: pointer;
+            font-size: 14px;
+            font-weight: 500;
+            transition: all 0.2s;
+        }
+
+        .notetaker-trigger:hover {
+            background: rgba(0, 0, 0, 0.8);
+        }
+
+        .notetaker-panel {
+            position: absolute;
+            top: 0;
+            right: -400px;
+            width: 400px;
+            height: 100%;
+            background: rgba(0, 0, 0, 0.95);
+            backdrop-filter: blur(20px);
+            transition: right 0.3s;
+            display: flex;
+            flex-direction: column;
+            box-shadow: -4px 0 12px rgba(0, 0, 0, 0.5);
+        }
+
+        .notetaker-panel.open {
+            right: 0;
+        }
+
+        .notetaker-header {
+            padding: 20px;
+            border-bottom: 1px solid rgba(255, 255, 255, 0.1);
+            display: flex;
+            justify-content: space-between;
+            align-items: center;
+        }
+
+        .notetaker-header h3 {
+            font-size: 18px;
+        }
+
+        .close-notetaker {
+            background: none;
+            border: none;
+            color: #fff;
+            font-size: 24px;
+            cursor: pointer;
+            padding: 0;
+            width: 32px;
+            height: 32px;
+        }
+
+        .notetaker-controls {
+            padding: 20px;
+            display: flex;
+            gap: 12px;
+        }
+
+        .notetaker-btn {
+            flex: 1;
+            padding: 12px;
+            border: none;
+            border-radius: 8px;
+            font-size: 14px;
+            font-weight: 500;
+            cursor: pointer;
+            transition: all 0.2s;
+        }
+
+        .notetaker-btn.start {
+            background: #4ade80;
+            color: #000;
+        }
+
+        .notetaker-btn.start:hover {
+            background: #22c55e;
+        }
+
+        .notetaker-btn.pause {
+            background: #fbbf24;
+            color: #000;
+        }
+
+        .notetaker-btn.pause:hover {
+            background: #f59e0b;
+        }
+
+        .notetaker-btn.stop {
+            background: #ef4444;
+            color: #fff;
+        }
+
+        .notetaker-btn.stop:hover {
+            background: #dc2626;
+        }
+
+        .notetaker-btn:disabled {
+            opacity: 0.5;
+            cursor: not-allowed;
+        }
+
+        .notetaker-status {
+            padding: 0 20px 20px;
+            font-size: 14px;
+            color: #9ca3af;
+        }
+
+        .notetaker-status.recording {
+            color: #4ade80;
+        }
+
+        .transcript-container {
+            flex: 1;
+            overflow-y: auto;
+            padding: 20px;
+        }
+
+        .transcript-entry {
+            margin-bottom: 16px;
+            padding: 12px;
+            background: rgba(255, 255, 255, 0.05);
+            border-radius: 8px;
+            border-left: 3px solid #4ade80;
+        }
+
+        .transcript-time {
+            font-size: 12px;
+            color: #9ca3af;
+            margin-bottom: 4px;
+        }
+
+        .transcript-text {
+            font-size: 14px;
+            line-height: 1.5;
+        }
+
+        /* Loading */
+        .loading {
+            display: none;
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            text-align: center;
+            z-index: 100;
+        }
+
+        .loading.active {
+            display: block;
+        }
+
+        .spinner {
+            width: 50px;
+            height: 50px;
+            border: 4px solid rgba(255, 255, 255, 0.1);
+            border-top-color: #4ade80;
+            border-radius: 50%;
+            animation: spin 1s linear infinite;
+        }
+
+        @keyframes spin {
+            to { transform: rotate(360deg); }
+        }
+
+        .loading-text {
+            margin-top: 16px;
+            font-size: 14px;
+            color: #9ca3af;
+        }
+
+        /* Mobile Responsive */
+        @media (max-width: 768px) {
+            #local-video {
+                width: 120px;
+                height: 90px;
+                bottom: 100px;
+                right: 10px;
+            }
+
+            .notetaker-panel {
+                width: 100%;
+                right: -100%;
+            }
+
+            .control-btn {
+                width: 48px;
+                height: 48px;
+                font-size: 20px;
+            }
+
+            .call-controls {
+                gap: 12px;
+                padding: 16px;
+            }
+        }
+    </style>
 </head>
 <body>
     <!-- Preview Screen -->
-    <div class="preview-screen" id="previewScreen">
-        <div class="preview-content">
-            <h2>Ready to join?</h2>
-            <div class="preview-video-container">
-                <video id="previewVideo" autoplay muted playsinline></video>
-                <div class="preview-placeholder" id="previewPlaceholder">
-                    <div class="preview-icon">👤</div>
-                    <p>Camera preview</p>
-                </div>
-            </div>
+    <div id="preview-screen">
+        <div class="preview-container">
+            <video id="preview-video" class="preview-video" autoplay muted playsinline></video>
             <div class="preview-controls">
-                <button class="preview-control-btn" id="previewMicBtn" data-active="true">
-                    <span class="btn-icon">🎤</span>
-                </button>
-                <button class="preview-control-btn" id="previewCameraBtn" data-active="true">
-                    <span class="btn-icon">📹</span>
-                </button>
+                <button id="preview-mic-btn" class="preview-btn active" title="Microphone">🎤</button>
+                <button id="preview-camera-btn" class="preview-btn active" title="Camera">📹</button>
             </div>
-            <div class="preview-actions">
-                <button class="join-btn" id="joinCallBtn">Join Call</button>
-            </div>
-            <div class="share-link-card" id="shareLinkContainer" style="display: none;">
-                <h3>Invite your guests</h3>
-                <div class="share-item" id="shareGuestItem">
-                    <label>Guest link (up to 20 people)</label>
-                    <div class="share-input">
-                        <input type="text" id="shareGuestLink" readonly>
-                        <button class="copy-btn" id="copyGuestLinkBtn">Copy</button>
-                    </div>
-                </div>
-                <div class="share-item" id="shareHostItem" style="display: none;">
-                    <label>Your host link</label>
-                    <div class="share-input">
-                        <input type="text" id="shareHostLink" readonly>
-                        <button class="copy-btn" id="copyHostLinkBtn">Copy</button>
-                    </div>
-                </div>
-                <p class="share-status" id="shareLinkStatus"></p>
-            </div>
-        </div>
-
-        <div class="reactions-panel" id="reactionsPanel" style="display: none;">
-            <button class="reaction-btn" data-reaction="👏">👏</button>
-            <button class="reaction-btn" data-reaction="👍">👍</button>
-            <button class="reaction-btn" data-reaction="🔥">🔥</button>
-            <button class="reaction-btn" data-reaction="🎉">🎉</button>
-            <button class="reaction-btn" data-reaction="❤️">❤️</button>
+            <button id="join-btn" class="join-btn">Join Call</button>
         </div>
     </div>
 
-    <!-- Loading Screen -->
-    <div class="loading-screen" id="loadingScreen" style="display: none;">
-        <div class="loading-content">
-            <div class="loading-logo">
-                <div class="pulse-ring"></div>
-                <div class="pulse-ring delay-1"></div>
-                <div class="pulse-ring delay-2"></div>
-                <svg width="80" height="80" viewBox="0 0 100 100" fill="none">
-                    <circle cx="50" cy="50" r="35" stroke="url(#gradient)" stroke-width="3" stroke-linecap="round" stroke-dasharray="220" stroke-dashoffset="220">
-                        <animate attributeName="stroke-dashoffset" from="220" to="0" dur="2s" repeatCount="indefinite"/>
-                    </circle>
-                    <defs>
-                        <linearGradient id="gradient" x1="0%" y1="0%" x2="100%" y2="100%">
-                            <stop offset="0%" style="stop-color:#00f2fe;stop-opacity:1" />
-                            <stop offset="100%" style="stop-color:#4facfe;stop-opacity:1" />
-                        </linearGradient>
-                    </defs>
-                </svg>
-            </div>
-            <h2 class="loading-title">AI Meeting Assistant</h2>
-            <p class="loading-subtitle">Connecting to professional call...</p>
-            <div class="loading-steps">
-                <div class="step active" id="step1">
-                    <div class="step-icon">🔐</div>
-                    <span>Authenticating</span>
+    <!-- Call Screen -->
+    <div id="call-screen">
+        <div class="video-container">
+            <video id="remote-video" autoplay playsinline></video>
+            <video id="local-video" autoplay muted playsinline></video>
+
+            <button class="notetaker-trigger" id="notetaker-trigger">📝 AI Notetaker</button>
+
+            <!-- AI Notetaker Panel -->
+            <div class="notetaker-panel" id="notetaker-panel">
+                <div class="notetaker-header">
+                    <h3>AI Notetaker</h3>
+                    <button class="close-notetaker" id="close-notetaker">×</button>
                 </div>
-                <div class="step" id="step2">
-                    <div class="step-icon">📹</div>
-                    <span>Setting up video</span>
+                <div class="notetaker-controls">
+                    <button class="notetaker-btn start" id="notetaker-start">Start</button>
+                    <button class="notetaker-btn pause" id="notetaker-pause" disabled>Pause</button>
+                    <button class="notetaker-btn stop" id="notetaker-stop" disabled>Stop</button>
                 </div>
-                <div class="step" id="step3">
-                    <div class="step-icon">🤖</div>
-                    <span>Activating AI</span>
+                <div class="notetaker-status" id="notetaker-status">Ready to start</div>
+                <div class="transcript-container" id="transcript-container">
+                    <!-- Transcript entries will appear here -->
                 </div>
             </div>
+        </div>
+
+        <div class="call-controls">
+            <button id="mic-btn" class="control-btn active" title="Microphone">🎤</button>
+            <button id="camera-btn" class="control-btn active" title="Camera">📹</button>
+            <button id="speaker-btn" class="control-btn active" title="Speaker">🔊</button>
+            <button id="screen-share-btn" class="control-btn" title="Screen Share">🖥️</button>
+            <button id="end-call-btn" class="control-btn end-call" title="End Call">📞</button>
+        </div>
+
+        <div class="loading" id="loading">
+            <div class="spinner"></div>
+            <div class="loading-text">Connecting...</div>
         </div>
     </div>
 
-    <!-- Main Container -->
-    <div class="call-container controls-visible" id="callContainer" style="display: none;">
-        <!-- Top Bar -->
-        <div class="top-bar glassmorphic">
-            <button class="back-btn" id="backBtn" title="Leave meeting">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M15 18L9 12L15 6" stroke="currentColor" stroke-width="2.5" stroke-linecap="round"/>
-                </svg>
-            </button>
-
-            <div class="call-info">
-                <div class="recording-indicator" id="recordingIndicator" style="display: none;">
-                    <span class="rec-dot"></span>
-                    <span>REC</span>
-                </div>
-                <div class="call-timer" id="callTimer">00:00</div>
-            </div>
-
-            <div class="participant-label" id="participantLabel">
-                <span class="participant-name">Waiting for guest...</span>
-            </div>
-
-            <button class="settings-btn" id="settingsBtn" title="Settings">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/>
-                </svg>
-            </button>
-        </div>
-
-        <!-- Video Area -->
-        <div class="video-area">
-            <!-- Remote Video (Full Screen) -->
-            <div class="remote-video-container" id="remoteVideoContainer">
-                <video id="remoteVideo" autoplay playsinline></video>
-                <div class="remote-placeholder" id="remotePlaceholder">
-                    <div class="avatar-large">
-                        <svg width="80" height="80" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M12 12c2.21 0 4-1.79 4-4s-1.79-4-4-4-4 1.79-4 4 1.79 4 4 4zm0 2c-2.67 0-8 1.34-8 4v2h16v-2c0-2.66-5.33-4-8-4z"/>
-                        </svg>
-                    </div>
-                    <div class="placeholder-text">
-                        <h3>Waiting for participant...</h3>
-                        <p>Share the link to start your professional meeting</p>
-                    </div>
-                </div>
-                <div class="reaction-overlay" id="reactionOverlay"></div>
-
-                <!-- Speaking Indicator -->
-                <div class="speaking-border" id="remoteSpeaking" style="display: none;"></div>
-            </div>
-
-            <!-- Local Video (PiP) -->
-            <div class="local-video-pip" id="localVideoPip">
-                <video id="localVideo" autoplay muted playsinline></video>
-                <div class="pip-controls">
-                    <button class="pip-btn" id="pipExpandBtn" title="Expand">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M7 14H5v5h5v-2H7v-3zm-2-4h2V7h3V5H5v5zm12 7h-3v2h5v-5h-2v3zM14 5v2h3v3h2V5h-5z"/>
-                        </svg>
-                    </button>
-                </div>
-                <div class="speaking-border" id="localSpeaking" style="display: none;"></div>
-            </div>
-        </div>
-
-        <!-- Live Transcript Panel (Right Side) -->
-        <div class="transcript-panel glassmorphic" id="transcriptPanel">
-            <div class="panel-header">
-                <div class="panel-title">
-                    <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M14 2H6c-1.1 0-2 .9-2 2v16c0 1.1.9 2 2 2h12c1.1 0 2-.9 2-2V8l-6-6z"/>
-                    </svg>
-                    <span>Live Transcript</span>
-                    <span class="ai-badge">AI</span>
-                </div>
-                <div class="panel-actions">
-                    <button class="icon-btn" id="toggleAITranscriptBtn" title="Toggle AI Transcription">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
-                            <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
-                        </svg>
-                    </button>
-                    <button class="icon-btn" id="searchTranscriptBtn" title="Search">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M15.5 14h-.79l-.28-.27C15.41 12.59 16 11.11 16 9.5 16 5.91 13.09 3 9.5 3S3 5.91 3 9.5 5.91 16 9.5 16c1.61 0 3.09-.59 4.23-1.57l.27.28v.79l5 4.99L20.49 19l-4.99-5zm-6 0C7.01 14 5 11.99 5 9.5S7.01 5 9.5 5 14 7.01 14 9.5 11.99 14 9.5 14z"/>
-                        </svg>
-                    </button>
-                    <button class="icon-btn" id="bookmarkBtn" title="Bookmark moment">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M17 3H7c-1.1 0-2 .9-2 2v16l7-3 7 3V5c0-1.1-.9-2-2-2z"/>
-                        </svg>
-                    </button>
-                    <button class="icon-btn" id="exportBtn" title="Export">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M19 12v7H5v-7H3v7c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2v-7h-2zm-6 .67l2.59-2.58L17 11.5l-5 5-5-5 1.41-1.41L11 12.67V3h2z"/>
-                        </svg>
-                    </button>
-                    <button class="icon-btn toggle-panel" id="togglePanelBtn" title="Hide panel">
-                        <svg width="16" height="16" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M15.41 7.41L14 6l-6 6 6 6 1.41-1.41L10.83 12z"/>
-                        </svg>
-                    </button>
-                </div>
-            </div>
-
-            <!-- Speaker Filter -->
-            <div class="filter-bar">
-                <div class="filter-tabs">
-                    <button class="filter-tab active" data-filter="both">Both</button>
-                    <button class="filter-tab" data-filter="guest">Guest</button>
-                    <button class="filter-tab" data-filter="me">Me</button>
-                </div>
-            </div>
-
-            <!-- Transcript List -->
-            <div class="transcript-list" id="transcriptList">
-                <div class="empty-state">
-                    <svg width="48" height="48" viewBox="0 0 24 24" fill="currentColor" opacity="0.3">
-                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm-2 15l-5-5 1.41-1.41L10 14.17l7.59-7.59L19 8l-9 9z"/>
-                    </svg>
-                    <p>Start speaking to see transcript...</p>
-                    <small>AI will analyze in real-time</small>
-                </div>
-            </div>
-        </div>
-
-        <!-- AI Notetaker Floating Trigger Button -->
-        <button class="ai-notetaker-trigger" id="aiNotetakerTrigger" style="display: none;">
-            <span class="icon">🤖</span>
-        </button>
-
-        <!-- AI Notetaker Panel - НОВИЙ ДИЗАЙН -->
-        <div id="notetakerPanel">
-            <!-- Header -->
-            <div class="notetaker-header">
-                <h2 class="notetaker-title">🤖 AI Notetaker</h2>
-                <p class="notetaker-subtitle">Real-time meeting transcription</p>
-            </div>
-
-            <!-- Status Bar -->
-            <div class="notetaker-status-bar">
-                <div class="notetaker-status">
-                    <span class="status-dot" id="notetakerStatusDot"></span>
-                    <span class="status-text" id="notetakerStatus">Ready</span>
-                </div>
-                <div class="notetaker-timer" id="notetakerTimer">0:00</div>
-            </div>
-
-            <!-- Controls -->
-            <div class="notetaker-controls">
-                <button class="notetaker-btn start" id="startNotetakerBtn">
-                    ⏺ Start Recording
-                </button>
-                <button class="notetaker-btn pause" id="pauseNotetakerBtn" style="display:none;">
-                    ⏸ Pause
-                </button>
-                <button class="notetaker-btn stop" id="stopNotetakerBtn" style="display:none;">
-                    ⏹ Stop
-                </button>
-            </div>
-
-            <!-- Transcript -->
-            <div class="notetaker-transcript" id="notetakerTranscriptList">
-                <div class="transcript-empty">
-                    <div class="transcript-empty-icon">📝</div>
-                    <div class="transcript-empty-text">Click Start to begin recording</div>
-                </div>
-            </div>
-
-            <!-- Stats -->
-            <div class="notetaker-stats">
-                <div class="stat-item">
-                    <span class="stat-value" id="statDuration">0:00</span>
-                    <span class="stat-label">Duration</span>
-                </div>
-                <div class="stat-item">
-                    <span class="stat-value" id="statWords">0</span>
-                    <span class="stat-label">Words</span>
-                </div>
-            </div>
-        </div>
-
-        <!-- Reactions Panel (In Call) -->
-        <div class="reactions-floating-panel" id="reactionsFloatingPanel" style="display: none;">
-            <button class="reaction-quick-btn" data-reaction="👏">👏</button>
-            <button class="reaction-quick-btn" data-reaction="👍">👍</button>
-            <button class="reaction-quick-btn" data-reaction="🔥">🔥</button>
-            <button class="reaction-quick-btn" data-reaction="🎉">🎉</button>
-            <button class="reaction-quick-btn" data-reaction="❤️">❤️</button>
-            <button class="reaction-quick-btn" data-reaction="😊">😊</button>
-        </div>
-
-        <!-- Mobile More Menu -->
-        <div class="mobile-more-menu" id="mobileMoreMenu" style="display: none;">
-            <div class="mobile-menu-header">
-                <h3>Effects & Backgrounds</h3>
-                <button class="close-menu-btn" id="closeMobileMenu">✕</button>
-            </div>
-            <div class="mobile-menu-content">
-                <button class="mobile-menu-item" id="mobileBlurBtn">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 2C6.48 2 2 6.48 2 12s4.48 10 10 10 10-4.48 10-10S17.52 2 12 2zm0 18c-4.41 0-8-3.59-8-8s3.59-8 8-8 8 3.59 8 8-3.59 8-8 8z"/>
-                    </svg>
-                    <span>Blur Background</span>
-                </button>
-                <button class="mobile-menu-item" id="mobileVirtualBtn">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M20 4H4c-1.1 0-2 .9-2 2v12c0 1.1.9 2 2 2h16c1.1 0 2-.9 2-2V6c0-1.1-.9-2-2-2zM4 18V6h16v12H4z"/>
-                    </svg>
-                    <span>Virtual Background</span>
-                </button>
-                <button class="mobile-menu-item" id="mobileSpeakerBtn">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02z"/>
-                    </svg>
-                    <span>Speaker Settings</span>
-                </button>
-                <button class="mobile-menu-item" id="mobileRaiseHandBtn">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M23 5.5V20c0 2.2-1.8 4-4 4h-7.3c-1.08 0-2.1-.43-2.85-1.19L1 14.83s1.26-1.23 1.3-1.25c.22-.19.49-.29.79-.29.22 0 .42.06.6.16.04.01 4.31 2.46 4.31 2.46V4c0-.83.67-1.5 1.5-1.5S11 3.17 11 4v7h1V1.5c0-.83.67-1.5 1.5-1.5S15 .67 15 1.5V11h1V2.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5V11h1V5.5c0-.83.67-1.5 1.5-1.5s1.5.67 1.5 1.5z"/>
-                    </svg>
-                    <span>Raise Hand</span>
-                </button>
-            </div>
-        </div>
-
-        <!-- Bottom Controls -->
-        <div class="bottom-controls glassmorphic">
-            <div class="controls-left">
-                <button class="control-btn" id="micBtn" data-active="true">
-                    <svg class="icon-on" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 14c1.66 0 3-1.34 3-3V5c0-1.66-1.34-3-3-3S9 3.34 9 5v6c0 1.66 1.34 3 3 3z"/>
-                        <path d="M17 11c0 2.76-2.24 5-5 5s-5-2.24-5-5H5c0 3.53 2.61 6.43 6 6.92V21h2v-3.08c3.39-.49 6-3.39 6-6.92h-2z"/>
-                    </svg>
-                    <svg class="icon-off" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="display: none;">
-                        <path d="M19 11h-1.7c0 .74-.16 1.43-.43 2.05l1.23 1.23c.56-.98.9-2.09.9-3.28zm-4.02.17c0-.06.02-.11.02-.17V5c0-1.66-1.34-3-3-3S9 3.34 9 5v.18l5.98 5.99zM4.27 3L3 4.27l6.01 6.01V11c0 1.66 1.33 3 2.99 3 .22 0 .44-.03.65-.08l1.66 1.66c-.71.33-1.5.52-2.31.52-2.76 0-5.3-2.1-5.3-5.1H5c0 3.41 2.72 6.23 6 6.72V21h2v-3.28c.91-.13 1.77-.45 2.54-.9L19.73 21 21 19.73 4.27 3z"/>
-                    </svg>
-                    <span>Mic</span>
-                </button>
-
-                <button class="control-btn" id="cameraBtn" data-active="true">
-                    <svg class="icon-on" width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/>
-                    </svg>
-                    <svg class="icon-off" width="24" height="24" viewBox="0 0 24 24" fill="currentColor" style="display: none;">
-                        <path d="M21 6.5l-4 4V7c0-.55-.45-1-1-1H9.82L21 17.18V6.5zM3.27 2L2 3.27 4.73 6H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.21 0 .39-.08.54-.18L19.73 21 21 19.73 3.27 2z"/>
-                    </svg>
-                    <span>Camera</span>
-                </button>
-
-                <button class="control-btn desktop-only" id="screenShareBtn">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M20 18c1.1 0 1.99-.9 1.99-2L22 6c0-1.1-.9-2-2-2H4c-1.1 0-2 .9-2 2v10c0 1.1.9 2 2 2H0v2h24v-2h-4zM4 6h16v10H4V6z"/>
-                    </svg>
-                    <span>Share</span>
-                </button>
-
-                <button class="control-btn mobile-only" id="reactionsBtn">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5zm-7 0c.83 0 1.5-.67 1.5-1.5S9.33 8 8.5 8 7 8.67 7 9.5 7.67 11 8.5 11zm3.5 6.5c2.33 0 4.31-1.46 5.11-3.5H6.89c.8 2.04 2.78 3.5 5.11 3.5z"/>
-                    </svg>
-                    <span>React</span>
-                </button>
-
-                <button class="control-btn mobile-only" id="mobileMoreBtn">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                        <circle cx="12" cy="5" r="2"/>
-                        <circle cx="12" cy="12" r="2"/>
-                        <circle cx="12" cy="19" r="2"/>
-                    </svg>
-                    <span>More</span>
-                </button>
-            </div>
-
-            <div class="controls-center">
-                <button class="control-btn danger large" id="endCallBtn">
-                    <svg width="28" height="28" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 9c-1.6 0-3.15.25-4.6.72v3.1c0 .39-.23.74-.56.9-.98.49-1.87 1.12-2.66 1.85-.18.18-.43.28-.7.28-.28 0-.53-.11-.71-.29L.29 13.08c-.18-.17-.29-.42-.29-.7 0-.28.11-.53.29-.71C3.34 8.78 7.46 7 12 7s8.66 1.78 11.71 4.67c.18.18.29.43.29.71 0 .28-.11.53-.29.71l-2.48 2.48c-.18.18-.43.29-.71.29-.27 0-.52-.11-.7-.28-.79-.74-1.69-1.36-2.67-1.85-.33-.16-.56-.5-.56-.9v-3.1C15.15 9.25 13.6 9 12 9z"/>
-                    </svg>
-                </button>
-            </div>
-
-            <div class="controls-right">
-                <button class="control-btn" id="chatBtn">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2zM9 11H7V9h2v2zm4 0h-2V9h2v2zm4 0h-2V9h2v2z"/>
-                    </svg>
-                    <span>Chat</span>
-                    <span class="notification-badge" id="chatBadge" style="display: none;">0</span>
-                </button>
-
-                <button class="control-btn" id="pollBtn">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
-                    </svg>
-                    <span>Poll</span>
-                </button>
-
-                <button class="control-btn desktop-only" id="reactionsDesktopBtn">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M11.99 2C6.47 2 2 6.48 2 12s4.47 10 9.99 10C17.52 22 22 17.52 22 12S17.52 2 11.99 2zM12 20c-4.42 0-8-3.58-8-8s3.58-8 8-8 8 3.58 8 8-3.58 8-8 8zm3.5-9c.83 0 1.5-.67 1.5-1.5S16.33 8 15.5 8 14 8.67 14 9.5s.67 1.5 1.5 1.5zm-7 0c.83 0 1.5-.67 1.5-1.5S9.33 8 8.5 8 7 8.67 7 9.5 7.67 11 8.5 11zm3.5 6.5c2.33 0 4.31-1.46 5.11-3.5H6.89c.8 2.04 2.78 3.5 5.11 3.5z"/>
-                    </svg>
-                    <span>React</span>
-                </button>
-
-                <button class="control-btn host-only" id="recordBtn" style="display: none;">
-                    <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                        <circle cx="12" cy="12" r="8"/>
-                    </svg>
-                    <span>Record</span>
-                </button>
-            </div>
-        </div>
-    </div>
-
-    <!-- Custom Alert/Notification System -->
-    <div class="custom-alert glassmorphic" id="customAlert" style="display: none;">
-        <div class="alert-icon" id="alertIcon"></div>
-        <div class="alert-content">
-            <div class="alert-title" id="alertTitle"></div>
-            <div class="alert-message" id="alertMessage"></div>
-        </div>
-        <button class="alert-close" id="alertClose">✕</button>
-    </div>
-
-    <!-- Custom Confirm Dialog -->
-    <div class="confirm-backdrop" id="confirmBackdrop" style="display: none;"></div>
-    <div class="custom-confirm glassmorphic" id="customConfirm" style="display: none;">
-        <div class="confirm-icon" id="confirmIcon">❓</div>
-        <div class="confirm-title" id="confirmTitle">Confirm Action</div>
-        <div class="confirm-message" id="confirmMessage">Are you sure?</div>
-        <div class="confirm-actions">
-            <button class="btn-secondary" id="confirmCancel">Cancel</button>
-            <button class="btn-primary" id="confirmOk">Confirm</button>
-        </div>
-    </div>
-
-    <!-- AI Recommendation Modal -->
-    <div class="ai-modal-backdrop" id="aiModalBackdrop" style="display: none;"></div>
-    <div class="ai-recommendation-modal glassmorphic" id="aiRecommendationModal" style="display: none;">
-        <div class="modal-header">
-            <h3 id="aiModalTitle">🤖 AI Recommendation</h3>
-            <button class="close-btn" id="closeAiModalBtn">✕</button>
-        </div>
-        <div class="modal-body" id="aiModalBody">
-            <!-- Content will be injected here -->
-        </div>
-    </div>
-
-    <!-- Poll Results Modal -->
-    <div class="poll-results-modal glassmorphic" id="pollResultsModal" style="display: none;">
-        <div class="modal-header">
-            <h3>📊 Poll Results</h3>
-            <button class="close-btn" id="closePollResultsBtn">✕</button>
-        </div>
-        <div class="modal-body" id="pollResultsBody">
-            <!-- Poll results will be injected here -->
-        </div>
-    </div>
-
-    <!-- Chat Panel -->
-    <div class="chat-panel glassmorphic" id="chatPanel" style="display: none;">
-        <div class="panel-header">
-            <div class="panel-title">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M20 2H4c-1.1 0-1.99.9-1.99 2L2 22l4-4h14c1.1 0 2-.9 2-2V4c0-1.1-.9-2-2-2z"/>
-                </svg>
-                <span>Chat</span>
-            </div>
-            <button class="icon-btn" id="closeChatBtn">✕</button>
-        </div>
-        <div class="chat-messages" id="chatMessages"></div>
-        <div class="chat-input-area">
-            <input type="text" id="chatInput" placeholder="Type a message..." />
-            <button class="send-btn" id="sendChatBtn">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M2.01 21L23 12 2.01 3 2 10l15 2-15 2z"/>
-                </svg>
-            </button>
-        </div>
-    </div>
-
-    <!-- Enhanced Poll Modal -->
-    <div class="poll-modal glassmorphic" id="pollModal" style="display: none;">
-        <div class="modal-header">
-            <div class="modal-title-area">
-                <svg width="24" height="24" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M19 3H5c-1.1 0-2 .9-2 2v14c0 1.1.9 2 2 2h14c1.1 0 2-.9 2-2V5c0-1.1-.9-2-2-2zM9 17H7v-7h2v7zm4 0h-2V7h2v10zm4 0h-2v-4h2v4z"/>
-                </svg>
-                <h3 id="pollModalTitle">Create Poll</h3>
-            </div>
-            <button class="close-btn" id="closePollBtn">✕</button>
-        </div>
-
-        <!-- Create Poll View -->
-        <div class="modal-body" id="pollCreateView">
-            <div class="poll-creator">
-                <div class="input-group">
-                    <label class="input-label">Question</label>
-                    <input type="text" class="poll-input-enhanced" id="pollQuestion" placeholder="What would you like to ask?" />
-                </div>
-
-                <div class="input-group">
-                    <label class="input-label">Options</label>
-                    <div class="poll-options-list" id="pollOptionsList">
-                        <div class="poll-option-item">
-                            <span class="option-number">A</span>
-                            <input type="text" class="poll-input-enhanced" placeholder="First option" data-option="0" />
-                            <button class="remove-option-btn" style="visibility: hidden;">✕</button>
-                        </div>
-                        <div class="poll-option-item">
-                            <span class="option-number">B</span>
-                            <input type="text" class="poll-input-enhanced" placeholder="Second option" data-option="1" />
-                            <button class="remove-option-btn" style="visibility: hidden;">✕</button>
-                        </div>
-                    </div>
-                    <button class="add-option-btn-enhanced" id="addPollOption">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                            <path d="M19 13h-6v6h-2v-6H5v-2h6V5h2v6h6v2z"/>
-                        </svg>
-                        <span>Add Option</span>
-                    </button>
-                </div>
-
-                <div class="poll-settings">
-                    <label class="toggle-setting">
-                        <input type="checkbox" id="pollAnonymous" />
-                        <span class="toggle-slider"></span>
-                        <span class="toggle-label">Anonymous voting</span>
-                    </label>
-                    <label class="toggle-setting">
-                        <input type="checkbox" id="pollMultiple" />
-                        <span class="toggle-slider"></span>
-                        <span class="toggle-label">Allow multiple answers</span>
-                    </label>
-                </div>
-            </div>
-
-            <div class="modal-actions">
-                <button class="btn-secondary" id="cancelPollBtn">Cancel</button>
-                <button class="btn-primary-gradient" id="createPollBtn">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M9 16.2L4.8 12l-1.4 1.4L9 19 21 7l-1.4-1.4L9 16.2z"/>
-                    </svg>
-                    <span>Create Poll</span>
-                </button>
-            </div>
-        </div>
-
-        <!-- Active Poll View -->
-        <div class="modal-body" id="pollActiveView" style="display: none;">
-            <div class="active-poll">
-                <h4 class="poll-question-display" id="activePollQuestion"></h4>
-                <div class="poll-options-vote" id="pollVoteOptions"></div>
-                <div class="poll-footer">
-                    <span class="poll-vote-count" id="pollVoteCount">0 votes</span>
-                    <button class="btn-text" id="viewPollResults">View Results →</button>
-                </div>
-            </div>
-        </div>
-
-        <!-- Results View -->
-        <div class="modal-body" id="pollResultsView" style="display: none;">
-            <div class="poll-results">
-                <h4 class="poll-question-display" id="resultsPollQuestion"></h4>
-                <div class="results-chart" id="pollResultsChart"></div>
-                <div class="results-actions">
-                    <button class="btn-export" id="exportPollResults">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <path d="M21 15v4a2 2 0 0 1-2 2H5a2 2 0 0 1-2-2v-4"/>
-                            <polyline points="7 10 12 15 17 10"/>
-                            <line x1="12" y1="15" x2="12" y2="3"/>
-                        </svg>
-                        <span>Export Results</span>
-                    </button>
-                    <button class="btn-share" id="sharePollResults">
-                        <svg width="18" height="18" viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2">
-                            <circle cx="18" cy="5" r="3"/>
-                            <circle cx="6" cy="12" r="3"/>
-                            <circle cx="18" cy="19" r="3"/>
-                            <line x1="8.59" y1="13.51" x2="15.42" y2="17.49"/>
-                            <line x1="15.41" y1="6.51" x2="8.59" y2="10.49"/>
-                        </svg>
-                        <span>Share</span>
-                    </button>
-                </div>
-                <div class="results-footer">
-                    <span class="total-votes" id="totalVotes">0 total votes</span>
-                    <button class="btn-text" id="backToPoll">← Back to Poll</button>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- Whiteboard -->
-    <!-- Settings Panel -->
-    <div class="settings-panel glassmorphic" id="settingsPanel" style="display: none;">
-        <div class="panel-header">
-            <div class="panel-title">
-                <svg width="20" height="20" viewBox="0 0 24 24" fill="currentColor">
-                    <path d="M19.14,12.94c0.04-0.3,0.06-0.61,0.06-0.94c0-0.32-0.02-0.64-0.07-0.94l2.03-1.58c0.18-0.14,0.23-0.41,0.12-0.61 l-1.92-3.32c-0.12-0.22-0.37-0.29-0.59-0.22l-2.39,0.96c-0.5-0.38-1.03-0.7-1.62-0.94L14.4,2.81c-0.04-0.24-0.24-0.41-0.48-0.41 h-3.84c-0.24,0-0.43,0.17-0.47,0.41L9.25,5.35C8.66,5.59,8.12,5.92,7.63,6.29L5.24,5.33c-0.22-0.08-0.47,0-0.59,0.22L2.74,8.87 C2.62,9.08,2.66,9.34,2.86,9.48l2.03,1.58C4.84,11.36,4.8,11.69,4.8,12s0.02,0.64,0.07,0.94l-2.03,1.58 c-0.18,0.14-0.23,0.41-0.12,0.61l1.92,3.32c0.12,0.22,0.37,0.29,0.59,0.22l2.39-0.96c0.5,0.38,1.03,0.7,1.62,0.94l0.36,2.54 c0.05,0.24,0.24,0.41,0.48,0.41h3.84c0.24,0,0.44-0.17,0.47-0.41l0.36-2.54c0.59-0.24,1.13-0.56,1.62-0.94l2.39,0.96 c0.22,0.08,0.47,0,0.59-0.22l1.92-3.32c0.12-0.22,0.07-0.47-0.12-0.61L19.14,12.94z M12,15.6c-1.98,0-3.6-1.62-3.6-3.6 s1.62-3.6,3.6-3.6s3.6,1.62,3.6,3.6S13.98,15.6,12,15.6z"/>
-                </svg>
-                <span data-i18n="settings">Settings</span>
-            </div>
-            <button class="icon-btn" id="closeSettingsBtn">✕</button>
-        </div>
-
-        <div class="settings-content">
-            <!-- Language Section -->
-            <div class="settings-section">
-                <h4 class="settings-section-title">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12.87 15.07l-2.54-2.51.03-.03c1.74-1.94 2.98-4.17 3.71-6.53H17V4h-7V2H8v2H1v1.99h11.17C11.5 7.92 10.44 9.75 9 11.35 8.07 10.32 7.3 9.19 6.69 8h-2c.73 1.63 1.73 3.17 2.98 4.56l-5.09 5.02L4 19l5-5 3.11 3.11.76-2.04zM18.5 10h-2L12 22h2l1.12-3h4.75L21 22h2l-4.5-12zm-2.62 7l1.62-4.33L19.12 17h-3.24z"/>
-                    </svg>
-                    <span data-i18n="language">Language</span>
-                </h4>
-                <div class="language-options">
-                    <button class="lang-option active" data-lang="uk">
-                        <span class="flag">🇺🇦</span>
-                        <span>Українська</span>
-                    </button>
-                    <button class="lang-option" data-lang="en">
-                        <span class="flag">🇬🇧</span>
-                        <span>English</span>
-                    </button>
-                    <button class="lang-option" data-lang="de">
-                        <span class="flag">🇩🇪</span>
-                        <span>Deutsch</span>
-                    </button>
-                </div>
-            </div>
-
-            <!-- Video Quality Section -->
-            <div class="settings-section">
-                <h4 class="settings-section-title">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/>
-                    </svg>
-                    <span data-i18n="videoQuality">Video Quality</span>
-                </h4>
-                <select class="settings-select" id="videoQualitySelect">
-                    <option value="auto" data-i18n="auto">Auto</option>
-                    <option value="720p">720p HD</option>
-                    <option value="480p">480p SD</option>
-                    <option value="360p">360p</option>
-                </select>
-            </div>
-
-            <!-- Audio Settings -->
-            <div class="settings-section">
-                <h4 class="settings-section-title">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M3 9v6h4l5 5V4L7 9H3zm13.5 3c0-1.77-1.02-3.29-2.5-4.03v8.05c1.48-.73 2.5-2.25 2.5-4.02zM14 3.23v2.06c2.89.86 5 3.54 5 6.71s-2.11 5.85-5 6.71v2.06c4.01-.91 7-4.49 7-8.77s-2.99-7.86-7-8.77z"/>
-                    </svg>
-                    <span data-i18n="audioSettings">Audio Settings</span>
-                </h4>
-                <div class="settings-toggle">
-                    <label class="toggle-label">
-                        <input type="checkbox" id="echoCancellation" checked>
-                        <span class="toggle-slider"></span>
-                        <span data-i18n="echoCancellation">Echo Cancellation</span>
-                    </label>
-                    <label class="toggle-label">
-                        <input type="checkbox" id="noiseSuppression" checked>
-                        <span class="toggle-slider"></span>
-                        <span data-i18n="noiseSuppression">Noise Suppression</span>
-                    </label>
-                </div>
-            </div>
-
-            <!-- AI Assistant -->
-            <div class="settings-section host-only">
-                <h4 class="settings-section-title">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M20,2H4C2.9,2,2,2.9,2,4v18l4-4h14c1.1,0,2-0.9,2-2V4C22,2.9,21.1,2,20,2z M13,14h-2v-2h2V14z M13,10h-2V6h2V10z"/>
-                    </svg>
-                    <span data-i18n="aiAssistant">AI Assistant</span>
-                </h4>
-                <div class="settings-toggle">
-                    <label class="toggle-label">
-                        <input type="checkbox" id="autoAnalysis" checked>
-                        <span class="toggle-slider"></span>
-                        <span data-i18n="autoAnalysis">Auto-analyze transcript</span>
-                    </label>
-                    <label class="toggle-label">
-                        <input type="checkbox" id="showRecommendations" checked>
-                        <span class="toggle-slider"></span>
-                        <span data-i18n="showRecommendations">Show recommendations</span>
-                    </label>
-                </div>
-            </div>
-
-            <!-- Notifications -->
-            <div class="settings-section">
-                <h4 class="settings-section-title">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 22c1.1 0 2-.9 2-2h-4c0 1.1.9 2 2 2zm6-6v-5c0-3.07-1.63-5.64-4.5-6.32V4c0-.83-.67-1.5-1.5-1.5s-1.5.67-1.5 1.5v.68C7.64 5.36 6 7.92 6 11v5l-2 2v1h16v-1l-2-2zm-2 1H8v-6c0-2.48 1.51-4.5 4-4.5s4 2.02 4 4.5v6z"/>
-                    </svg>
-                    <span>Notifications</span>
-                </h4>
-                <div class="settings-toggle">
-                    <label class="toggle-label">
-                        <input type="checkbox" id="soundNotifications" checked>
-                        <span class="toggle-slider"></span>
-                        <span>Sound notifications</span>
-                    </label>
-                    <label class="toggle-label">
-                        <input type="checkbox" id="chatNotifications" checked>
-                        <span class="toggle-slider"></span>
-                        <span>Chat message alerts</span>
-                    </label>
-                    <label class="toggle-label">
-                        <input type="checkbox" id="participantNotifications" checked>
-                        <span class="toggle-slider"></span>
-                        <span>Participant join/leave</span>
-                    </label>
-                </div>
-            </div>
-
-            <!-- Theme -->
-            <div class="settings-section">
-                <h4 class="settings-section-title">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M12 3c-4.97 0-9 4.03-9 9s4.03 9 9 9c.83 0 1.5-.67 1.5-1.5 0-.39-.15-.74-.39-1.01-.23-.26-.38-.61-.38-.99 0-.83.67-1.5 1.5-1.5H16c2.76 0 5-2.24 5-5 0-4.42-4.03-8-9-8zm-5.5 9c-.83 0-1.5-.67-1.5-1.5S5.67 9 6.5 9 8 9.67 8 10.5 7.33 12 6.5 12zm3-4C8.67 8 8 7.33 8 6.5S8.67 5 9.5 5s1.5.67 1.5 1.5S10.33 8 9.5 8zm5 0c-.83 0-1.5-.67-1.5-1.5S13.67 5 14.5 5s1.5.67 1.5 1.5S15.33 8 14.5 8zm3 4c-.83 0-1.5-.67-1.5-1.5S16.67 9 17.5 9s1.5.67 1.5 1.5-.67 1.5-1.5 1.5z"/>
-                    </svg>
-                    <span>Theme</span>
-                </h4>
-                <div class="theme-options">
-                    <button class="theme-option active" data-theme="dark">
-                        <span class="theme-icon">🌙</span>
-                        <span>Dark</span>
-                    </button>
-                    <button class="theme-option" data-theme="light">
-                        <span class="theme-icon">☀️</span>
-                        <span>Light</span>
-                    </button>
-                    <button class="theme-option" data-theme="auto">
-                        <span class="theme-icon">🔄</span>
-                        <span>Auto</span>
-                    </button>
-                </div>
-            </div>
-
-            <!-- Device Selection -->
-            <div class="settings-section">
-                <h4 class="settings-section-title">
-                    <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
-                        <path d="M17 10.5V7c0-.55-.45-1-1-1H4c-.55 0-1 .45-1 1v10c0 .55.45 1 1 1h12c.55 0 1-.45 1-1v-3.5l4 4v-11l-4 4z"/>
-                    </svg>
-                    <span>Devices</span>
-                </h4>
-                <div class="device-selects">
-                    <div class="device-select-group">
-                        <label>Camera</label>
-                        <select class="settings-select" id="cameraSelect">
-                            <option>Default camera</option>
-                        </select>
-                    </div>
-                    <div class="device-select-group">
-                        <label>Microphone</label>
-                        <select class="settings-select" id="microphoneSelect">
-                            <option>Default microphone</option>
-                        </select>
-                    </div>
-                    <div class="device-select-group">
-                        <label>Speakers</label>
-                        <select class="settings-select" id="speakerSelect">
-                            <option>Default speakers</option>
-                        </select>
-                    </div>
-                </div>
-            </div>
-        </div>
-    </div>
-
-    <!-- 100ms SDK Bundle (local) -->
-    <script src="/static/i18n.js"></script>
-    <script src="/static/js/hms-bundle.js"></script>
-
-    <!-- Professional Meeting SDK -->
-    <script src="/static/js/professional-1on1/hms-sdk-integration.js"></script>
-
-    <!-- UI Controller -->
-    <script src="/static/js/professional-1on1/ui-controller.js"></script>
-
-    <!-- Call Controls - NEW -->
-    <script src="/static/js/professional-1on1/call-controls.js"></script>
-
-    <!-- AI Notetaker - NEW -->
-    <script src="/static/js/professional-1on1/ai-notetaker.js"></script>
-
-    <!-- GIF Picker -->
-    <script src="/static/enhanced-gif-picker.js?v=2"></script>
-
-    <!-- Enhanced Chat -->
-    <script src="/static/js/professional-1on1/enhanced-chat.js"></script>
-    <script src="/static/js/professional-1on1/chat-polls.js"></script>
-
-    <!-- Integration Patch -->
-    <script src="/static/js/professional-1on1/integration-patch.js"></script>
-
-    <!-- Mobile Simple Controls -->
-    <script src="/static/js/professional-1on1/mobile-simple.js"></script>
-
-    <!-- Initialize App -->
-    <script>
-        console.log('[PROFESSIONAL] Initializing...');
-
-        // Determine context from URL
-        const pathSegments = window.location.pathname.split('/').filter(Boolean);
-        const urlParams = new URLSearchParams(window.location.search);
-        const inviteFromPath = pathSegments[0] === 'professional' && pathSegments[1] ? pathSegments[1] : null;
-        const inviteFromParam = urlParams.get('invite');
-        const inviteCode = inviteFromParam || inviteFromPath || null;
-        const isHost = urlParams.get('host') === 'true';
-        const isGuest = !isHost && !!inviteCode;
-
-        // Create UI controller
-        const uiController = new ProfessionalUIController();
-
-        // Initialize mobile intuitive controls
-        let mobileController = null;
-
-        (async () => {
-            try {
-                if (isGuest) {
-                    const storedName = localStorage.getItem('professional_guest_name') || 'Guest';
-                    const userName = window.prompt('Enter your name:', storedName) || storedName;
-                    localStorage.setItem('professional_guest_name', userName);
-                    await uiController.initializeAsGuest(inviteCode, userName);
-                } else {
-                    await uiController.initializeAsHost(isHost && inviteCode ? inviteCode : null);
-                }
-
-                // Initialize simple mobile controls
-                if (typeof SimpleMobileController !== 'undefined') {
-                    mobileController = new SimpleMobileController(uiController);
-                    console.log('[PROFESSIONAL] ✅ Mobile controls ready');
-                }
-            } catch (error) {
-                console.error('[PROFESSIONAL] ❌ Failed to initialize:', error);
-                alert('Failed to initialize professional mode: ' + (error?.message || 'unknown error'));
-                window.location.href = isGuest ? '/' : '/home';
-            }
-        })();
-
-        // Cleanup on page unload
-        window.addEventListener('beforeunload', () => {
-            if (mobileController) {
-                mobileController.cleanup();
-            }
-        });
-
-        console.log('[PROFESSIONAL] ✅ App ready', { isGuest, isHost, inviteCode });
-    </script>
+    <!-- 100ms SDK -->
+    <script src="https://sdk.100ms.live/beta/hms.js"></script>
+
+    <!-- App Logic -->
+    <script src="/static/js/professional-1on1/app.js"></script>
 </body>
 </html>
