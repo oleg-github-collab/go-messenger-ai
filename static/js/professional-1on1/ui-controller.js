@@ -1065,93 +1065,79 @@ class ProfessionalUIController {
             return;
         }
 
-        // Mic toggle with race condition protection
+        // Mic toggle - simplified and working
         this.micBtn?.addEventListener('click', async () => {
-            if (!this.sdk) {
-                this.logWarn('Mic toggle ignored - SDK not initialized');
+            if (!this.sdk || !this.sdk.hmsActions || !this.sdk.hmsStore) {
+                console.error('[UI] SDK not ready');
                 return;
             }
 
-            // Prevent race conditions from rapid clicks
-            if (this.audioToggleInProgress || this.micBtn.disabled) {
-                this.logDebug('Mic toggle ignored - already in progress');
-                return;
-            }
+            if (this.micBtn.disabled) return;
 
-            this.audioToggleInProgress = true;
             this.micBtn.disabled = true;
 
             try {
-                this.logDebug('Mic toggle requested');
-                const enabled = await this.sdk.toggleAudio();
+                // Get current state directly from store
+                const currentlyEnabled = this.sdk.hmsStore.getState((state) => {
+                    return state.localPeer?.audioEnabled === true;
+                });
 
-                if (typeof enabled === 'boolean') {
-                    this.micBtn.classList.toggle('active', enabled);
-                    this.micBtn.dataset.active = enabled ? 'true' : 'false';
+                console.log('[UI] Mic currently:', currentlyEnabled);
 
-                    // Toggle icons
-                    const iconOn = this.micBtn.querySelector('.icon-on');
-                    const iconOff = this.micBtn.querySelector('.icon-off');
-                    if (iconOn && iconOff) {
-                        iconOn.style.display = enabled ? 'block' : 'none';
-                        iconOff.style.display = enabled ? 'none' : 'block';
-                    }
+                // Toggle to opposite
+                const newState = !currentlyEnabled;
+                await this.sdk.hmsActions.setLocalAudioEnabled(newState);
 
-                    this.logDebug('Mic state updated:', enabled);
-                } else {
-                    this.logWarn('Mic toggle returned invalid state');
-                }
+                console.log('[UI] Mic toggled to:', newState);
+
+                // Update UI
+                this.updateMicUI(newState);
+
             } catch (error) {
-                this.logError('Mic toggle failed:', error);
+                console.error('[UI] Mic toggle error:', error);
+                alert('Failed to toggle microphone');
             } finally {
-                // Always re-enable button and clear flag
-                this.micBtn.disabled = false;
-                this.audioToggleInProgress = false;
+                setTimeout(() => {
+                    this.micBtn.disabled = false;
+                }, 300);
             }
         });
 
-        // Camera toggle with race condition protection
+        // Camera toggle - simplified and working
         this.cameraBtn?.addEventListener('click', async () => {
-            if (!this.sdk) {
-                this.logWarn('Camera toggle ignored - SDK not initialized');
+            if (!this.sdk || !this.sdk.hmsActions || !this.sdk.hmsStore) {
+                console.error('[UI] SDK not ready');
                 return;
             }
 
-            // Prevent race conditions from rapid clicks
-            if (this.videoToggleInProgress || this.cameraBtn.disabled) {
-                this.logDebug('Camera toggle ignored - already in progress');
-                return;
-            }
+            if (this.cameraBtn.disabled) return;
 
-            this.videoToggleInProgress = true;
             this.cameraBtn.disabled = true;
 
             try {
-                this.logDebug('Camera toggle requested');
-                const enabled = await this.sdk.toggleVideo();
+                // Get current state directly from store
+                const currentlyEnabled = this.sdk.hmsStore.getState((state) => {
+                    return state.localPeer?.videoEnabled === true;
+                });
 
-                if (typeof enabled === 'boolean') {
-                    this.cameraBtn.classList.toggle('active', enabled);
-                    this.cameraBtn.dataset.active = enabled ? 'true' : 'false';
+                console.log('[UI] Camera currently:', currentlyEnabled);
 
-                    // Toggle icons
-                    const iconOn = this.cameraBtn.querySelector('.icon-on');
-                    const iconOff = this.cameraBtn.querySelector('.icon-off');
-                    if (iconOn && iconOff) {
-                        iconOn.style.display = enabled ? 'block' : 'none';
-                        iconOff.style.display = enabled ? 'none' : 'block';
-                    }
+                // Toggle to opposite
+                const newState = !currentlyEnabled;
+                await this.sdk.hmsActions.setLocalVideoEnabled(newState);
 
-                    this.logDebug('Camera state updated:', enabled);
-                } else {
-                    this.logWarn('Camera toggle returned invalid state');
-                }
+                console.log('[UI] Camera toggled to:', newState);
+
+                // Update UI
+                this.updateCameraUI(newState);
+
             } catch (error) {
-                this.logError('Camera toggle failed:', error);
+                console.error('[UI] Camera toggle error:', error);
+                alert('Failed to toggle camera');
             } finally {
-                // Always re-enable button and clear flag
-                this.cameraBtn.disabled = false;
-                this.videoToggleInProgress = false;
+                setTimeout(() => {
+                    this.cameraBtn.disabled = false;
+                }, 300);
             }
         });
 
@@ -1751,6 +1737,46 @@ class ProfessionalUIController {
             console.error('[UI Controller] Failed to copy link:', error);
             this.showShareStatus('Copy failed. Try manually selecting the link.');
         }
+    }
+
+    /**
+     * Update mic button UI
+     */
+    updateMicUI(enabled) {
+        if (!this.micBtn) return;
+
+        this.micBtn.classList.toggle('active', enabled);
+        this.micBtn.dataset.active = enabled ? 'true' : 'false';
+
+        const iconOn = this.micBtn.querySelector('.icon-on');
+        const iconOff = this.micBtn.querySelector('.icon-off');
+
+        if (iconOn && iconOff) {
+            iconOn.style.display = enabled ? 'block' : 'none';
+            iconOff.style.display = enabled ? 'none' : 'block';
+        }
+
+        console.log('[UI] Mic UI updated:', enabled);
+    }
+
+    /**
+     * Update camera button UI
+     */
+    updateCameraUI(enabled) {
+        if (!this.cameraBtn) return;
+
+        this.cameraBtn.classList.toggle('active', enabled);
+        this.cameraBtn.dataset.active = enabled ? 'true' : 'false';
+
+        const iconOn = this.cameraBtn.querySelector('.icon-on');
+        const iconOff = this.cameraBtn.querySelector('.icon-off');
+
+        if (iconOn && iconOff) {
+            iconOn.style.display = enabled ? 'block' : 'none';
+            iconOff.style.display = enabled ? 'none' : 'block';
+        }
+
+        console.log('[UI] Camera UI updated:', enabled);
     }
 
     /**

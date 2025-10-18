@@ -838,8 +838,8 @@
     <!-- Integration Patch -->
     <script src="/static/js/professional-1on1/integration-patch.js"></script>
 
-    <!-- Mobile Intuitive Controls -->
-    <script src="/static/js/professional-1on1/mobile-intuitive-controls.js"></script>
+    <!-- Mobile Simple Controls -->
+    <script src="/static/js/professional-1on1/mobile-simple.js"></script>
 
     <!-- Initialize App -->
     <script>
@@ -871,10 +871,10 @@
                     await uiController.initializeAsHost(isHost && inviteCode ? inviteCode : null);
                 }
 
-                // Initialize mobile controls after UI is ready
-                if (typeof MobileIntuitiveController !== 'undefined') {
-                    mobileController = new MobileIntuitiveController(uiController);
-                    console.log('[PROFESSIONAL] ✅ Mobile intuitive controls initialized');
+                // Initialize simple mobile controls
+                if (typeof SimpleMobileController !== 'undefined') {
+                    mobileController = new SimpleMobileController(uiController);
+                    console.log('[PROFESSIONAL] ✅ Mobile controls ready');
                 }
             } catch (error) {
                 console.error('[PROFESSIONAL] ❌ Failed to initialize:', error);

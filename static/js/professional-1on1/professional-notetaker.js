@@ -265,50 +265,46 @@ class ProfessionalAINotetaker {
             return;
         }
 
-        this.recordingInProgress = true;
+        console.log('[PRO-NOTETAKER] 🛑 Stop button clicked');
+
         this.updateStatus('Stopping...', 'loading');
 
         try {
-            console.log('[PRO-NOTETAKER] 🛑 Stopping recording...');
-
-            // 1. Mark as not recording immediately to prevent new actions
+            // 1. Mark as not recording immediately
             this.isRecording = false;
             this.isPaused = false;
 
-            // 2. Stop speech recognition
+            // 2. Stop speech recognition first
             if (this.recognition) {
                 try {
                     this.recognition.stop();
-                    console.log('[PRO-NOTETAKER] ✅ Speech recognition stopped');
-                } catch (recognitionError) {
-                    console.warn('[PRO-NOTETAKER] Recognition stop error:', recognitionError);
+                    console.log('[PRO-NOTETAKER] Speech recognition stopped');
+                } catch (err) {
+                    console.warn('[PRO-NOTETAKER] Recognition already stopped');
                 }
             }
 
-            // 3. Stop HMS recording
-            if (this.hmsRecording) {
-                try {
-                    const hmsResult = await this.hmsRecording.stopRecording();
-                    if (hmsResult.success) {
-                        console.log('[PRO-NOTETAKER] ✅ HMS recording stopped');
-                    }
-                } catch (hmsError) {
-                    console.warn('[PRO-NOTETAKER] HMS stop error:', hmsError);
-                }
-            }
-
-            // 4. Stop UI timer
+            // 3. Stop timer
             this.stopDurationTimer();
 
-            // 5. Calculate final duration
+            // 4. Calculate duration
             const duration = this.startTime ? Date.now() - this.startTime - this.pausedDuration : 0;
             const durationStr = this.formatDuration(duration);
 
-            // Update UI
+            // 5. Update UI immediately
             this.updateUIStopped();
-            this.updateStatus('Processing transcript...', 'processing');
 
-            // Notify backend
+            // 6. Stop HMS recording (if available)
+            if (this.hmsRecording) {
+                try {
+                    await this.hmsRecording.stopRecording();
+                    console.log('[PRO-NOTETAKER] HMS recording stopped');
+                } catch (err) {
+                    console.warn('[PRO-NOTETAKER] HMS stop error:', err);
+                }
+            }
+
+            // 7. Notify backend
             try {
                 await fetch('/api/notetaker/stop', {
                     method: 'POST',
@@ -320,19 +316,21 @@ class ProfessionalAINotetaker {
                     })
                 });
             } catch (err) {
-                console.warn('[PRO-NOTETAKER] Backend stop error:', err);
+                console.warn('[PRO-NOTETAKER] Backend error:', err);
             }
 
-            console.log('[PRO-NOTETAKER] ✅ Recording stopped');
-
-            // Show analysis modal
+            // 8. Show analysis modal
+            this.updateStatus('Processing...', 'processing');
             await this.showAnalysisModal(durationStr);
 
+            // 9. Reset to ready state
             this.updateStatus('Ready', 'ready');
+            console.log('[PRO-NOTETAKER] ✅ Stopped successfully');
 
         } catch (error) {
-            console.error('[PRO-NOTETAKER] ❌ Failed to stop recording:', error);
-            alert('Failed to stop AI Notetaker: ' + error.message);
+            console.error('[PRO-NOTETAKER] Stop error:', error);
+            this.updateStatus('Ready', 'ready');
+            this.updateUIStopped();
         }
     }
 
