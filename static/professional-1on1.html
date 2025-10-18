@@ -14,6 +14,7 @@
     <link rel="stylesheet" href="/static/css/professional-chat-enhanced.css">
     <link rel="stylesheet" href="/static/css/professional-notetaker-modal.css">
     <link rel="stylesheet" href="/static/css/professional-mobile-ultra.css">
+    <link rel="stylesheet" href="/static/css/professional-mobile-intuitive.css">
 </head>
 <body>
     <!-- Preview Screen -->
@@ -837,6 +838,9 @@
     <!-- Integration Patch -->
     <script src="/static/js/professional-1on1/integration-patch.js"></script>
 
+    <!-- Mobile Intuitive Controls -->
+    <script src="/static/js/professional-1on1/mobile-intuitive-controls.js"></script>
+
     <!-- Initialize App -->
     <script>
         console.log('[PROFESSIONAL] Initializing...');
@@ -853,6 +857,9 @@
         // Create UI controller
         const uiController = new ProfessionalUIController();
 
+        // Initialize mobile intuitive controls
+        let mobileController = null;
+
         (async () => {
             try {
                 if (isGuest) {
@@ -863,12 +870,25 @@
                 } else {
                     await uiController.initializeAsHost(isHost && inviteCode ? inviteCode : null);
                 }
+
+                // Initialize mobile controls after UI is ready
+                if (typeof MobileIntuitiveController !== 'undefined') {
+                    mobileController = new MobileIntuitiveController(uiController);
+                    console.log('[PROFESSIONAL] ✅ Mobile intuitive controls initialized');
+                }
             } catch (error) {
                 console.error('[PROFESSIONAL] ❌ Failed to initialize:', error);
                 alert('Failed to initialize professional mode: ' + (error?.message || 'unknown error'));
                 window.location.href = isGuest ? '/' : '/home';
             }
         })();
+
+        // Cleanup on page unload
+        window.addEventListener('beforeunload', () => {
+            if (mobileController) {
+                mobileController.cleanup();
+            }
+        });
 
         console.log('[PROFESSIONAL] ✅ App ready', { isGuest, isHost, inviteCode });
     </script>
