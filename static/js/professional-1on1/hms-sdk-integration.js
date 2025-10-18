@@ -423,163 +423,134 @@ class ProfessionalMeetingSDK {
     }
 
     /**
-     * Toggle local audio
+     * Toggle audio - 100ms best practices
+     * Uses selectIsLocalAudioEnabled selector for reliable state management
      */
     async toggleAudio() {
         console.log('[HMS SDK] toggleAudio called');
 
-        if (!this.hmsActions) {
-            console.error('[HMS SDK] hmsActions not available');
-            return false;
-        }
-
-        if (!this.hmsStore) {
-            console.error('[HMS SDK] hmsStore not available');
+        if (!this.hmsActions || !this.hmsStore) {
+            console.error('[HMS SDK] HMS not ready - actions or store missing');
             return false;
         }
 
         try {
-            // Get current peer state
-            const peer = this.hmsStore.getState((state) => state.localPeer);
+            // Use 100ms selector for current state (best practice)
+            const selectIsLocalAudioEnabled = (state) => {
+                return state.localPeer?.audioEnabled ?? false;
+            };
 
-            if (!peer) {
-                console.error('[HMS SDK] Local peer not found');
-                return false;
-            }
+            const currentlyEnabled = this.hmsStore.getState(selectIsLocalAudioEnabled);
+            const targetState = !currentlyEnabled;
 
-            const isCurrentlyEnabled = peer.audioEnabled === true;
-            const newState = !isCurrentlyEnabled;
-
-            console.log('[HMS SDK] Audio state:', {
-                currentEnabled: isCurrentlyEnabled,
-                targetEnabled: newState,
-                hasAudioTrack: !!peer.audioTrack
+            console.log('[HMS SDK] Audio toggle:', {
+                current: currentlyEnabled,
+                target: targetState
             });
 
-            // Toggle using HMS method
-            await this.hmsActions.setLocalAudioEnabled(newState);
+            // Use 100ms API to toggle
+            await this.hmsActions.setLocalAudioEnabled(targetState);
 
-            // Give HMS time to update
-            await new Promise(resolve => setTimeout(resolve, 500));
+            // Wait for state to propagate through HMS store
+            await new Promise(resolve => setTimeout(resolve, 100));
 
-            // Check result
-            const updatedPeer = this.hmsStore.getState((state) => state.localPeer);
-            const finalState = updatedPeer?.audioEnabled === true;
+            // Verify using selector
+            const finalState = this.hmsStore.getState(selectIsLocalAudioEnabled);
 
-            console.log('[HMS SDK] Audio toggled to:', finalState);
+            console.log('[HMS SDK] Audio toggled successfully:', finalState);
             return finalState;
 
         } catch (error) {
-            console.error('[HMS SDK] toggleAudio failed:', error);
-            return false;
+            console.error('[HMS SDK] Audio toggle error:', error);
+
+            // Fallback: return current state
+            const selectIsLocalAudioEnabled = (state) => state.localPeer?.audioEnabled ?? false;
+            return this.hmsStore.getState(selectIsLocalAudioEnabled);
         }
     }
 
     /**
-     * Toggle local video
+     * Toggle video - 100ms best practices
+     * Uses selectIsLocalVideoEnabled selector for reliable state management
      */
     async toggleVideo() {
         console.log('[HMS SDK] toggleVideo called');
 
-        if (!this.hmsActions) {
-            console.error('[HMS SDK] hmsActions not available');
-            return false;
-        }
-
-        if (!this.hmsStore) {
-            console.error('[HMS SDK] hmsStore not available');
+        if (!this.hmsActions || !this.hmsStore) {
+            console.error('[HMS SDK] HMS not ready - actions or store missing');
             return false;
         }
 
         try {
-            // Get current peer state
-            const peer = this.hmsStore.getState((state) => state.localPeer);
+            // Use 100ms selector for current state (best practice)
+            const selectIsLocalVideoEnabled = (state) => {
+                return state.localPeer?.videoEnabled ?? false;
+            };
 
-            if (!peer) {
-                console.error('[HMS SDK] Local peer not found');
-                return false;
-            }
+            const currentlyEnabled = this.hmsStore.getState(selectIsLocalVideoEnabled);
+            const targetState = !currentlyEnabled;
 
-            const isCurrentlyEnabled = peer.videoEnabled === true;
-            const newState = !isCurrentlyEnabled;
-
-            console.log('[HMS SDK] Video state:', {
-                currentEnabled: isCurrentlyEnabled,
-                targetEnabled: newState,
-                hasVideoTrack: !!peer.videoTrack
+            console.log('[HMS SDK] Video toggle:', {
+                current: currentlyEnabled,
+                target: targetState
             });
 
-            // Toggle using HMS method
-            await this.hmsActions.setLocalVideoEnabled(newState);
+            // Use 100ms API to toggle
+            await this.hmsActions.setLocalVideoEnabled(targetState);
 
-            // Give HMS time to update
-            await new Promise(resolve => setTimeout(resolve, 500));
+            // Wait for state to propagate through HMS store
+            await new Promise(resolve => setTimeout(resolve, 100));
 
-            // Check result
-            const updatedPeer = this.hmsStore.getState((state) => state.localPeer);
-            const finalState = updatedPeer?.videoEnabled === true;
+            // Verify using selector
+            const finalState = this.hmsStore.getState(selectIsLocalVideoEnabled);
 
-            console.log('[HMS SDK] Video toggled to:', finalState);
+            console.log('[HMS SDK] Video toggled successfully:', finalState);
             return finalState;
 
         } catch (error) {
-            console.error('[HMS SDK] toggleVideo failed:', error);
-            return false;
+            console.error('[HMS SDK] Video toggle error:', error);
+
+            // Fallback: return current state
+            const selectIsLocalVideoEnabled = (state) => state.localPeer?.videoEnabled ?? false;
+            return this.hmsStore.getState(selectIsLocalVideoEnabled);
         }
     }
 
+    /**
+     * Toggle screenshare - 100ms API
+     * Uses setScreenShareEnabled for start/stop
+     */
     async toggleScreenshare(enable) {
-        if (!this.hmsActions) return;
+        console.log('[HMS SDK] toggleScreenshare called:', enable);
+
+        if (!this.hmsActions || !this.hmsStore) {
+            console.error('[HMS SDK] HMS not ready');
+            return false;
+        }
+
         try {
             if (enable) {
-                // Try HMS SDK method first
-                if (typeof this.hmsActions.setScreenShareEnabled === 'function') {
-                    await this.hmsActions.setScreenShareEnabled(true);
-                    this.isScreenSharing = true;
-                    console.debug('[HMS SDK] Screen share enabled via HMS');
-                } else if (typeof this.hmsActions.startScreenshare === 'function') {
-                    await this.hmsActions.startScreenshare();
-                    this.isScreenSharing = true;
-                    console.debug('[HMS SDK] Screen share started via HMS');
-                } else {
-                    // Fallback: use native getDisplayMedia
-                    console.debug('[HMS SDK] Using native screen share fallback');
-                    const screenStream = await navigator.mediaDevices.getDisplayMedia({
-                        video: {
-                            cursor: 'always',
-                            displaySurface: 'monitor'
-                        }
-                    });
+                // Start screen share using 100ms API
+                console.log('[HMS SDK] Starting screen share...');
+                await this.hmsActions.setScreenShareEnabled(true);
 
-                    // Replace video track with screen share track
-                    const screenTrack = screenStream.getVideoTracks()[0];
-                    if (screenTrack) {
-                        // Stop when user clicks browser's "Stop sharing" button
-                        screenTrack.addEventListener('ended', () => {
-                            this.isScreenSharing = false;
-                            console.debug('[HMS SDK] Screen share ended by user');
-                        });
+                this.isScreenSharing = true;
+                console.log('[HMS SDK] Screen share started successfully');
+                return true;
 
-                        // Try to replace track in HMS
-                        if (typeof this.hmsActions.setScreenShareEnabled === 'function') {
-                            await this.hmsActions.setScreenShareEnabled(true, screenTrack);
-                        }
-                        this.isScreenSharing = true;
-                    }
-                }
             } else {
                 // Stop screen share
-                if (typeof this.hmsActions.setScreenShareEnabled === 'function') {
-                    await this.hmsActions.setScreenShareEnabled(false);
-                } else if (typeof this.hmsActions.stopScreenshare === 'function') {
-                    await this.hmsActions.stopScreenshare();
-                }
+                console.log('[HMS SDK] Stopping screen share...');
+                await this.hmsActions.setScreenShareEnabled(false);
+
                 this.isScreenSharing = false;
-                console.debug('[HMS SDK] Screen share stopped');
+                console.log('[HMS SDK] Screen share stopped successfully');
+                return false;
             }
+
         } catch (error) {
-            this.isScreenSharing = false;
             console.error('[HMS SDK] Screen share error:', error);
+            this.isScreenSharing = false;
             throw error;
         }
     }
