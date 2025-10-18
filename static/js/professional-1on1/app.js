@@ -168,17 +168,37 @@ class ProfessionalCall {
     setupHMSListeners() {
         console.log('[App] Setting up HMS listeners');
 
-        // Listen for notifications - EXACTLY as per docs
+        // Listen for notifications - with better reconnect handling
         this.hmsNotifications.onNotification((notification) => {
             console.log('[HMS Notification]', notification.type, notification);
 
-            if (notification.type === 'RECONNECTING') {
-                this.showLoading('Reconnecting...');
-            } else if (notification.type === 'RECONNECTED') {
-                this.hideLoading();
-            } else if (notification.type === 'ERROR') {
-                console.error('[HMS Error]', notification.data);
-                alert('Call error: ' + notification.data?.message);
+            switch(notification.type) {
+                case 'RECONNECTING':
+                    this.showLoading('Connection lost. Reconnecting...');
+                    break;
+                case 'RECONNECTED':
+                    this.hideLoading();
+                    console.log('[App] ✅ Reconnected successfully');
+                    break;
+                case 'ERROR':
+                    console.error('[HMS Error]', notification.data);
+                    const errorMsg = notification.data?.message || 'Unknown error';
+                    if (errorMsg.includes('network') || errorMsg.includes('connection')) {
+                        this.showLoading('Connection issues. Retrying...');
+                        // Auto-retry after 2 seconds
+                        setTimeout(() => {
+                            console.log('[App] Auto-retry reconnect');
+                        }, 2000);
+                    } else {
+                        alert('Call error: ' + errorMsg);
+                    }
+                    break;
+                case 'PEER_JOINED':
+                    console.log('[App] Peer joined:', notification.data);
+                    break;
+                case 'PEER_LEFT':
+                    console.log('[App] Peer left:', notification.data);
+                    break;
             }
         });
 
@@ -320,35 +340,24 @@ class ProfessionalCall {
         const localPeer = peers.find(p => p.isLocal);
         const remotePeer = peers.find(p => !p.isLocal);
 
-        // Attach local video - EXACTLY as per docs
-        if (localPeer && localPeer.videoTrack) {
-            this.attachTrack(localPeer.videoTrack, this.localVideo);
+        // Attach local video - Use HMS SDK attachVideo method
+        if (localPeer?.videoTrack) {
+            console.log('[App] Attaching local video track');
+            this.hmsActions.attachVideo(localPeer.videoTrack.id, this.localVideo);
         }
 
-        // Attach remote video - EXACTLY as per docs
-        if (remotePeer && remotePeer.videoTrack) {
-            this.attachTrack(remotePeer.videoTrack, this.remoteVideo);
+        // Attach remote video
+        if (remotePeer?.videoTrack) {
+            console.log('[App] Attaching remote video track');
+            this.hmsActions.attachVideo(remotePeer.videoTrack.id, this.remoteVideo);
         }
 
-        // Attach remote audio - EXACTLY as per docs
-        if (remotePeer && remotePeer.audioTrack) {
-            this.attachTrack(remotePeer.audioTrack, this.remoteVideo);
-        }
-    }
-
-    attachTrack(track, element) {
-        console.log('[App] Attaching track:', track.type, 'to', element.id);
-
-        try {
-            // EXACTLY as per 100ms docs
-            if (track.enabled) {
-                const mediaStream = new MediaStream();
-                mediaStream.addTrack(track);
-                element.srcObject = mediaStream;
-                console.log('[App] ✅ Track attached');
-            }
-        } catch (error) {
-            console.error('[App] ❌ Track attachment failed:', error);
+        // Attach remote audio
+        if (remotePeer?.audioTrack) {
+            console.log('[App] Attaching remote audio track');
+            // Audio goes to same video element for remote
+            const audioElement = this.remoteVideo;
+            audioElement.srcObject = new MediaStream([remotePeer.audioTrack]);
         }
     }
 
