@@ -773,6 +773,52 @@ func getHMSManagementToken() (string, error) {
 	return signedToken, nil
 }
 
+// Simple notes saving handler (no HMS recording, no transcription)
+func handleSaveNotes(w http.ResponseWriter, r *http.Request) {
+	if r.Method != http.MethodPost {
+		http.Error(w, "Method not allowed", http.StatusMethodNotAllowed)
+		return
+	}
+
+	var req struct {
+		RoomID  string `json:"room_id"`
+		Notes   []struct {
+			Text      string `json:"text"`
+			Timestamp string `json:"timestamp"`
+			Time      string `json:"time"`
+		} `json:"notes"`
+		SavedAt string `json:"saved_at"`
+	}
+
+	if err := json.NewDecoder(r.Body).Decode(&req); err != nil {
+		http.Error(w, "Invalid request", http.StatusBadRequest)
+		return
+	}
+
+	// Save notes to Redis with 24h TTL
+	notesKey := fmt.Sprintf("professional_notes:%s", req.RoomID)
+	notesJSON, err := json.Marshal(req)
+	if err != nil {
+		log.Printf("[NOTES] ❌ Failed to marshal notes: %v", err)
+		http.Error(w, "Failed to save notes", http.StatusInternalServerError)
+		return
+	}
+
+	if err := rdb.Set(ctx, notesKey, notesJSON, 24*time.Hour).Err(); err != nil {
+		log.Printf("[NOTES] ❌ Failed to save notes to Redis: %v", err)
+		http.Error(w, "Failed to save notes", http.StatusInternalServerError)
+		return
+	}
+
+	log.Printf("[NOTES] ✅ Saved %d notes for room %s", len(req.Notes), req.RoomID)
+
+	w.Header().Set("Content-Type", "application/json")
+	json.NewEncoder(w).Encode(map[string]interface{}{
+		"success": true,
+		"count":   len(req.Notes),
+	})
+}
+
 // Register Professional Mode Routes
 func registerProfessionalModeRoutes() {
 	http.HandleFunc("/api/professional/create-room", handleCreateProfessionalRoom)
@@ -781,6 +827,7 @@ func registerProfessionalModeRoutes() {
 	http.HandleFunc("/api/professional/webhook", handleProfessionalWebhook)
 	http.HandleFunc("/api/professional/config", handleCheckHMSConfig) // DEBUG
 	http.HandleFunc("/api/professional/invite/", handleProfessionalInvite)
+	http.HandleFunc("/api/save-notes", handleSaveNotes) // Simple notes saving
 
 	log.Println("[PROFESSIONAL] ✅ Routes registered")
 }

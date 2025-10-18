@@ -472,149 +472,81 @@ class ProfessionalCall {
 }
 
 /**
- * AI Notetaker with Web Speech API
+ * Simple Notetaker - Manual text notes (no auto-transcription, no HMS recording)
  */
 class AINotetaker {
     constructor(roomID, container, statusEl) {
         this.roomID = roomID;
         this.container = container;
         this.statusEl = statusEl;
+        this.notes = [];
+        this.startTime = null;
 
-        this.isRecording = false;
-        this.isPaused = false;
-        this.recognition = null;
-        this.transcript = [];
+        // Add manual note input
+        this.setupManualInput();
+    }
 
-        // Initialize Web Speech API
-        const SpeechRecognition = window.SpeechRecognition || window.webkitSpeechRecognition;
-        if (SpeechRecognition) {
-            this.recognition = new SpeechRecognition();
-            this.recognition.continuous = true;
-            this.recognition.interimResults = true;
-            this.recognition.lang = 'en-US';
+    setupManualInput() {
+        // Add input field to container
+        const inputContainer = document.createElement('div');
+        inputContainer.style.cssText = 'padding: 12px; border-top: 1px solid rgba(255,255,255,0.1);';
+        inputContainer.innerHTML = `
+            <div style="display: flex; gap: 8px;">
+                <input type="text" id="manual-note-input" placeholder="Type a note..."
+                    style="flex: 1; padding: 8px 12px; background: rgba(255,255,255,0.05); border: 1px solid rgba(255,255,255,0.1); border-radius: 6px; color: white; font-size: 14px;">
+                <button id="add-note-btn" style="padding: 8px 16px; background: #4ade80; border: none; border-radius: 6px; color: #000; font-weight: 600; cursor: pointer;">Add</button>
+            </div>
+        `;
 
-            this.recognition.onresult = (event) => this.handleResult(event);
-            this.recognition.onerror = (event) => this.handleError(event);
-            this.recognition.onend = () => this.handleEnd();
-        } else {
-            console.warn('[Notetaker] Speech Recognition not supported');
-        }
+        this.container.parentElement.insertBefore(inputContainer, this.container);
+
+        const noteInput = document.getElementById('manual-note-input');
+        const addNoteBtn = document.getElementById('add-note-btn');
+
+        addNoteBtn.onclick = () => this.addManualNote(noteInput);
+        noteInput.onkeydown = (e) => {
+            if (e.key === 'Enter') {
+                this.addManualNote(noteInput);
+            }
+        };
+    }
+
+    addManualNote(input) {
+        const text = input.value.trim();
+        if (!text) return;
+
+        this.addNoteEntry(text);
+        input.value = '';
     }
 
     start() {
-        if (!this.recognition) {
-            alert('Speech recognition not supported in your browser');
-            return;
-        }
-
-        if (this.isRecording && !this.isPaused) {
-            console.log('[Notetaker] Already recording');
-            return;
-        }
-
-        console.log('[Notetaker] Starting...');
-
-        try {
-            this.recognition.start();
-            this.isRecording = true;
-            this.isPaused = false;
-
-            this.updateStatus('Recording...', 'recording');
-            this.updateButtons();
-
-            console.log('[Notetaker] ✅ Started');
-        } catch (error) {
-            console.error('[Notetaker] ❌ Start failed:', error);
-        }
+        console.log('[Notetaker] Started (manual mode)');
+        this.startTime = Date.now();
+        this.updateStatus('Ready - Type notes manually', 'recording');
+        this.updateButtons();
     }
 
     pause() {
-        if (!this.isRecording || this.isPaused) return;
-
-        console.log('[Notetaker] Pausing...');
-
-        this.recognition.stop();
-        this.isPaused = true;
-
+        console.log('[Notetaker] Paused');
         this.updateStatus('Paused', 'paused');
         this.updateButtons();
-
-        console.log('[Notetaker] ✅ Paused');
     }
 
     stop() {
-        if (!this.isRecording) return;
-
-        console.log('[Notetaker] Stopping...');
-
-        this.recognition.stop();
-        this.isRecording = false;
-        this.isPaused = false;
-
+        console.log('[Notetaker] Stopped');
         this.updateStatus('Stopped', 'stopped');
         this.updateButtons();
-
-        // Save transcript to backend
-        this.saveTranscript();
-
-        console.log('[Notetaker] ✅ Stopped');
+        this.saveNotes();
     }
 
-    handleResult(event) {
-        for (let i = event.resultIndex; i < event.results.length; i++) {
-            const result = event.results[i];
-
-            if (result.isFinal) {
-                const text = result[0].transcript.trim();
-                if (text) {
-                    this.addTranscriptEntry(text);
-                }
-            }
-        }
-    }
-
-    handleError(event) {
-        console.error('[Notetaker] Error:', event.error);
-
-        if (event.error === 'no-speech') {
-            // Restart if no speech detected
-            if (this.isRecording && !this.isPaused) {
-                setTimeout(() => {
-                    if (this.isRecording && !this.isPaused) {
-                        this.recognition.start();
-                    }
-                }, 1000);
-            }
-        } else {
-            this.updateStatus('Error: ' + event.error, 'error');
-        }
-    }
-
-    handleEnd() {
-        console.log('[Notetaker] Recognition ended');
-
-        // Auto-restart if still recording and not paused
-        if (this.isRecording && !this.isPaused) {
-            setTimeout(() => {
-                if (this.isRecording && !this.isPaused) {
-                    try {
-                        this.recognition.start();
-                    } catch (error) {
-                        console.error('[Notetaker] Restart failed:', error);
-                    }
-                }
-            }, 500);
-        }
-    }
-
-    addTranscriptEntry(text) {
+    addNoteEntry(text) {
         const entry = {
             text: text,
             timestamp: new Date().toISOString(),
             time: new Date().toLocaleTimeString()
         };
 
-        this.transcript.push(entry);
+        this.notes.push(entry);
 
         // Add to UI
         const entryEl = document.createElement('div');
@@ -627,30 +559,31 @@ class AINotetaker {
         this.container.appendChild(entryEl);
         this.container.scrollTop = this.container.scrollHeight;
 
-        console.log('[Notetaker] Entry added:', text);
+        console.log('[Notetaker] Note added:', text);
     }
 
-    async saveTranscript() {
-        if (this.transcript.length === 0) {
-            console.log('[Notetaker] No transcript to save');
+    async saveNotes() {
+        if (this.notes.length === 0) {
+            console.log('[Notetaker] No notes to save');
             return;
         }
 
-        console.log('[Notetaker] Saving transcript...');
+        console.log('[Notetaker] Saving notes...');
 
         try {
-            const response = await fetch('/api/save-transcript', {
+            const response = await fetch('/api/save-notes', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
                     room_id: this.roomID,
-                    transcript: this.transcript,
+                    notes: this.notes,
                     saved_at: new Date().toISOString()
                 })
             });
 
             if (response.ok) {
-                console.log('[Notetaker] ✅ Transcript saved');
+                console.log('[Notetaker] ✅ Notes saved');
+                alert('Notes saved successfully!');
             } else {
                 console.error('[Notetaker] ❌ Save failed:', response.status);
             }
@@ -672,23 +605,25 @@ class AINotetaker {
         const pauseBtn = document.getElementById('notetaker-pause');
         const stopBtn = document.getElementById('notetaker-stop');
 
-        if (this.isRecording) {
-            startBtn.disabled = true;
+        // Simple mode - hide pause/stop, only show clear
+        if (startBtn) startBtn.style.display = 'none';
+        if (pauseBtn) {
+            pauseBtn.textContent = 'Clear All';
             pauseBtn.disabled = false;
+            pauseBtn.onclick = () => this.clearNotes();
+        }
+        if (stopBtn) {
+            stopBtn.textContent = 'Save Notes';
             stopBtn.disabled = false;
+            stopBtn.onclick = () => this.saveNotes();
+        }
+    }
 
-            if (this.isPaused) {
-                pauseBtn.textContent = 'Resume';
-                pauseBtn.onclick = () => this.start();
-            } else {
-                pauseBtn.textContent = 'Pause';
-                pauseBtn.onclick = () => this.pause();
-            }
-        } else {
-            startBtn.disabled = false;
-            pauseBtn.disabled = true;
-            stopBtn.disabled = true;
-            pauseBtn.textContent = 'Pause';
+    clearNotes() {
+        if (confirm('Clear all notes?')) {
+            this.notes = [];
+            this.container.innerHTML = '';
+            console.log('[Notetaker] Notes cleared');
         }
     }
 
