@@ -586,6 +586,12 @@ class AINotetaker {
                 this.pauseBtn.style.display = 'inline-flex';
             }
 
+            // Notify enhanced features
+            if (window.notetakerEnhanced) {
+                const mixedStream = this.mixer ? this.mixer.getStream() : null;
+                window.notetakerEnhanced.onRecordingStart(mixedStream);
+            }
+
             console.log('[NOTETAKER] ✅ Recording started with persistence enabled');
         } catch (error) {
             console.error('[NOTETAKER] ❌ Failed to start recording:', error);
@@ -660,6 +666,11 @@ class AINotetaker {
 
             // Release audio capture resources
             this.releaseRecordingResources();
+
+            // Notify enhanced features
+            if (window.notetakerEnhanced) {
+                window.notetakerEnhanced.onRecordingStop();
+            }
 
             // Show analysis modal only if requested
             if (showModal) {
