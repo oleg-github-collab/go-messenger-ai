@@ -11,11 +11,16 @@ class ProfessionalAINotetaker {
         this.isRecording = false;
         this.isPaused = false;
         this.startTime = null;
+        this.pausedDuration = 0;
+        this.pauseStartTime = null;
         this.transcript = '';
         this.recognition = null;
         this.conversationHistory = [];
         this.durationTimer = null;
         this.wordCount = 0;
+        this.recordingInProgress = false; // Prevent race conditions
+        this.reconnectAttempts = 0;
+        this.maxReconnectAttempts = 5;
 
         // HMS Recording integration
         this.hmsRecording = new HMSRecordingIntegration();
@@ -117,34 +122,41 @@ class ProfessionalAINotetaker {
         };
 
         this.recognition.onerror = (event) => {
-            if (event.error === 'no-speech' && this.isRecording && !this.isPaused) {
-                // Restart silently
-                setTimeout(() => {
-                    if (this.isRecording && !this.isPaused) {
-                        try {
-                            this.recognition.start();
-                        } catch (err) {
-                            // Already started
-                        }
-                    }
-                }, 1000);
+            console.log('[PRO-NOTETAKER] Recognition error:', event.error);
+
+            if (event.error === 'no-speech') {
+                // No speech detected - restart silently
+                if (this.isRecording && !this.isPaused) {
+                    this.attemptRecognitionReconnect(1000);
+                }
+            } else if (event.error === 'aborted') {
+                // Aborted - normal stop, don't restart
+                console.log('[PRO-NOTETAKER] Recognition aborted normally');
             } else if (['not-allowed', 'service-not-allowed'].includes(event.error)) {
                 console.error('[PRO-NOTETAKER] ❌ Microphone access denied');
                 this.updateStatus('Microphone access denied', 'error');
+                this.isRecording = false;
+            } else if (event.error === 'network') {
+                console.warn('[PRO-NOTETAKER] Network error, reconnecting...');
+                if (this.isRecording && !this.isPaused) {
+                    this.attemptRecognitionReconnect(2000);
+                }
+            } else if (event.error === 'audio-capture') {
+                console.error('[PRO-NOTETAKER] Audio capture failed');
+                this.updateStatus('Audio capture failed', 'error');
+            } else {
+                console.warn('[PRO-NOTETAKER] Recognition error:', event.error);
+                if (this.isRecording && !this.isPaused) {
+                    this.attemptRecognitionReconnect(1500);
+                }
             }
         };
 
         this.recognition.onend = () => {
+            console.log('[PRO-NOTETAKER] Recognition ended');
+            // Auto-restart if still recording and not paused
             if (this.isRecording && !this.isPaused) {
-                setTimeout(() => {
-                    if (this.isRecording && !this.isPaused) {
-                        try {
-                            this.recognition.start();
-                        } catch (err) {
-                            // Already started
-                        }
-                    }
-                }, 500);
+                this.attemptRecognitionReconnect(500);
             }
         };
     }
@@ -158,60 +170,92 @@ class ProfessionalAINotetaker {
     }
 
     async startRecording() {
-        if (this.isRecording) {
-            console.warn('[PRO-NOTETAKER] Already recording');
+        if (this.isRecording || this.recordingInProgress) {
+            console.warn('[PRO-NOTETAKER] Recording already in progress');
             return;
         }
+
+        this.recordingInProgress = true;
+        this.updateStatus('Starting...', 'loading');
 
         try {
             console.log('[PRO-NOTETAKER] 🎙️ Starting recording...');
 
-            // Notify backend
-            const response = await fetch('/api/notetaker/start', {
-                method: 'POST',
-                headers: { 'Content-Type': 'application/json' },
-                body: JSON.stringify({ room_id: this.roomID })
-            });
+            // 1. Notify backend
+            try {
+                const response = await fetch('/api/notetaker/start', {
+                    method: 'POST',
+                    headers: { 'Content-Type': 'application/json' },
+                    body: JSON.stringify({ room_id: this.roomID }),
+                    signal: AbortSignal.timeout(5000) // 5s timeout
+                });
 
-            if (!response.ok) {
-                throw new Error('Failed to start notetaker on backend');
+                if (!response.ok) {
+                    const errorData = await response.json().catch(() => ({}));
+                    throw new Error(errorData.error || 'Backend start failed');
+                }
+
+                console.log('[PRO-NOTETAKER] ✅ Backend notified');
+            } catch (backendError) {
+                console.error('[PRO-NOTETAKER] Backend error:', backendError);
+                this.updateStatus('Backend unavailable, continuing...', 'warning');
+                // Continue with local recording even if backend fails
             }
 
-            // Start HMS audio recording
-            const hmsRecordingResult = await this.hmsRecording.startRecording();
-            if (!hmsRecordingResult.success) {
-                console.warn('[PRO-NOTETAKER] HMS recording failed:', hmsRecordingResult.error);
-                // Continue anyway with speech recognition
+            // 2. Start HMS audio recording (if available)
+            if (this.hmsRecording) {
+                try {
+                    const hmsResult = await this.hmsRecording.startRecording();
+                    if (hmsResult.success) {
+                        console.log('[PRO-NOTETAKER] ✅ HMS recording started');
+                    } else {
+                        console.warn('[PRO-NOTETAKER] HMS recording unavailable:', hmsResult.error);
+                    }
+                } catch (hmsError) {
+                    console.warn('[PRO-NOTETAKER] HMS recording error:', hmsError);
+                }
             }
 
-            // Start speech recognition
+            // 3. Start speech recognition
             if (this.recognition) {
                 try {
                     this.recognition.start();
                     console.log('[PRO-NOTETAKER] 🗣️ Speech recognition started');
-                } catch (err) {
-                    console.warn('[PRO-NOTETAKER] Speech recognition error:', err);
+                    this.reconnectAttempts = 0; // Reset reconnect counter
+                } catch (recognitionError) {
+                    if (recognitionError.message.includes('already started')) {
+                        console.log('[PRO-NOTETAKER] Recognition already active');
+                    } else {
+                        throw recognitionError;
+                    }
                 }
             }
 
+            // 4. Initialize state
             this.isRecording = true;
+            this.isPaused = false;
             this.startTime = Date.now();
+            this.pausedDuration = 0;
+            this.pauseStartTime = null;
             this.transcript = '';
-            this.wordCount = 0;
             this.conversationHistory = [];
+            this.wordCount = 0;
 
-            // Start timer
+            // 5. Start UI timer
             this.startDurationTimer();
 
-            // Update UI
+            // 6. Update UI
             this.updateUIRecording();
-            this.updateStatus('Recording in progress...', 'recording');
+            this.updateStatus('Recording', 'recording');
 
-            console.log('[PRO-NOTETAKER] ✅ Recording started');
+            console.log('[PRO-NOTETAKER] ✅ Recording started successfully');
 
         } catch (error) {
             console.error('[PRO-NOTETAKER] ❌ Failed to start recording:', error);
-            alert('Failed to start AI Notetaker: ' + error.message);
+            this.updateStatus('Failed to start', 'error');
+            this.isRecording = false;
+        } finally {
+            this.recordingInProgress = false;
         }
     }
 
@@ -221,29 +265,43 @@ class ProfessionalAINotetaker {
             return;
         }
 
+        this.recordingInProgress = true;
+        this.updateStatus('Stopping...', 'loading');
+
         try {
             console.log('[PRO-NOTETAKER] 🛑 Stopping recording...');
 
+            // 1. Mark as not recording immediately to prevent new actions
             this.isRecording = false;
+            this.isPaused = false;
 
-            // Stop speech recognition
+            // 2. Stop speech recognition
             if (this.recognition) {
                 try {
                     this.recognition.stop();
-                    console.log('[PRO-NOTETAKER] 🗣️ Speech recognition stopped');
-                } catch (err) {
-                    console.warn('[PRO-NOTETAKER] Speech recognition stop error:', err);
+                    console.log('[PRO-NOTETAKER] ✅ Speech recognition stopped');
+                } catch (recognitionError) {
+                    console.warn('[PRO-NOTETAKER] Recognition stop error:', recognitionError);
                 }
             }
 
-            // Stop HMS recording
-            const hmsRecordingResult = await this.hmsRecording.stopRecording();
-            console.log('[PRO-NOTETAKER] HMS recording result:', hmsRecordingResult);
+            // 3. Stop HMS recording
+            if (this.hmsRecording) {
+                try {
+                    const hmsResult = await this.hmsRecording.stopRecording();
+                    if (hmsResult.success) {
+                        console.log('[PRO-NOTETAKER] ✅ HMS recording stopped');
+                    }
+                } catch (hmsError) {
+                    console.warn('[PRO-NOTETAKER] HMS stop error:', hmsError);
+                }
+            }
 
-            // Stop timer
+            // 4. Stop UI timer
             this.stopDurationTimer();
 
-            const duration = this.startTime ? Date.now() - this.startTime : 0;
+            // 5. Calculate final duration
+            const duration = this.startTime ? Date.now() - this.startTime - this.pausedDuration : 0;
             const durationStr = this.formatDuration(duration);
 
             // Update UI
@@ -590,6 +648,43 @@ class ProfessionalAINotetaker {
             }
         }
         console.log('[PRO-NOTETAKER] 🧹 Cleanup complete');
+    }
+
+    // Reconnect speech recognition with exponential backoff
+    attemptRecognitionReconnect(baseDelay = 500) {
+        if (!this.isRecording || this.isPaused) {
+            return; // Don't reconnect if not recording
+        }
+
+        if (this.reconnectAttempts >= this.maxReconnectAttempts) {
+            console.error('[PRO-NOTETAKER] Max reconnect attempts reached');
+            this.updateStatus('Recognition failed - please restart', 'error');
+            return;
+        }
+
+        this.reconnectAttempts++;
+        const delay = baseDelay * Math.pow(1.5, this.reconnectAttempts - 1);
+
+        console.log(`[PRO-NOTETAKER] Reconnect attempt ${this.reconnectAttempts}/${this.maxReconnectAttempts} in ${delay}ms`);
+
+        setTimeout(() => {
+            if (this.isRecording && !this.isPaused && this.recognition) {
+                try {
+                    this.recognition.start();
+                    console.log('[PRO-NOTETAKER] ✅ Recognition reconnected');
+                    this.reconnectAttempts = 0; // Reset on successful restart
+                } catch (err) {
+                    if (err.message && err.message.includes('already started')) {
+                        console.log('[PRO-NOTETAKER] Recognition already running');
+                        this.reconnectAttempts = 0;
+                    } else {
+                        console.error('[PRO-NOTETAKER] Reconnect failed:', err);
+                        // Try again with next attempt
+                        this.attemptRecognitionReconnect(baseDelay);
+                    }
+                }
+            }
+        }, delay);
     }
 }
 

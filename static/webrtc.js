@@ -678,10 +678,20 @@ class WebRTCManager {
     }
 
     async restartIce() {
+        // Prevent multiple simultaneous restart attempts
+        if (this.iceRestartInProgress) {
+            console.log('[WebRTC] ICE restart already in progress, skipping');
+            return;
+        }
+
+        this.iceRestartInProgress = true;
         console.log('[WebRTC] 🔄 Attempting ICE restart (fast recovery)...');
         this.updateStatus('Reconnecting...', 'warning');
 
         try {
+            // Ensure we have local tracks before restarting
+            await this.ensureLocalTracksActive();
+
             // ICE restart - much faster than full reconnect
             const offer = await this.peerConnection.createOffer({ iceRestart: true });
             await this.peerConnection.setLocalDescription(offer);
@@ -692,35 +702,68 @@ class WebRTCManager {
             }));
 
             console.log('[WebRTC] ✅ ICE restart offer sent');
+
+            // Set timeout for restart - if not connected in 5s, try full reconnect
+            setTimeout(() => {
+                if (this.peerConnection &&
+                    this.peerConnection.iceConnectionState !== 'connected' &&
+                    this.peerConnection.iceConnectionState !== 'completed') {
+                    console.warn('[WebRTC] ICE restart timeout, trying full reconnect');
+                    this.iceRestartInProgress = false;
+                    this.reconnect();
+                } else {
+                    this.iceRestartInProgress = false;
+                }
+            }, 5000);
+
         } catch (error) {
             console.error('[WebRTC] ICE restart failed, trying full reconnect:', error);
+            this.iceRestartInProgress = false;
             await this.reconnect();
         }
     }
 
     async reconnect() {
-        console.log('[WebRTC] Attempting full reconnect...');
+        // Prevent multiple simultaneous reconnect attempts
+        if (this.reconnectInProgress) {
+            console.log('[WebRTC] Reconnect already in progress, skipping');
+            return;
+        }
+
+        this.reconnectInProgress = true;
+        console.log('[WebRTC] 🔄 Attempting full reconnect...');
         this.updateStatus('Reconnecting...', 'warning');
 
-        await this.ensureLocalTracksActive();
+        try {
+            // Ensure local media tracks are active
+            await this.ensureLocalTracksActive();
 
-        // Close existing connection
-        if (this.peerConnection) {
-            this.peerConnection.close();
+            // Close existing connection
+            if (this.peerConnection) {
+                this.peerConnection.close();
+            }
+
+            // Create new connection
+            this.createPeerConnection();
+
+            // Re-add tracks
+            if (this.localStream) {
+                this.localStream.getTracks().forEach(track => {
+                    this.peerConnection.addTrack(track, this.localStream);
+                });
+            }
+
+            // Create new offer
+            await this.createOffer();
+
+            console.log('[WebRTC] ✅ Full reconnect initiated');
+
+        } catch (error) {
+            console.error('[WebRTC] ❌ Reconnect failed:', error);
+            this.updateStatus('Reconnect failed', 'error');
+        } finally {
+            this.reconnectInProgress = false;
         }
-
-        // Create new connection
-        this.createPeerConnection();
-
-        // Re-add tracks
-        if (this.localStream) {
-            this.localStream.getTracks().forEach(track => {
-                this.peerConnection.addTrack(track, this.localStream);
-            });
-        }
-
-        // Create new offer
-        await this.createOffer();
     }
 
     async runMediaDiagnostics() {
