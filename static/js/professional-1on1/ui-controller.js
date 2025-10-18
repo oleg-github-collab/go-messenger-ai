@@ -1847,39 +1847,22 @@ class ProfessionalUIController {
     initializeAINotetaker() {
         console.log('[UI Controller] Initializing AI Notetaker');
 
-        if (typeof ProfessionalNotetaker === 'undefined') {
-            console.warn('[UI Controller] ProfessionalNotetaker class not loaded');
+        if (typeof ProfessionalAINotetaker === 'undefined') {
+            console.warn('[UI Controller] ProfessionalAINotetaker class not loaded');
             return;
         }
 
         try {
-            // Initialize notetaker instance
-            this.professionalNotetaker = new ProfessionalNotetaker(
-                this.sdk,
-                this.roomCode || this.sdk?.hmsRoomId
+            // Initialize NEW AI Notetaker
+            this.aiNotetaker = new ProfessionalAINotetaker(
+                this.roomCode || this.sdk?.hmsRoomId,
+                this.isHost,
+                this.sdk
             );
 
-            // Bind button handlers
-            if (this.notetakerStartBtn) {
-                this.notetakerStartBtn.addEventListener('click', async () => {
-                    await this.professionalNotetaker.startRecording();
-                    this.updateNotetakerUI('recording');
-                });
-            }
+            console.log('[UI Controller] AI Notetaker initialized');
 
-            if (this.notetakerPauseBtn) {
-                this.notetakerPauseBtn.addEventListener('click', async () => {
-                    await this.professionalNotetaker.pauseRecording();
-                    this.updateNotetakerUI('paused');
-                });
-            }
-
-            if (this.notetakerStopBtn) {
-                this.notetakerStopBtn.addEventListener('click', async () => {
-                    await this.professionalNotetaker.stopRecording();
-                    this.updateNotetakerUI('stopped');
-                });
-            }
+            // Note: Buttons are handled inside AI Notetaker class now
 
             console.log('[UI Controller] ✅ AI Notetaker initialized');
         } catch (error) {
