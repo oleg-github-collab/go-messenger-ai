@@ -445,10 +445,13 @@
         </div>
     </div>
 
-    <!-- 100ms SDK -->
-    <script src="https://cdn.100ms.live/web-sdk/hmssdk.js"></script>
+    <!-- 100ms SDK via Skypack CDN -->
+    <script type="module">
+        import { HMSReactiveStore } from 'https://cdn.skypack.dev/@100mslive/hms-video-store';
+        window.HMSReactiveStore = HMSReactiveStore;
+    </script>
 
     <!-- App Logic -->
-    <script src="/static/js/professional-1on1/app.js"></script>
+    <script src="/static/js/professional-1on1/app.js" defer></script>
 </body>
 </html>
