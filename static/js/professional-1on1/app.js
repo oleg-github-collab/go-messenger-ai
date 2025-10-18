@@ -57,12 +57,15 @@ class ProfessionalCall {
     async init() {
         console.log('[App] Initializing Professional Call');
 
-        // Get room info from URL
+        // Get room info from URL path: /professional/{inviteCode}?host=true
+        const pathParts = window.location.pathname.split('/');
+        this.roomID = pathParts[2]; // Get invite code from path
+
         const params = new URLSearchParams(window.location.search);
-        this.roomID = params.get('room');
-        const role = params.get('role');
-        this.isHost = role === 'host';
+        this.isHost = params.get('host') === 'true';
         this.userName = this.isHost ? 'Host' : 'Guest';
+
+        console.log('[App] Room ID:', this.roomID, 'Is Host:', this.isHost);
 
         if (!this.roomID) {
             alert('Room ID missing');
@@ -99,29 +102,42 @@ class ProfessionalCall {
     }
 
     async getAuthToken() {
-        console.log('[App] Fetching auth token...');
+        console.log('[App] Fetching auth token for invite code:', this.roomID);
 
         try {
-            const response = await fetch('/api/professional-token', {
+            // First, get invite details to get HMS room_id
+            const inviteResponse = await fetch(`/api/professional/invite/${this.roomID}`);
+            if (!inviteResponse.ok) {
+                throw new Error('Invite not found');
+            }
+
+            const inviteData = await inviteResponse.json();
+            const hmsRoomID = inviteData.hms_room_id;
+
+            console.log('[App] HMS Room ID:', hmsRoomID);
+
+            // Now get the auth token
+            const tokenResponse = await fetch('/api/professional/create-token', {
                 method: 'POST',
                 headers: { 'Content-Type': 'application/json' },
                 body: JSON.stringify({
-                    room_id: this.roomID,
+                    room_id: hmsRoomID,
                     user_id: this.isHost ? 'host' : 'guest-' + Date.now(),
-                    role: this.isHost ? 'host' : 'guest'
+                    role: this.isHost ? 'host' : 'guest',
+                    user_name: this.userName
                 })
             });
 
-            if (!response.ok) {
+            if (!tokenResponse.ok) {
                 throw new Error('Token fetch failed');
             }
 
-            const data = await response.json();
-            this.authToken = data.token;
+            const tokenData = await tokenResponse.json();
+            this.authToken = tokenData.token;
             console.log('[App] ✅ Auth token received');
         } catch (error) {
             console.error('[App] ❌ Token fetch failed:', error);
-            alert('Failed to get authentication token');
+            alert('Failed to get authentication token: ' + error.message);
             throw error;
         }
     }
