@@ -77,14 +77,15 @@ class ProfessionalCall {
         try {
             // SDK loaded via script tag, use global HMSReactiveStore
             if (typeof HMSReactiveStore === 'undefined') {
-                throw new Error('HMSReactiveStore not loaded');
+                throw new Error('HMSReactiveStore not loaded - check SDK script');
             }
 
-            const hms = new HMSReactiveStore();
+            const hmsManager = new HMSReactiveStore();
+            hmsManager.triggerOnSubscribe(); // REQUIRED per docs
 
-            this.hmsActions = hms.getHMSActions();
-            this.hmsStore = hms.getStore();
-            this.hmsNotifications = hms.getNotifications();
+            this.hmsStore = hmsManager.getStore();
+            this.hmsActions = hmsManager.getActions();
+            this.hmsNotifications = hmsManager.getNotifications();
 
             console.log('[App] ✅ 100ms SDK initialized');
         } catch (error) {
